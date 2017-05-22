@@ -44,7 +44,8 @@ impl<T> Tokenizer<T>
     }
     fn scan_symbol(&mut self) -> Result<Token> {
         use tokens::Symbol;
-        let symbol = match track_try!(self.reader.read_char()) {
+        let c = track_try!(self.reader.read_char());
+        let symbol = match c {
             '[' => Symbol::OpenSquare,
             ']' => Symbol::CloseSquare,
             '(' => Symbol::OpenParen,
@@ -58,80 +59,81 @@ impl<T> Tokenizer<T>
             '?' => Symbol::Question,
             '!' => Symbol::Not,
             '*' => Symbol::Multiply,
-            '<' => {
-                match self.reader.read_char_if("-=<") {
-                    Some('-') => Symbol::LeftAllow,
-                    Some('=') => Symbol::DoubleLeftAllow,
-                    Some('<') => Symbol::DoubleLeftAngle,
-                    _ => Symbol::Less,
-                }
-            }
-            '>' => {
-                match self.reader.read_char_if(">=") {
-                    Some('>') => Symbol::DoubleRightAngle,
-                    Some('=') => Symbol::GreaterEq,
-                    _ => Symbol::Greater,
-                }
-            }
-            '/' => {
-                if self.reader.read_char_if("=").is_some() {
-                    Symbol::NotEq
-                } else {
-                    Symbol::Slash
-                }
-            }
-            '=' => {
-                match self.reader.read_char_if("<>=:/") {
-                    Some('<') => Symbol::LessEq,
-                    Some('>') => Symbol::DoubleRightAllow,
-                    Some('=') => Symbol::Eq,
-                    Some(':') => {
-                        if self.reader.read_char_if("=").is_some() {
-                            Symbol::ExactEq
-                        } else {
-                            self.reader.unread(':');
-                            Symbol::Match
-                        }
-                    }
-                    Some('/') => {
-                        if self.reader.read_char_if("=").is_some() {
-                            Symbol::ExactNotEq
-                        } else {
-                            self.reader.unread('/');
-                            Symbol::Match
-                        }
-                    }
-                    _ => Symbol::Match,
-                }
-            }
-            ':' => {
-                match self.reader.read_char_if("=") {
-                    Some('=') => Symbol::MapMatch,
-                    _ => Symbol::Colon,
-                }
-            }
-            '|' => {
-                match self.reader.read_char_if("|") {
-                    Some('|') => Symbol::DoubleVerticalBar,
-                    _ => Symbol::VerticalBar,
-                }
-            }
-            '-' => {
-                match self.reader.read_char_if("->") {
-                    Some('-') => Symbol::MinusMinus,
-                    Some('>') => Symbol::RightAllow,
-                    _ => Symbol::Hyphen,
-                }
-            }
-            '+' => {
-                match self.reader.read_char_if("+") {
-                    Some('+') => Symbol::PlusPlus,
-                    _ => Symbol::Plus,
-                }
-            }
+            '<' | '>' | '/' | '=' | ':' | '|' | '-' | '+' => self.scan_multi_char_symbol(c),
             c => track_panic!(ErrorKind::InvalidInput, "Illegal character: {:?}", c),
         };
         Ok(Token::from(symbol))
+    }
+    fn scan_multi_char_symbol(&mut self, c0: char) -> tokens::Symbol {
+        use tokens::Symbol;
+        let c1 = self.reader.read_char().ok();
+        match (c0, c1) {
+            ('<', Some('-')) => Symbol::LeftAllow,
+            ('<', Some('=')) => Symbol::DoubleLeftAllow,
+            ('<', Some('<')) => Symbol::DoubleLeftAngle,
+            ('<', _) => {
+                c1.map(|c| self.reader.unread(c));
+                Symbol::Less
+            }
+            ('>', Some('>')) => Symbol::DoubleRightAngle,
+            ('>', Some('=')) => Symbol::GreaterEq,
+            ('>', _) => {
+                c1.map(|c| self.reader.unread(c));
+                Symbol::Greater
+            }
+            ('/', Some('=')) => Symbol::NotEq,
+            ('/', _) => {
+                c1.map(|c| self.reader.unread(c));
+                Symbol::Slash
+            }
+            (':', Some('=')) => Symbol::MapMatch,
+            (':', _) => {
+                c1.map(|c| self.reader.unread(c));
+                Symbol::Colon
+            }
+            ('|', Some('|')) => Symbol::DoubleVerticalBar,
+            ('|', _) => {
+                c1.map(|c| self.reader.unread(c));
+                Symbol::VerticalBar
+            }
+            ('-', Some('-')) => Symbol::MinusMinus,
+            ('-', Some('>')) => Symbol::RightAllow,
+            ('-', _) => {
+                c1.map(|c| self.reader.unread(c));
+                Symbol::Hyphen
+            }
+            ('+', Some('+')) => Symbol::PlusPlus,
+            ('+', _) => {
+                c1.map(|c| self.reader.unread(c));
+                Symbol::Plus
+            }
+            ('=', Some('<')) => Symbol::LessEq,
+            ('=', Some('>')) => Symbol::DoubleRightAllow,
+            ('=', Some('=')) => Symbol::Eq,
+            ('=', Some(':')) => {
+                if self.reader.peek_char().ok() == Some('=') {
+                    self.reader.consume_char();
+                    Symbol::ExactEq
+                } else {
+                    self.reader.unread(':');
+                    Symbol::Match
+                }
+            }
+            ('=', Some('/')) => {
+                if self.reader.peek_char().ok() == Some('=') {
+                    self.reader.consume_char();
+                    Symbol::ExactEq
+                } else {
+                    self.reader.unread('/');
+                    Symbol::Match
+                }
+            }
+            ('=', _) => {
+                c1.map(|c| self.reader.unread(c));
+                Symbol::Match
+            }
+            _ => unreachable!(),
+        }
     }
 }
 impl<T> Iterator for Tokenizer<T>

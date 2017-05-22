@@ -30,16 +30,6 @@ impl<T> CharReader<T>
         }
         buf
     }
-    pub fn read_char_if(&mut self, expects: &str) -> Option<char> {
-        self.peek_char()
-            .ok()
-            .and_then(|c| if expects.contains(c) {
-                          self.consume_char();
-                          Some(c)
-                      } else {
-                          None
-                      })
-    }
     pub fn peek_char(&mut self) -> Result<char> {
         if let Some(c) = self.unreads.last().cloned() {
             Ok(c)
