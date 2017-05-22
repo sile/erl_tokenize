@@ -47,6 +47,14 @@ impl Deref for Comment {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Whitespace {
+    Space, // ' '
+    Tab, // '\t'
+    Return, // '\r'
+    Newline, // '\n'
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Int(pub BigUint);
 impl Deref for Int {
     type Target = BigUint;

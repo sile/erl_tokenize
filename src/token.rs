@@ -1,23 +1,7 @@
-use types::Location;
-
 use tokens;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Token {
-    pub location: Location,
-    pub value: TokenValue,
-}
-impl Token {
-    pub fn new<T: Into<TokenValue>>(location: Location, value: T) -> Self {
-        Token {
-            location,
-            value: value.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum TokenValue {
+pub enum Token {
     Symbol(tokens::Symbol),
     Keyword(tokens::Keyword),
     Int(tokens::Int),
@@ -27,55 +11,55 @@ pub enum TokenValue {
     Atom(tokens::Atom),
     Str(tokens::Str),
     Comment(tokens::Comment),
-    Space(tokens::Space),
+    Whitespace(tokens::Whitespace),
 }
-impl From<tokens::Symbol> for TokenValue {
+impl From<tokens::Symbol> for Token {
     fn from(f: tokens::Symbol) -> Self {
-        TokenValue::Symbol(f)
+        Token::Symbol(f)
     }
 }
-impl From<tokens::Keyword> for TokenValue {
+impl From<tokens::Keyword> for Token {
     fn from(f: tokens::Keyword) -> Self {
-        TokenValue::Keyword(f)
+        Token::Keyword(f)
     }
 }
-impl From<tokens::Int> for TokenValue {
+impl From<tokens::Int> for Token {
     fn from(f: tokens::Int) -> Self {
-        TokenValue::Int(f)
+        Token::Int(f)
     }
 }
-impl From<tokens::Float> for TokenValue {
+impl From<tokens::Float> for Token {
     fn from(f: tokens::Float) -> Self {
-        TokenValue::Float(f)
+        Token::Float(f)
     }
 }
-impl From<tokens::Char> for TokenValue {
+impl From<tokens::Char> for Token {
     fn from(f: tokens::Char) -> Self {
-        TokenValue::Char(f)
+        Token::Char(f)
     }
 }
-impl From<tokens::Var> for TokenValue {
+impl From<tokens::Var> for Token {
     fn from(f: tokens::Var) -> Self {
-        TokenValue::Var(f)
+        Token::Var(f)
     }
 }
-impl From<tokens::Atom> for TokenValue {
+impl From<tokens::Atom> for Token {
     fn from(f: tokens::Atom) -> Self {
-        TokenValue::Atom(f)
+        Token::Atom(f)
     }
 }
-impl From<tokens::Str> for TokenValue {
+impl From<tokens::Str> for Token {
     fn from(f: tokens::Str) -> Self {
-        TokenValue::Str(f)
+        Token::Str(f)
     }
 }
-impl From<tokens::Comment> for TokenValue {
+impl From<tokens::Comment> for Token {
     fn from(f: tokens::Comment) -> Self {
-        TokenValue::Comment(f)
+        Token::Comment(f)
     }
 }
-impl From<tokens::Space> for TokenValue {
-    fn from(f: tokens::Space) -> Self {
-        TokenValue::Space(f)
+impl From<tokens::Whitespace> for Token {
+    fn from(f: tokens::Whitespace) -> Self {
+        Token::Whitespace(f)
     }
 }

@@ -17,25 +17,31 @@ impl<T> Tokenizer<T>
 
     fn scan_token(&mut self) -> Result<Token> {
         let c = track_try!(self.reader.peek_char());
-        loop {
-            match c {
-                ' ' | '\t' | '\r' | '\n' => self.reader.consume_char(),
-                'a'...'z' => unimplemented!(),
-                'A'...'Z' => unimplemented!(),
-                '0'...'9' => unimplemented!(),
-                '$' => unimplemented!(),
-                '"' => unimplemented!(),
-                '\'' => unimplemented!(),
-                '%' => return self.scan_comment(),
-                _ => unimplemented!(),
-            }
-        }
+        Ok(match c {
+               ' ' | '\t' | '\r' | '\n' => self.scan_whitespace(),
+               'a'...'z' => unimplemented!(),
+               'A'...'Z' => unimplemented!(),
+               '0'...'9' => unimplemented!(),
+               '$' => unimplemented!(),
+               '"' => unimplemented!(),
+               '\'' => unimplemented!(),
+               '%' => self.scan_comment(),
+               _ => unimplemented!(),
+           })
     }
-    fn scan_comment(&mut self) -> Result<Token> {
-        let location = self.reader.current_location();
+    fn scan_whitespace(&mut self) -> Token {
+        let whitespace = match self.reader.read_char() {
+            Ok(' ') => tokens::Whitespace::Space,
+            Ok('\t') => tokens::Whitespace::Tab,
+            Ok('\r') => tokens::Whitespace::Return,
+            Ok('\n') => tokens::Whitespace::Newline,
+            _ => unreachable!(),
+        };
+        Token::from(whitespace)
+    }
+    fn scan_comment(&mut self) -> Token {
         let line = self.reader.read_while(|c| c != '\n');
-        let _ = self.reader.consume_char();
-        Ok(Token::new(location, tokens::Comment(line)))
+        Token::from(tokens::Comment(line))
     }
 }
 impl<T> Iterator for Tokenizer<T>

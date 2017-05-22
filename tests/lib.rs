@@ -4,12 +4,15 @@ extern crate trackable;
 
 use erl_tokenize::{Tokenizer, Result, Token};
 use erl_tokenize::tokens;
-use erl_tokenize::types::Location;
 
-macro_rules! comment {
-    ($line:expr, $column:expr, $comment:expr) => {
-        Token::new(Location{line: $line, column: $column}, tokens::Comment($comment.into()))
-    }
+fn nl() -> Token {
+    Token::from(tokens::Whitespace::Newline)
+}
+fn space() -> Token {
+    Token::from(tokens::Whitespace::Space)
+}
+fn comment(s: &str) -> Token {
+    Token::from(tokens::Comment(s.into()))
 }
 
 fn tokenize(s: &str) -> Result<Vec<Token>> {
@@ -20,12 +23,18 @@ fn tokenize(s: &str) -> Result<Vec<Token>> {
 fn tokenize_comments() {
     let src = "% foo";
     let tokens = track_try_unwrap!(tokenize(src));
-    assert_eq!(tokens, [comment!(1, 1, "% foo")]);
+    assert_eq!(tokens, [comment("% foo")]);
 
     let src = r#"
 % foo
-  % bar
+ % bar
 "#;
     let tokens = track_try_unwrap!(tokenize(src));
-    assert_eq!(tokens, [comment!(1, 1, "% foo")]);
+    assert_eq!(tokens,
+               [nl(),
+                comment("% foo"),
+                nl(),
+                space(),
+                comment("% bar"),
+                nl()]);
 }
