@@ -1,41 +1,41 @@
-use std::iter::Peekable;
-
 use {Result, ErrorKind, Token};
-use types::Location;
+use char_reader::CharReader;
+use tokens;
 
 #[derive(Debug)]
 pub struct Tokenizer<T>
     where T: Iterator<Item = char>
 {
-    chars: Peekable<T>,
-    current: Location,
+    reader: CharReader<T>,
 }
 impl<T> Tokenizer<T>
     where T: Iterator<Item = char>
 {
     pub fn new(chars: T) -> Self {
-        Tokenizer {
-            chars: chars.peekable(),
-            current: Location { line: 0, column: 0 },
-        }
+        Tokenizer { reader: CharReader::new(chars) }
     }
 
-    fn next_token(&mut self) -> Result<Token> {
-        let c = track_try!(self.chars.peek().ok_or(ErrorKind::UnexpectedEof));
-        match *c {
-            ' ' | '\t' | '\r' | '\n' => unimplemented!(),
-            'a'...'z' => unimplemented!(),
-            'A'...'Z' => unimplemented!(),
-            '0'...'9' => unimplemented!(),
-            '$' => unimplemented!(),
-            '"' => unimplemented!(),
-            '\'' => unimplemented!(),
-            '%' => unimplemented!(),
-            _ => unimplemented!(),
+    fn scan_token(&mut self) -> Result<Token> {
+        let c = track_try!(self.reader.peek_char());
+        loop {
+            match c {
+                ' ' | '\t' | '\r' | '\n' => self.reader.consume_char(),
+                'a'...'z' => unimplemented!(),
+                'A'...'Z' => unimplemented!(),
+                '0'...'9' => unimplemented!(),
+                '$' => unimplemented!(),
+                '"' => unimplemented!(),
+                '\'' => unimplemented!(),
+                '%' => return self.scan_comment(),
+                _ => unimplemented!(),
+            }
         }
     }
-    fn is_eos(&mut self) -> bool {
-        self.chars.peek().is_none()
+    fn scan_comment(&mut self) -> Result<Token> {
+        let location = self.reader.current_location();
+        let line = self.reader.read_while(|c| c != '\n');
+        let _ = self.reader.consume_char();
+        Ok(Token::new(location, tokens::Comment(line)))
     }
 }
 impl<T> Iterator for Tokenizer<T>
@@ -43,10 +43,10 @@ impl<T> Iterator for Tokenizer<T>
 {
     type Item = Result<Token>;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.is_eos() {
+        if self.reader.is_eos() {
             None
         } else {
-            Some(track!(self.next_token()))
+            Some(track!(self.scan_token()))
         }
     }
 }

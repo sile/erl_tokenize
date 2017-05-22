@@ -9,6 +9,7 @@ pub use tokenizer::Tokenizer;
 pub mod tokens;
 pub mod types;
 
+mod char_reader;
 mod error;
 mod token;
 mod tokenizer;
