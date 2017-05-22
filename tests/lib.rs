@@ -23,7 +23,7 @@ fn tokenize(s: &str) -> Result<Vec<Token>> {
 fn tokenize_comments() {
     let src = "% foo";
     let tokens = track_try_unwrap!(tokenize(src));
-    assert_eq!(tokens, [comment("% foo")]);
+    assert_eq!(tokens, [comment(" foo")]);
 
     let src = r#"
 % foo
@@ -31,10 +31,5 @@ fn tokenize_comments() {
 "#;
     let tokens = track_try_unwrap!(tokenize(src));
     assert_eq!(tokens,
-               [nl(),
-                comment("% foo"),
-                nl(),
-                space(),
-                comment("% bar"),
-                nl()]);
+               [nl(), comment(" foo"), nl(), space(), comment(" bar"), nl()]);
 }

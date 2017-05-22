@@ -6,6 +6,7 @@ pub type Error = TrackableError<ErrorKind>;
 
 #[derive(Debug, Clone)]
 pub enum ErrorKind {
+    InvalidInput,
     UnexpectedEof,
     Other,
 }

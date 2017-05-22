@@ -3,9 +3,7 @@ use char_reader::CharReader;
 use tokens;
 
 #[derive(Debug)]
-pub struct Tokenizer<T>
-    where T: Iterator<Item = char>
-{
+pub struct Tokenizer<T> {
     reader: CharReader<T>,
 }
 impl<T> Tokenizer<T>
@@ -26,7 +24,7 @@ impl<T> Tokenizer<T>
                '"' => unimplemented!(),
                '\'' => unimplemented!(),
                '%' => self.scan_comment(),
-               _ => unimplemented!(),
+               _ => track_try!(self.scan_symbol()),
            })
     }
     fn scan_whitespace(&mut self) -> Token {
@@ -40,8 +38,100 @@ impl<T> Tokenizer<T>
         Token::from(whitespace)
     }
     fn scan_comment(&mut self) -> Token {
+        self.reader.consume_char();
         let line = self.reader.read_while(|c| c != '\n');
         Token::from(tokens::Comment(line))
+    }
+    fn scan_symbol(&mut self) -> Result<Token> {
+        use tokens::Symbol;
+        let symbol = match track_try!(self.reader.read_char()) {
+            '[' => Symbol::OpenSquare,
+            ']' => Symbol::CloseSquare,
+            '(' => Symbol::OpenParen,
+            ')' => Symbol::CloseParen,
+            '{' => Symbol::OpenBrace,
+            '}' => Symbol::CloseBrace,
+            '#' => Symbol::Sharp,
+            '.' => Symbol::Dot,
+            ',' => Symbol::Comma,
+            ';' => Symbol::Semicolon,
+            '?' => Symbol::Question,
+            '!' => Symbol::Not,
+            '*' => Symbol::Multiply,
+            '<' => {
+                match self.reader.read_char_if("-=<") {
+                    Some('-') => Symbol::LeftAllow,
+                    Some('=') => Symbol::DoubleLeftAllow,
+                    Some('<') => Symbol::DoubleLeftAngle,
+                    _ => Symbol::Less,
+                }
+            }
+            '>' => {
+                match self.reader.read_char_if(">=") {
+                    Some('>') => Symbol::DoubleRightAngle,
+                    Some('=') => Symbol::GreaterEq,
+                    _ => Symbol::Greater,
+                }
+            }
+            '/' => {
+                if self.reader.read_char_if("=").is_some() {
+                    Symbol::NotEq
+                } else {
+                    Symbol::Slash
+                }
+            }
+            '=' => {
+                match self.reader.read_char_if("<>=:/") {
+                    Some('<') => Symbol::LessEq,
+                    Some('>') => Symbol::DoubleRightAllow,
+                    Some('=') => Symbol::Eq,
+                    Some(':') => {
+                        if self.reader.read_char_if("=").is_some() {
+                            Symbol::ExactEq
+                        } else {
+                            self.reader.unread(':');
+                            Symbol::Match
+                        }
+                    }
+                    Some('/') => {
+                        if self.reader.read_char_if("=").is_some() {
+                            Symbol::ExactNotEq
+                        } else {
+                            self.reader.unread('/');
+                            Symbol::Match
+                        }
+                    }
+                    _ => Symbol::Match,
+                }
+            }
+            ':' => {
+                match self.reader.read_char_if("=") {
+                    Some('=') => Symbol::MapMatch,
+                    _ => Symbol::Colon,
+                }
+            }
+            '|' => {
+                match self.reader.read_char_if("|") {
+                    Some('|') => Symbol::DoubleVerticalBar,
+                    _ => Symbol::VerticalBar,
+                }
+            }
+            '-' => {
+                match self.reader.read_char_if("->") {
+                    Some('-') => Symbol::MinusMinus,
+                    Some('>') => Symbol::RightAllow,
+                    _ => Symbol::Hyphen,
+                }
+            }
+            '+' => {
+                match self.reader.read_char_if("+") {
+                    Some('+') => Symbol::PlusPlus,
+                    _ => Symbol::Plus,
+                }
+            }
+            c => track_panic!(ErrorKind::InvalidInput, "Illegal character: {:?}", c),
+        };
+        Ok(Token::from(symbol))
     }
 }
 impl<T> Iterator for Tokenizer<T>
