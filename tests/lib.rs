@@ -61,9 +61,10 @@ fn tokenize_numbers() {
 
 #[test]
 fn tokenize_atoms() {
-    let src = "foo 'BAR'";
+    let src = "foo 'BAR' comté";
     let tokens = track_try_unwrap!(tokenize(src));
-    assert_eq!(tokens, [atom("foo"), space(), atom("BAR")]);
+    assert_eq!(tokens,
+               [atom("foo"), space(), atom("BAR"), space(), atom("comté")]);
 }
 
 #[test]

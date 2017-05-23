@@ -126,7 +126,7 @@ impl<T> Tokenizer<T>
         fn is_atom_non_leading_char(c: char) -> bool {
             match c {
                 'a'...'z' | 'A'...'Z' | '@' | '_' | '0'...'9' => true,
-                _ => false,
+                _ => c.is_alphabetic(),
             }
         }
         let name = self.reader.read_while(is_atom_non_leading_char);
