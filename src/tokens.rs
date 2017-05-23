@@ -52,6 +52,7 @@ pub enum Whitespace {
     Tab, // '\t'
     Return, // '\r'
     Newline, // '\n'
+    NoBreakSpace,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -18,7 +18,7 @@ impl<T> Tokenizer<T>
     fn scan_token(&mut self) -> Result<Token> {
         let c = track_try!(self.reader.peek_char());
         Ok(match c {
-               ' ' | '\t' | '\r' | '\n' => self.scan_whitespace(),
+               ' ' | '\t' | '\r' | '\n' | '\u{A0}' => self.scan_whitespace(),
                'a'...'z' => self.scan_atom_or_keyword(),
                'A'...'Z' | '_' => self.scan_variable(),
                '0'...'9' => track_try!(self.scan_number()),
@@ -119,6 +119,7 @@ impl<T> Tokenizer<T>
             Ok('\t') => tokens::Whitespace::Tab,
             Ok('\r') => tokens::Whitespace::Return,
             Ok('\n') => tokens::Whitespace::Newline,
+            Ok('\u{A0}') => tokens::Whitespace::NoBreakSpace,
             _ => unreachable!(),
         };
         Token::from(whitespace)
