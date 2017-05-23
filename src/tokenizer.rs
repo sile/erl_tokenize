@@ -1,3 +1,5 @@
+use num::Num;
+
 use {Result, ErrorKind, Token};
 use char_reader::CharReader;
 use tokens;
@@ -17,15 +19,93 @@ impl<T> Tokenizer<T>
         let c = track_try!(self.reader.peek_char());
         Ok(match c {
                ' ' | '\t' | '\r' | '\n' => self.scan_whitespace(),
-               'a'...'z' => unimplemented!(),
-               'A'...'Z' => unimplemented!(),
-               '0'...'9' => unimplemented!(),
-               '$' => unimplemented!(),
-               '"' => unimplemented!(),
-               '\'' => unimplemented!(),
+               'a'...'z' => self.scan_atom_or_keyword(),
+               'A'...'Z' | '_' => self.scan_variable(),
+               '0'...'9' => track_try!(self.scan_number()),
+               '$' => track_try!(self.scan_character()),
+               '"' => track_try!(self.scan_string()),
+               '\'' => track_try!(self.scan_quoted_atom()),
                '%' => self.scan_comment(),
                _ => track_try!(self.scan_symbol()),
            })
+    }
+    fn scan_character(&mut self) -> Result<Token> {
+        self.reader.consume_char();
+        let mut c = track_try!(self.reader.read_char());
+        if c == '\\' {
+            c = track_try!(self.reader.read_escaped_char());
+        }
+        Ok(Token::from(tokens::Char(c)))
+    }
+    fn scan_string(&mut self) -> Result<Token> {
+        // See: http://erlang.org/doc/reference_manual/data_types.html#id76742
+        self.reader.consume_char();
+        let mut buf = String::new();
+        loop {
+            let c = match track_try!(self.reader.read_char()) {
+                '\\' => track_try!(self.reader.read_escaped_char()),
+                '"' => break,
+                c => c,
+            };
+            buf.push(c);
+        }
+        Ok(Token::from(tokens::Str(buf)))
+    }
+    fn scan_variable(&mut self) -> Token {
+        fn is_var_char(c: char) -> bool {
+            match c {
+                'a'...'z' | 'A'...'Z' | '@' | '_' | '0'...'9' => true,
+                _ => false,
+            }
+        }
+        let var = self.reader.read_while(is_var_char);
+        Token::from(tokens::Var(var))
+    }
+    fn scan_number(&mut self) -> Result<Token> {
+        // See: http://erlang.org/doc/reference_manual/data_types.html#id65900
+        let mut buf = String::new();
+        while let Ok(c) = self.reader.peek_char() {
+            match c {
+                '0'...'9' => {
+                    self.reader.consume_char();
+                    buf.push(c);
+                }
+                '.' => {
+                    self.reader.consume_char();
+                    buf.push('.');
+                    return track!(self.scan_float(buf));
+                }
+                '#' => {
+                    self.reader.consume_char();
+                    let radix = track_try!(buf.parse());
+                    track_assert!(1 < radix && radix < 37,
+                                  ErrorKind::InvalidInput,
+                                  "Illegal Radix: {:?}",
+                                  buf);
+                    return track!(self.scan_integer(radix));
+                }
+                _ => break,
+            }
+        }
+        let n = track_try!(buf.parse());
+        Ok(Token::from(tokens::Int(n)))
+    }
+    fn scan_integer(&mut self, radix: u32) -> Result<Token> {
+        let buf = self.reader.read_while(|c| c.is_digit(radix));
+        let n = track_try!(Num::from_str_radix(&buf, radix));
+        Ok(Token::from(tokens::Int(n)))
+    }
+    fn scan_float(&mut self, mut buf: String) -> Result<Token> {
+        buf.push_str(&self.reader.read_while(|c| c.is_digit(10)));
+        if self.reader.read_char_if("eE").is_some() {
+            buf.push('e');
+            if let Some(sign) = self.reader.read_char_if("-+") {
+                buf.push(sign);
+            }
+            buf.push_str(&self.reader.read_while(|c| c.is_digit(10)));
+        }
+        let n = track_try!(buf.parse());
+        Ok(Token::from(tokens::Float(n)))
     }
     fn scan_whitespace(&mut self) -> Token {
         let whitespace = match self.reader.read_char() {
@@ -41,6 +121,33 @@ impl<T> Tokenizer<T>
         self.reader.consume_char();
         let line = self.reader.read_while(|c| c != '\n');
         Token::from(tokens::Comment(line))
+    }
+    fn scan_atom_or_keyword(&mut self) -> Token {
+        fn is_atom_non_leading_char(c: char) -> bool {
+            match c {
+                'a'...'z' | 'A'...'Z' | '@' | '_' | '0'...'9' => true,
+                _ => false,
+            }
+        }
+        let name = self.reader.read_while(is_atom_non_leading_char);
+        if let Some(k) = tokens::Keyword::from_str(&name) {
+            Token::from(k)
+        } else {
+            Token::from(tokens::Atom(name))
+        }
+    }
+    fn scan_quoted_atom(&mut self) -> Result<Token> {
+        self.reader.consume_char();
+        let mut buf = String::new();
+        loop {
+            let c = match track_try!(self.reader.read_char()) {
+                '\\' => track_try!(self.reader.read_escaped_char()),
+                '\'' => break,
+                c => c,
+            };
+            buf.push(c);
+        }
+        Ok(Token::from(tokens::Atom(buf)))
     }
     fn scan_symbol(&mut self) -> Result<Token> {
         use tokens::Symbol;

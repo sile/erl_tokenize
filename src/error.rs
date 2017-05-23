@@ -1,4 +1,5 @@
-
+use std;
+use num;
 use trackable::error::{TrackableError, IntoTrackableError};
 use trackable::error::{ErrorKind as TrackableErrorKind, ErrorKindExt};
 
@@ -12,10 +13,18 @@ pub enum ErrorKind {
 }
 
 impl TrackableErrorKind for ErrorKind {}
-// impl IntoTrackableError<std::io::Error> for ErrorKind {
-//     fn into_trackable_error(from: std::io::Error) -> Error {
-
-//         ErrorKind::Other.cause(from)
-
-//     }
-// }
+impl IntoTrackableError<std::num::ParseIntError> for ErrorKind {
+    fn into_trackable_error(e: std::num::ParseIntError) -> Error {
+        ErrorKind::InvalidInput.cause(e)
+    }
+}
+impl IntoTrackableError<std::num::ParseFloatError> for ErrorKind {
+    fn into_trackable_error(e: std::num::ParseFloatError) -> Error {
+        ErrorKind::InvalidInput.cause(e)
+    }
+}
+impl IntoTrackableError<num::bigint::ParseBigIntError> for ErrorKind {
+    fn into_trackable_error(e: num::bigint::ParseBigIntError) -> Error {
+        ErrorKind::InvalidInput.cause(e)
+    }
+}
