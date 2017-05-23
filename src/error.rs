@@ -9,7 +9,6 @@ pub type Error = TrackableError<ErrorKind>;
 pub enum ErrorKind {
     InvalidInput,
     UnexpectedEof,
-    Other,
 }
 
 impl TrackableErrorKind for ErrorKind {}
