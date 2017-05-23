@@ -6,7 +6,8 @@ extern crate trackable;
 use std::fs::File;
 use std::io::Read;
 use clap::{App, Arg};
-use erl_tokenize::Tokenizer;
+use erl_tokenize::{Tokenizer, Token};
+use erl_tokenize::tokens::Whitespace;
 
 fn main() {
     let matches = App::new("tokenize")
@@ -18,9 +19,13 @@ fn main() {
     let mut file = File::open(src_file).expect("Cannot open file");
     file.read_to_string(&mut src).expect("Cannot read file");
 
+    let mut line = 1;
     let tokenizer = Tokenizer::new(src.chars());
     for token in tokenizer {
-        let token = track_try_unwrap!(token);
-        println!("{:?}", token);
+        let token = track_try_unwrap!(token, "line={}", line);
+        if token == Token::Whitespace(Whitespace::Newline) {
+            line += 1;
+        }
+        println!("[line:{}] {:?}", line, token);
     }
 }
