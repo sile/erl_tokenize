@@ -26,7 +26,13 @@ impl<T> Tokenizer<T>
                '"' => track_try!(self.scan_string()),
                '\'' => track_try!(self.scan_quoted_atom()),
                '%' => self.scan_comment(),
-               _ => track_try!(self.scan_symbol()),
+               _ => {
+                   if c.is_alphabetic() {
+                       self.scan_atom_or_keyword()
+                   } else {
+                       track_try!(self.scan_symbol())
+                   }
+               }
            })
     }
     fn scan_character(&mut self) -> Result<Token> {
