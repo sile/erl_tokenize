@@ -23,9 +23,10 @@ fn main() {
     let tokenizer = Tokenizer::new(src.chars());
     for token in tokenizer {
         let token = track_try_unwrap!(token, "line={}", line);
+        println!("[line:{}] {:?}", line, token);
+
         if token == Token::Whitespace(Whitespace::Newline) {
             line += 1;
         }
-        println!("[line:{}] {:?}", line, token);
     }
 }
