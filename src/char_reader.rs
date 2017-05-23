@@ -74,11 +74,8 @@ impl<T> CharReader<T>
                't' => '\t',
                'v' => 11 as char, // Vertical Tabulation
                '^' => {
-                   match track_try!(self.read_char()) {
-                       c @ 'a'...'z' => ((c as u8) - ('a' as u8) + 1) as char,
-                       c @ 'A'...'Z' => ((c as u8) - ('A' as u8) + 1) as char,
-                       c => track_panic!(ErrorKind::InvalidInput, "Illegal Character: {:?}", c),
-                   }
+                   let c = track_try!(self.read_char());
+                   (c as u32 % 32) as u8 as char
                }
                'x' => {
                    let c = self.read_char()?;

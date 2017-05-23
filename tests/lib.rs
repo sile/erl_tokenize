@@ -90,9 +90,16 @@ fn tokenize_strings() {
 
 #[test]
 fn tokenize_chars() {
-    let src = r#"$a $\t"#;
+    let src = r#"$a $\t $\^a $\^]"#;
     let tokens = track_try_unwrap!(tokenize(src));
-    assert_eq!(tokens, [ch('a'), space(), ch('\t')]);
+    assert_eq!(tokens,
+               [ch('a'),
+                space(),
+                ch('\t'),
+                space(),
+                ch('\u{1}'),
+                space(),
+                ch('\u{1d}')]);
 }
 
 #[test]
