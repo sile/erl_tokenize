@@ -53,15 +53,60 @@ impl<'a> AtomToken<'a> {
     }
 }
 
-// /// Character token.
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub struct Char(pub char);
-// impl Deref for Char {
-//     type Target = char;
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
+/// Character token.
+///
+/// # Examples
+///
+/// ```
+/// use erl_tokenize::tokens::CharToken;
+///
+/// // Ok
+/// assert_eq!(CharToken::from_text("$a").unwrap().value(), 'a');
+/// assert_eq!(CharToken::from_text("$a  ").unwrap().value(), 'a');
+/// assert_eq!(CharToken::from_text(r"$\t").unwrap().value(), '\t');
+/// assert_eq!(CharToken::from_text(r"$\123").unwrap().value(), 'I');
+/// assert_eq!(CharToken::from_text(r"$\x6F").unwrap().value(), 'o');
+/// assert_eq!(CharToken::from_text(r"$\x{06F}").unwrap().value(), 'o');
+/// assert_eq!(CharToken::from_text(r"$\^a").unwrap().value(), '\u{1}');
+///
+/// // Err
+/// assert!(CharToken::from_text("  $a").is_err());
+/// assert!(CharToken::from_text(r"$\").is_err());
+/// assert!(CharToken::from_text("a").is_err());
+/// ```
+#[derive(Debug, Clone)]
+pub struct CharToken<'a> {
+    value: char,
+    text: &'a str,
+}
+impl<'a> CharToken<'a> {
+    pub fn from_text(text: &'a str) -> Result<Self> {
+        let mut chars = text.char_indices();
+        track_assert_eq!(chars.next().map(|(_, c)| c),
+                         Some('$'),
+                         ErrorKind::InvalidInput);
+
+        let (_, c) = track_try!(chars.next().ok_or(ErrorKind::UnexpectedEos));
+        let (value, end) = if c == '\\' {
+            let mut chars = chars.peekable();
+            let value = track_try!(misc::parse_escaped_char(&mut chars));
+            let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
+            (value, end)
+        } else {
+            let value = c;
+            let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
+            (value, end)
+        };
+        let text = unsafe { text.slice_unchecked(0, end) };
+        Ok(CharToken { value, text })
+    }
+    pub fn value(&self) -> char {
+        self.value
+    }
+    pub fn text(&self) -> &str {
+        self.text
+    }
+}
 
 // /// Variable token.
 // #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

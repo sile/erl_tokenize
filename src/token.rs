@@ -3,7 +3,7 @@ use tokens;
 #[derive(Debug, Clone)]
 pub enum Token<'a> {
     Atom(tokens::AtomToken<'a>),
-    // Char(tokens::CharToken),
+    Char(tokens::CharToken<'a>),
     // Comment(tokens::CommentToken),
     // Float(tokens::FloatToken),
     // Integer(tokens::IntegerToken),
@@ -17,12 +17,18 @@ impl<'a> Token<'a> {
     pub fn text(&self) -> &str {
         match *self {
             Token::Atom(ref t) => t.text(),
+            Token::Char(ref t) => t.text(),
         }
     }
 }
 impl<'a> From<tokens::AtomToken<'a>> for Token<'a> {
     fn from(f: tokens::AtomToken<'a>) -> Self {
         Token::Atom(f)
+    }
+}
+impl<'a> From<tokens::CharToken<'a>> for Token<'a> {
+    fn from(f: tokens::CharToken<'a>) -> Self {
+        Token::Char(f)
     }
 }
 // impl From<tokens::Symbol> for Token {
@@ -43,11 +49,6 @@ impl<'a> From<tokens::AtomToken<'a>> for Token<'a> {
 // impl From<tokens::Float> for Token {
 //     fn from(f: tokens::Float) -> Self {
 //         Token::Float(f)
-//     }
-// }
-// impl From<tokens::Char> for Token {
-//     fn from(f: tokens::Char) -> Self {
-//         Token::Char(f)
 //     }
 // }
 // impl From<tokens::Var> for Token {
