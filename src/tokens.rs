@@ -141,6 +141,71 @@ impl<'a> CommentToken<'a> {
     }
 }
 
+/// Floating point number token.
+///
+/// # Examples
+///
+/// ```
+/// use erl_tokenize::tokens::FloatToken;
+///
+/// // Ok
+/// assert_eq!(FloatToken::from_text("0.1").unwrap().value(), 0.1);
+/// assert_eq!(FloatToken::from_text("12.3e-1  ").unwrap().value(), 1.23);
+///
+/// // Err
+/// assert!(FloatToken::from_text(".123").is_err());
+/// ```
+#[derive(Debug, Clone)]
+pub struct FloatToken<'a> {
+    value: f64,
+    text: &'a str,
+}
+impl<'a> FloatToken<'a> {
+    pub fn from_text(text: &'a str) -> Result<Self> {
+        let mut chars = text.char_indices().peekable();
+
+        while let Some((_, '0'...'9')) = chars.peek().cloned() {
+            let _ = chars.next();
+        }
+        track_assert_ne!(chars.peek().map(|&(i, _)| i),
+                         Some(0),
+                         ErrorKind::InvalidInput);
+
+        if let Some((_, '.')) = chars.peek().cloned() {
+            let _ = chars.next();
+        }
+        while let Some((_, '0'...'9')) = chars.peek().cloned() {
+            let _ = chars.next();
+        }
+        if let Some((_, 'e')) = chars.peek().cloned() {
+            let _ = chars.next();
+        }
+        if let Some((_, 'E')) = chars.peek().cloned() {
+            let _ = chars.next();
+        }
+        if let Some((_, '+')) = chars.peek().cloned() {
+            let _ = chars.next();
+        }
+        if let Some((_, '-')) = chars.peek().cloned() {
+            let _ = chars.next();
+        }
+        while let Some((_, '0'...'9')) = chars.peek().cloned() {
+            let _ = chars.next();
+        }
+
+        let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
+        let text = unsafe { text.slice_unchecked(0, end) };
+        let value = track_try!(text.parse());
+        Ok(FloatToken { value, text })
+    }
+    pub fn value(&self) -> f64 {
+        self.value
+    }
+    pub fn text(&self) -> &str {
+        self.text
+    }
+}
+
 
 // /// Variable token.
 // #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -198,16 +263,6 @@ impl<'a> CommentToken<'a> {
 // pub struct Int(pub BigUint);
 // impl Deref for Int {
 //     type Target = BigUint;
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
-
-// /// Floating point number token.
-// #[derive(Debug, Clone, PartialEq, PartialOrd)]
-// pub struct Float(pub f64);
-// impl Deref for Float {
-//     type Target = f64;
 //     fn deref(&self) -> &Self::Target {
 //         &self.0
 //     }

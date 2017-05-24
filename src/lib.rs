@@ -27,7 +27,7 @@ extern crate num;
 extern crate trackable;
 
 pub use error::{Error, ErrorKind};
-pub use token::{Token, TokenKind};
+pub use token::Token;
 // pub use tokenizer::Tokenizer;
 
 pub mod tokens;

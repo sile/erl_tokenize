@@ -5,7 +5,7 @@ pub enum Token<'a> {
     Atom(tokens::AtomToken<'a>),
     Char(tokens::CharToken<'a>),
     Comment(tokens::CommentToken<'a>),
-    // Float(tokens::FloatToken<'a>),
+    Float(tokens::FloatToken<'a>),
     // Integer(tokens::IntegerToken),
     // Keyword(tokens::KeywordToken),
     // String(tokens::StringToken),
@@ -19,6 +19,7 @@ impl<'a> Token<'a> {
             Token::Atom(ref t) => t.text(),
             Token::Char(ref t) => t.text(),
             Token::Comment(ref t) => t.text(),
+            Token::Float(ref t) => t.text(),
         }
     }
 }
@@ -37,6 +38,11 @@ impl<'a> From<tokens::CommentToken<'a>> for Token<'a> {
         Token::Comment(f)
     }
 }
+impl<'a> From<tokens::FloatToken<'a>> for Token<'a> {
+    fn from(f: tokens::FloatToken<'a>) -> Self {
+        Token::Float(f)
+    }
+}
 // impl From<tokens::Symbol> for Token {
 //     fn from(f: tokens::Symbol) -> Self {
 //         Token::Symbol(f)
@@ -50,11 +56,6 @@ impl<'a> From<tokens::CommentToken<'a>> for Token<'a> {
 // impl From<tokens::Int> for Token {
 //     fn from(f: tokens::Int) -> Self {
 //         Token::Int(f)
-//     }
-// }
-// impl From<tokens::Float> for Token {
-//     fn from(f: tokens::Float) -> Self {
-//         Token::Float(f)
 //     }
 // }
 // impl From<tokens::Var> for Token {
@@ -77,17 +78,3 @@ impl<'a> From<tokens::CommentToken<'a>> for Token<'a> {
 //         Token::Whitespace(f)
 //     }
 // }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TokenKind {
-    Atom,
-    Char,
-    Comment,
-    Float,
-    Integer,
-    Keyword,
-    String,
-    Symbol,
-    Variable,
-    Whitespace,
-}
