@@ -4,8 +4,8 @@ use tokens;
 pub enum Token<'a> {
     Atom(tokens::AtomToken<'a>),
     Char(tokens::CharToken<'a>),
-    // Comment(tokens::CommentToken),
-    // Float(tokens::FloatToken),
+    Comment(tokens::CommentToken<'a>),
+    // Float(tokens::FloatToken<'a>),
     // Integer(tokens::IntegerToken),
     // Keyword(tokens::KeywordToken),
     // String(tokens::StringToken),
@@ -18,6 +18,7 @@ impl<'a> Token<'a> {
         match *self {
             Token::Atom(ref t) => t.text(),
             Token::Char(ref t) => t.text(),
+            Token::Comment(ref t) => t.text(),
         }
     }
 }
@@ -29,6 +30,11 @@ impl<'a> From<tokens::AtomToken<'a>> for Token<'a> {
 impl<'a> From<tokens::CharToken<'a>> for Token<'a> {
     fn from(f: tokens::CharToken<'a>) -> Self {
         Token::Char(f)
+    }
+}
+impl<'a> From<tokens::CommentToken<'a>> for Token<'a> {
+    fn from(f: tokens::CommentToken<'a>) -> Self {
+        Token::Comment(f)
     }
 }
 // impl From<tokens::Symbol> for Token {

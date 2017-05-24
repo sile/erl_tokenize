@@ -108,6 +108,40 @@ impl<'a> CharToken<'a> {
     }
 }
 
+/// Comment token.
+///
+/// # Examples
+///
+/// ```
+/// use erl_tokenize::tokens::CommentToken;
+///
+/// // Ok
+/// assert_eq!(CommentToken::from_text("%").unwrap().value(), "");
+/// assert_eq!(CommentToken::from_text("%% foo ").unwrap().value(), "% foo ");
+///
+/// // Err
+/// assert!(CommentToken::from_text("  % foo").is_err());
+/// ```
+#[derive(Debug, Clone)]
+pub struct CommentToken<'a> {
+    text: &'a str,
+}
+impl<'a> CommentToken<'a> {
+    pub fn from_text(text: &'a str) -> Result<Self> {
+        track_assert_eq!(text.chars().nth(0), Some('%'), ErrorKind::InvalidInput);
+        let end = text.find('\n').unwrap_or(text.len());
+        let text = unsafe { text.slice_unchecked(0, end) };
+        Ok(CommentToken { text })
+    }
+    pub fn value(&self) -> &str {
+        unsafe { self.text.slice_unchecked(1, self.text.len()) }
+    }
+    pub fn text(&self) -> &str {
+        self.text
+    }
+}
+
+
 // /// Variable token.
 // #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 // pub struct Var(pub String);
@@ -122,17 +156,6 @@ impl<'a> CharToken<'a> {
 // #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 // pub struct Str(pub String);
 // impl Deref for Str {
-//     type Target = str;
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
-
-
-// /// Comment token.
-// #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub struct Comment(pub String);
-// impl Deref for Comment {
 //     type Target = str;
 //     fn deref(&self) -> &Self::Target {
 //         &self.0
