@@ -40,7 +40,7 @@ impl<T> CharReader<T>
             self.unreads.push(c);
             Ok(c)
         } else {
-            track_panic!(ErrorKind::UnexpectedEof)
+            track_panic!(ErrorKind::UnexpectedEos)
         }
     }
     pub fn read_char_if(&mut self, expects: &str) -> Option<char> {
@@ -57,7 +57,7 @@ impl<T> CharReader<T>
         if let Some(c) = self.unreads.pop() {
             Ok(c)
         } else {
-            let c = track_try!(self.chars.next().ok_or(ErrorKind::UnexpectedEof));
+            let c = track_try!(self.chars.next().ok_or(ErrorKind::UnexpectedEos));
             Ok(c)
         }
     }

@@ -1,6 +1,8 @@
+//! Tokens.
 use std::ops::Deref;
 use num::BigUint;
 
+/// Character token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Char(pub char);
 impl Deref for Char {
@@ -10,6 +12,7 @@ impl Deref for Char {
     }
 }
 
+/// Variable token.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Var(pub String);
 impl Deref for Var {
@@ -19,6 +22,7 @@ impl Deref for Var {
     }
 }
 
+/// String token.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Str(pub String);
 impl Deref for Str {
@@ -28,6 +32,7 @@ impl Deref for Str {
     }
 }
 
+/// Atom token.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Atom(pub String);
 impl Deref for Atom {
@@ -37,6 +42,7 @@ impl Deref for Atom {
     }
 }
 
+/// Comment token.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Comment(pub String);
 impl Deref for Comment {
@@ -46,15 +52,38 @@ impl Deref for Comment {
     }
 }
 
+/// White space token.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Whitespace {
-    Space, // ' '
-    Tab, // '\t'
-    Return, // '\r'
-    Newline, // '\n'
+    /// `' '`
+    Space,
+
+    /// `'\t'`
+    Tab,
+
+    /// `'\r'`
+    Return,
+
+    /// `'\n'`
+    Newline,
+
+    /// `'\u{A0}'`
     NoBreakSpace,
 }
+impl Whitespace {
+    /// Coverts to the corresponding character.
+    pub fn as_char(&self) -> char {
+        match *self {
+            Whitespace::Space => ' ',
+            Whitespace::Tab => '\t',
+            Whitespace::Return => '\r',
+            Whitespace::Newline => '\n',
+            Whitespace::NoBreakSpace => '\u{A0}',
+        }
+    }
+}
 
+/// Integer token.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Int(pub BigUint);
 impl Deref for Int {
@@ -64,6 +93,7 @@ impl Deref for Int {
     }
 }
 
+/// Floating point number token.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Float(pub f64);
 impl Deref for Float {
@@ -73,80 +103,220 @@ impl Deref for Float {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Symbol token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Symbol {
-    OpenSquare, // [
-    CloseSquare, // ]
-    OpenParen, // (
-    CloseParen, // )
-    OpenBrace, // {
-    CloseBrace, // }
-    Sharp, // #
-    Slash, // /
-    Dot, // .
-    Comma, // ,
-    Colon, // :
-    Semicolon, // ;
-    Match, // =
-    MapMatch, // :=
-    VerticalBar, // |
-    DoubleVerticalBar, // ||
-    Question, // ?
-    Not, // !
-    Hyphen, // -
-    MinusMinus, // --
-    Plus, // +
-    PlusPlus, // ++
-    Multiply, // *
-    RightAllow, // ->
-    LeftAllow, // <-
-    DoubleRightAllow, // =>
-    DoubleLeftAllow, // <=
-    DoubleRightAngle, // >>
-    DoubleLeftAngle, // <<
-    Eq, // ==
-    ExactEq, // =:=
-    NotEq, // /=
-    ExactNotEq, // =/=
-    Greater, // >
-    GreaterEq, // >=
-    Less, // <
-    LessEq, // =<
+    /// `[`
+    OpenSquare,
+
+    /// `]`
+    CloseSquare,
+
+    /// `(`
+    OpenParen,
+
+    /// `)`
+    CloseParen,
+
+    /// `{`
+    OpenBrace,
+
+    /// `}`
+    CloseBrace,
+
+    /// `#`
+    Sharp,
+
+    /// `/`
+    Slash,
+
+    /// ``
+    Dot,
+
+    /// `,`
+    Comma,
+
+    /// `:`
+    Colon,
+
+    /// `;`
+    Semicolon,
+
+    /// `=`
+    Match,
+
+    /// `:=`
+    MapMatch,
+
+    /// `|`
+    VerticalBar,
+
+    /// `||`
+    DoubleVerticalBar,
+
+    /// `?`
+    Question,
+
+    /// `!`
+    Not,
+
+    /// `-`
+    Hyphen,
+
+    /// `--`
+    MinusMinus,
+
+    /// `+`
+    Plus,
+
+    /// `++`
+    PlusPlus,
+
+    /// `*`
+    Multiply,
+
+    /// `->`
+    RightAllow,
+
+    /// `<-`
+    LeftAllow,
+
+    /// `=>`
+    DoubleRightAllow,
+
+    /// `<=`
+    DoubleLeftAllow,
+
+    /// `>>`
+    DoubleRightAngle,
+
+    /// `<<`
+    DoubleLeftAngle,
+
+    /// `==`
+    Eq,
+
+    /// `=:=`
+    ExactEq,
+
+    /// `/=`
+    NotEq,
+
+    /// `=/=`
+    ExactNotEq,
+
+    /// `>`
+    Greater,
+
+    /// `>=`
+    GreaterEq,
+
+    /// `<`
+    Less,
+
+    /// `=<`
+    LessEq,
 }
 
-
-// http://erlang.org/doc/reference_manual/introduction.html#id61721
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Keyword tokens.
+///
+/// Reference: [Erlang's Reserved Words][Reserved Words]
+///
+/// [Reserved Words]: http://erlang.org/doc/reference_manual/introduction.html#id61721
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Keyword {
+    /// `after`
     After,
+
+    /// `and`.
     And,
+
+    /// `andalso`.
     Andalso,
+
+    /// `band`.
     Band,
+
+    /// `begin`.
     Begin,
+
+    /// `bnot`.
     Bnot,
+
+    /// `bor`.
     Bor,
+
+    /// `bsl`.
     Bsl,
+
+    /// `bsr`.
     Bsr,
+
+    /// `bxor`.
     Bxor,
+
+    /// `case`.
     Case,
+
+    /// `catch`.
     Catch,
+
+    /// `cond`.
     Cond,
+
+    /// `div`.
     Div,
+
+    /// `end`.
     End,
+
+    /// `fun`.
     Fun,
+
+    /// `if`.
     If,
+
+    /// `let`.
     Let,
+
+    /// `not`.
     Not,
+
+    /// `of`.
     Of,
+
+    /// `or`.
     Or,
+
+    /// `orelse`.
     Orelse,
+
+    /// `receive`.
     Receive,
+
+    /// `rem`.
     Rem,
+
+    /// `try`.
     Try,
+
+    /// `when`.
     When,
+
+    /// `xor`.
     Xor,
 }
 impl Keyword {
+    /// Tries to convert from a string to a `Keyword` instance.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::Keyword;
+    ///
+    /// assert_eq!(Keyword::from_str("bor"), Some(Keyword::Bor));
+    /// assert_eq!(Keyword::from_str("foo"), None);
+    /// ```
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "after" => Some(Keyword::After),
@@ -179,6 +349,8 @@ impl Keyword {
             _ => None,
         }
     }
+
+    /// Returns the string representation of this keyword.
     pub fn as_str(&self) -> &'static str {
         match *self {
             Keyword::After => "after",

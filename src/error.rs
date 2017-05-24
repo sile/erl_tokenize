@@ -8,7 +8,7 @@ pub type Error = TrackableError<ErrorKind>;
 #[derive(Debug, Clone)]
 pub enum ErrorKind {
     InvalidInput,
-    UnexpectedEof,
+    UnexpectedEos,
 }
 
 impl TrackableErrorKind for ErrorKind {}
