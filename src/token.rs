@@ -142,3 +142,19 @@ pub enum TokenKind {
     Variable,
     Whitespace,
 }
+
+/// Token value.
+#[allow(missing_docs)]
+#[derive(Debug, PartialEq)]
+pub enum TokenValue<'a> {
+    Atom(&'a str),
+    Char(char),
+    Comment(&'a str),
+    Float(f64),
+    Integer(&'a BigUint),
+    Keyword(Keyword),
+    String(&'a str),
+    Symbol(Symbol),
+    Variable(&'a str),
+    Whitespace(Whitespace),
+}
