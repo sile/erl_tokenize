@@ -280,3 +280,34 @@ impl Symbol {
         }
     }
 }
+
+/// White space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Whitespace {
+    /// `' '`
+    Space,
+
+    /// `'\t'`
+    Tab,
+
+    /// `'\r'`
+    Return,
+
+    /// `'\n'`
+    Newline,
+
+    /// `'\u{A0}'`
+    NoBreakSpace,
+}
+impl Whitespace {
+    /// Coverts to the corresponding character.
+    pub fn as_char(&self) -> char {
+        match *self {
+            Whitespace::Space => ' ',
+            Whitespace::Tab => '\t',
+            Whitespace::Return => '\r',
+            Whitespace::Newline => '\n',
+            Whitespace::NoBreakSpace => '\u{A0}',
+        }
+    }
+}

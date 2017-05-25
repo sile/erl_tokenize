@@ -5,7 +5,7 @@ use num::{Num, BigUint};
 
 use {Result, ErrorKind};
 use misc;
-use types::{Keyword, Symbol};
+use types::{Keyword, Symbol, Whitespace};
 
 /// Atom token.
 ///
@@ -503,33 +503,44 @@ impl<'a> VariableToken<'a> {
     }
 }
 
-// /// White space token.
-// #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub enum Whitespace {
-//     /// `' '`
-//     Space,
-
-//     /// `'\t'`
-//     Tab,
-
-//     /// `'\r'`
-//     Return,
-
-//     /// `'\n'`
-//     Newline,
-
-//     /// `'\u{A0}'`
-//     NoBreakSpace,
-// }
-// impl Whitespace {
-//     /// Coverts to the corresponding character.
-//     pub fn as_char(&self) -> char {
-//         match *self {
-//             Whitespace::Space => ' ',
-//             Whitespace::Tab => '\t',
-//             Whitespace::Return => '\r',
-//             Whitespace::Newline => '\n',
-//             Whitespace::NoBreakSpace => '\u{A0}',
-//         }
-//     }
-// }
+/// Whitespace token.
+///
+/// # Examples
+///
+/// ```
+/// use erl_tokenize::tokens::WhitespaceToken;
+/// use erl_tokenize::types::Whitespace;
+///
+/// // Ok
+/// assert_eq!(WhitespaceToken::from_text(" ").unwrap().value(), Whitespace::Space);
+/// assert_eq!(WhitespaceToken::from_text("\t ").unwrap().value(), Whitespace::Tab);
+///
+/// // Err
+/// assert!(WhitespaceToken::from_text("foo").is_err());
+/// ```
+#[derive(Debug, Clone)]
+pub struct WhitespaceToken<'a> {
+    value: Whitespace,
+    text: &'a str,
+}
+impl<'a> WhitespaceToken<'a> {
+    pub fn from_text(text: &'a str) -> Result<Self> {
+        track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
+        let (text, _) = text.split_at(1);
+        let value = match text.as_bytes()[0] {
+            b' ' => Whitespace::Space,
+            b'\t' => Whitespace::Tab,
+            b'\r' => Whitespace::Return,
+            b'\n' => Whitespace::Newline,
+            0xA0 => Whitespace::NoBreakSpace,
+            _ => track_panic!(ErrorKind::InvalidInput, "Not a whitespace: {:?}", text),
+        };
+        Ok(WhitespaceToken { value, text })
+    }
+    pub fn value(&self) -> Whitespace {
+        self.value
+    }
+    pub fn text(&self) -> &'a str {
+        self.text
+    }
+}
