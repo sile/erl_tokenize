@@ -1,22 +1,10 @@
 //! Miscellaneous types.
-use std::str::FromStr;
-
-use {Result, Error, ErrorKind};
 
 /// Keyword (a.k.a., reserved word).
 ///
 /// Reference: [Erlang's Reserved Words][Reserved Words]
 ///
 /// [Reserved Words]: http://erlang.org/doc/reference_manual/introduction.html#id61721
-///
-/// # Examples
-///
-/// ```
-/// use erl_tokenize::types::Keyword;
-///
-/// assert_eq!("bor".parse().ok(), Some(Keyword::Bor));
-/// assert!("foo".parse::<Keyword>().is_err());
-/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Keyword {
     /// `after`
@@ -134,38 +122,161 @@ impl Keyword {
         }
     }
 }
-impl FromStr for Keyword {
-    type Err = Error;
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "after" => Ok(Keyword::After),
-            "and" => Ok(Keyword::And),
-            "andalso" => Ok(Keyword::Andalso),
-            "band" => Ok(Keyword::Band),
-            "begin" => Ok(Keyword::Begin),
-            "bnot" => Ok(Keyword::Bnot),
-            "bor" => Ok(Keyword::Bor),
-            "bsl" => Ok(Keyword::Bsl),
-            "bsr" => Ok(Keyword::Bsr),
-            "bxor" => Ok(Keyword::Bxor),
-            "case" => Ok(Keyword::Case),
-            "catch" => Ok(Keyword::Catch),
-            "cond" => Ok(Keyword::Cond),
-            "div" => Ok(Keyword::Div),
-            "end" => Ok(Keyword::End),
-            "fun" => Ok(Keyword::Fun),
-            "if" => Ok(Keyword::If),
-            "let" => Ok(Keyword::Let),
-            "not" => Ok(Keyword::Not),
-            "of" => Ok(Keyword::Of),
-            "or" => Ok(Keyword::Or),
-            "orelse" => Ok(Keyword::Orelse),
-            "receive" => Ok(Keyword::Receive),
-            "rem" => Ok(Keyword::Rem),
-            "try" => Ok(Keyword::Try),
-            "when" => Ok(Keyword::When),
-            "xor" => Ok(Keyword::Xor),
-            _ => track_panic!(ErrorKind::InvalidInput, "Undefined keyword: {:?}", s),
+
+/// Symbol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Symbol {
+    /// `[`
+    OpenSquare,
+
+    /// `]`
+    CloseSquare,
+
+    /// `(`
+    OpenParen,
+
+    /// `)`
+    CloseParen,
+
+    /// `{`
+    OpenBrace,
+
+    /// `}`
+    CloseBrace,
+
+    /// `#`
+    Sharp,
+
+    /// `/`
+    Slash,
+
+    /// `.`
+    Dot,
+
+    /// `,`
+    Comma,
+
+    /// `:`
+    Colon,
+
+    /// `;`
+    Semicolon,
+
+    /// `=`
+    Match,
+
+    /// `:=`
+    MapMatch,
+
+    /// `|`
+    VerticalBar,
+
+    /// `||`
+    DoubleVerticalBar,
+
+    /// `?`
+    Question,
+
+    /// `!`
+    Not,
+
+    /// `-`
+    Hyphen,
+
+    /// `--`
+    MinusMinus,
+
+    /// `+`
+    Plus,
+
+    /// `++`
+    PlusPlus,
+
+    /// `*`
+    Multiply,
+
+    /// `->`
+    RightAllow,
+
+    /// `<-`
+    LeftAllow,
+
+    /// `=>`
+    DoubleRightAllow,
+
+    /// `<=`
+    DoubleLeftAllow,
+
+    /// `>>`
+    DoubleRightAngle,
+
+    /// `<<`
+    DoubleLeftAngle,
+
+    /// `==`
+    Eq,
+
+    /// `=:=`
+    ExactEq,
+
+    /// `/=`
+    NotEq,
+
+    /// `=/=`
+    ExactNotEq,
+
+    /// `>`
+    Greater,
+
+    /// `>=`
+    GreaterEq,
+
+    /// `<`
+    Less,
+
+    /// `=<`
+    LessEq,
+}
+impl Symbol {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            Symbol::OpenSquare => "[",
+            Symbol::CloseSquare => "]",
+            Symbol::OpenParen => "(",
+            Symbol::CloseParen => ")",
+            Symbol::OpenBrace => "{",
+            Symbol::CloseBrace => "}",
+            Symbol::Sharp => "#",
+            Symbol::Slash => "/",
+            Symbol::Dot => ".",
+            Symbol::Comma => ",",
+            Symbol::Colon => ":",
+            Symbol::Semicolon => ";",
+            Symbol::Match => "=",
+            Symbol::MapMatch => ":=",
+            Symbol::VerticalBar => "|",
+            Symbol::DoubleVerticalBar => "||",
+            Symbol::Question => "?",
+            Symbol::Not => "!",
+            Symbol::Hyphen => "-",
+            Symbol::MinusMinus => "--",
+            Symbol::Plus => "+",
+            Symbol::PlusPlus => "++",
+            Symbol::Multiply => "*",
+            Symbol::RightAllow => "->",
+            Symbol::LeftAllow => "<-",
+            Symbol::DoubleRightAllow => "=>",
+            Symbol::DoubleLeftAllow => "<=",
+            Symbol::DoubleRightAngle => ">>",
+            Symbol::DoubleLeftAngle => "<<",
+            Symbol::Eq => "==",
+            Symbol::ExactEq => "=:=",
+            Symbol::NotEq => "/=",
+            Symbol::ExactNotEq => "=/=",
+            Symbol::Greater => ">",
+            Symbol::GreaterEq => ">=",
+            Symbol::Less => "<",
+            Symbol::LessEq => "=<",
         }
     }
 }

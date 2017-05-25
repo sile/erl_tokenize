@@ -5,7 +5,7 @@ use num::{Num, BigUint};
 
 use {Result, ErrorKind};
 use misc;
-use types::Keyword;
+use types::{Keyword, Symbol};
 
 /// Atom token.
 ///
@@ -291,10 +291,38 @@ pub struct KeywordToken<'a> {
 }
 impl<'a> KeywordToken<'a> {
     pub fn from_text(text: &'a str) -> Result<Self> {
-        let end = text.find(|c| if let 'a'...'z' = c { false } else { true })
-            .unwrap_or(text.len());
-        let text = unsafe { text.slice_unchecked(0, end) };
-        let value = track_try!(text.parse());
+        let atom = track_try!(AtomToken::from_text(text));
+        let value = match atom.text() {
+            "after" => Keyword::After,
+            "and" => Keyword::And,
+            "andalso" => Keyword::Andalso,
+            "band" => Keyword::Band,
+            "begin" => Keyword::Begin,
+            "bnot" => Keyword::Bnot,
+            "bor" => Keyword::Bor,
+            "bsl" => Keyword::Bsl,
+            "bsr" => Keyword::Bsr,
+            "bxor" => Keyword::Bxor,
+            "case" => Keyword::Case,
+            "catch" => Keyword::Catch,
+            "cond" => Keyword::Cond,
+            "div" => Keyword::Div,
+            "end" => Keyword::End,
+            "fun" => Keyword::Fun,
+            "if" => Keyword::If,
+            "let" => Keyword::Let,
+            "not" => Keyword::Not,
+            "of" => Keyword::Of,
+            "or" => Keyword::Or,
+            "orelse" => Keyword::Orelse,
+            "receive" => Keyword::Receive,
+            "rem" => Keyword::Rem,
+            "try" => Keyword::Try,
+            "when" => Keyword::When,
+            "xor" => Keyword::Xor,
+            s => track_panic!(ErrorKind::InvalidInput, "Undefined keyword: {:?}", s),            
+        };
+        let text = atom.text();
         Ok(KeywordToken { value, text })
     }
     pub fn value(&self) -> Keyword {
@@ -342,6 +370,99 @@ impl<'a> StringToken<'a> {
     }
 }
 
+/// Symbol token.
+///
+/// # Examples
+///
+/// ```
+/// use erl_tokenize::tokens::SymbolToken;
+/// use erl_tokenize::types::Symbol;
+///
+/// // Ok
+/// assert_eq!(SymbolToken::from_text(".").unwrap().value(), Symbol::Dot);
+/// assert_eq!(SymbolToken::from_text(":=  ").unwrap().value(), Symbol::MapMatch);
+///
+/// // Err
+/// assert!(SymbolToken::from_text("  .").is_err());
+/// assert!(SymbolToken::from_text("foo").is_err());
+/// ```
+#[derive(Debug, Clone)]
+pub struct SymbolToken<'a> {
+    value: Symbol,
+    text: &'a str,
+}
+impl<'a> SymbolToken<'a> {
+    pub fn from_text(text: &'a str) -> Result<Self> {
+        let bytes = text.as_bytes();
+        let mut symbol = None;
+        if bytes.len() >= 3 {
+            symbol = match &bytes[0..3] {
+                b"=:=" => Some(Symbol::ExactEq),
+                b"=/=" => Some(Symbol::ExactNotEq),
+                _ => None,
+            };
+        }
+        if symbol.is_none() && bytes.len() >= 2 {
+            symbol = match &bytes[0..2] {
+                b":=" => Some(Symbol::MapMatch),
+                b"||" => Some(Symbol::DoubleVerticalBar),
+                b"--" => Some(Symbol::MinusMinus),
+                b"++" => Some(Symbol::PlusPlus),
+                b"->" => Some(Symbol::RightAllow),
+                b"<-" => Some(Symbol::LeftAllow),
+                b"=>" => Some(Symbol::DoubleRightAllow),
+                b"<=" => Some(Symbol::DoubleLeftAllow),
+                b">>" => Some(Symbol::DoubleRightAngle),
+                b"<<" => Some(Symbol::DoubleLeftAngle),
+                b"==" => Some(Symbol::Eq),
+                b"/=" => Some(Symbol::NotEq),
+                b">=" => Some(Symbol::GreaterEq),
+                b"=<" => Some(Symbol::LessEq),
+                _ => None,
+            };
+        }
+        if symbol.is_none() && bytes.len() >= 1 {
+            symbol = match bytes[0] {
+                b'[' => Some(Symbol::OpenSquare),
+                b']' => Some(Symbol::CloseSquare),
+                b'(' => Some(Symbol::OpenParen),
+                b')' => Some(Symbol::CloseParen),
+                b'{' => Some(Symbol::OpenBrace),
+                b'}' => Some(Symbol::CloseBrace),
+                b'#' => Some(Symbol::Sharp),
+                b'/' => Some(Symbol::Slash),
+                b'.' => Some(Symbol::Dot),
+                b',' => Some(Symbol::Comma),
+                b':' => Some(Symbol::Colon),
+                b';' => Some(Symbol::Semicolon),
+                b'=' => Some(Symbol::Match),
+                b'|' => Some(Symbol::VerticalBar),
+                b'?' => Some(Symbol::Question),
+                b'!' => Some(Symbol::Not),
+                b'-' => Some(Symbol::Hyphen),
+                b'+' => Some(Symbol::Plus),
+                b'*' => Some(Symbol::Multiply),
+                b'>' => Some(Symbol::Greater),
+                b'<' => Some(Symbol::Less),
+                _ => None,
+            };
+        }
+        if let Some(value) = symbol {
+            let end = value.as_str().len();
+            let text = unsafe { text.slice_unchecked(0, end) };
+            Ok(SymbolToken { value, text })
+        } else {
+            track_panic!(ErrorKind::InvalidInput);
+        }
+    }
+    pub fn value(&self) -> Symbol {
+        self.value
+    }
+    pub fn text(&self) -> &'a str {
+        self.text
+    }
+}
+
 // /// Variable token.
 // #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 // pub struct Var(pub String);
@@ -381,119 +502,4 @@ impl<'a> StringToken<'a> {
 //             Whitespace::NoBreakSpace => '\u{A0}',
 //         }
 //     }
-// }
-
-// /// Symbol token.
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-// pub enum Symbol {
-//     /// `[`
-//     OpenSquare,
-
-//     /// `]`
-//     CloseSquare,
-
-//     /// `(`
-//     OpenParen,
-
-//     /// `)`
-//     CloseParen,
-
-//     /// `{`
-//     OpenBrace,
-
-//     /// `}`
-//     CloseBrace,
-
-//     /// `#`
-//     Sharp,
-
-//     /// `/`
-//     Slash,
-
-//     /// ``
-//     Dot,
-
-//     /// `,`
-//     Comma,
-
-//     /// `:`
-//     Colon,
-
-//     /// `;`
-//     Semicolon,
-
-//     /// `=`
-//     Match,
-
-//     /// `:=`
-//     MapMatch,
-
-//     /// `|`
-//     VerticalBar,
-
-//     /// `||`
-//     DoubleVerticalBar,
-
-//     /// `?`
-//     Question,
-
-//     /// `!`
-//     Not,
-
-//     /// `-`
-//     Hyphen,
-
-//     /// `--`
-//     MinusMinus,
-
-//     /// `+`
-//     Plus,
-
-//     /// `++`
-//     PlusPlus,
-
-//     /// `*`
-//     Multiply,
-
-//     /// `->`
-//     RightAllow,
-
-//     /// `<-`
-//     LeftAllow,
-
-//     /// `=>`
-//     DoubleRightAllow,
-
-//     /// `<=`
-//     DoubleLeftAllow,
-
-//     /// `>>`
-//     DoubleRightAngle,
-
-//     /// `<<`
-//     DoubleLeftAngle,
-
-//     /// `==`
-//     Eq,
-
-//     /// `=:=`
-//     ExactEq,
-
-//     /// `/=`
-//     NotEq,
-
-//     /// `=/=`
-//     ExactNotEq,
-
-//     /// `>`
-//     Greater,
-
-//     /// `>=`
-//     GreaterEq,
-
-//     /// `<`
-//     Less,
-
-//     /// `=<`
-//     LessEq,
 // }

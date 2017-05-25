@@ -9,7 +9,7 @@ pub enum Token<'a> {
     Integer(tokens::IntegerToken<'a>),
     Keyword(tokens::KeywordToken<'a>),
     String(tokens::StringToken<'a>),
-    // Symbol(tokens::SymbolToken),
+    Symbol(tokens::SymbolToken<'a>),
     // Variable(tokens::VariableToken),
     // Whitespace(tokens::WhitespaceToken)
 }
@@ -23,6 +23,7 @@ impl<'a> Token<'a> {
             Token::Integer(ref t) => t.text(),
             Token::Keyword(ref t) => t.text(),
             Token::String(ref t) => t.text(),
+            Token::Symbol(ref t) => t.text(),
         }
     }
 }
@@ -61,11 +62,11 @@ impl<'a> From<tokens::StringToken<'a>> for Token<'a> {
         Token::String(f)
     }
 }
-// impl From<tokens::Symbol> for Token {
-//     fn from(f: tokens::Symbol) -> Self {
-//         Token::Symbol(f)
-//     }
-// }
+impl<'a> From<tokens::SymbolToken<'a>> for Token<'a> {
+    fn from(f: tokens::SymbolToken<'a>) -> Self {
+        Token::Symbol(f)
+    }
+}
 // impl From<tokens::Var> for Token {
 //     fn from(f: tokens::Var) -> Self {
 //         Token::Var(f)
