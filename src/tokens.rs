@@ -1,6 +1,7 @@
 //! Tokens.
 use std::str;
 use std::borrow::Cow;
+use num::{Num, BigUint};
 
 use {Result, ErrorKind};
 use misc;
@@ -206,6 +207,64 @@ impl<'a> FloatToken<'a> {
     }
 }
 
+/// Integer token.
+///
+/// # Examples
+///
+/// ```
+/// # extern crate num;
+/// # extern crate erl_tokenize;
+/// use erl_tokenize::tokens::IntegerToken;
+/// use num::traits::ToPrimitive;
+///
+/// # fn main() {
+/// // Ok
+/// assert_eq!(IntegerToken::from_text("10").unwrap().value().to_u32(), Some(10u32));
+/// assert_eq!(IntegerToken::from_text("16#ab0e").unwrap().value().to_u32(), Some(0xab0e));
+///
+/// // Err
+/// assert!(IntegerToken::from_text("-10").is_err());
+/// # }
+/// ```
+#[derive(Debug, Clone)]
+pub struct IntegerToken<'a> {
+    value: BigUint,
+    text: &'a str,
+}
+impl<'a> IntegerToken<'a> {
+    pub fn from_text(text: &'a str) -> Result<Self> {
+        let mut start = 0;
+        let mut radix = 10;
+        let mut chars = text.char_indices().peekable();
+        while let Some((i, c)) = chars.peek().cloned() {
+            if c == '#' && start == 0 {
+                start = i + 1;
+                radix = track_try!(unsafe { text.slice_unchecked(0, i) }.parse());
+                track_assert!(1 < radix && radix < 37,
+                              ErrorKind::InvalidInput,
+                              "radix={}",
+                              radix);
+            } else if !c.is_digit(radix) {
+                break;
+            }
+            chars.next();
+        }
+        let end = chars.peek().map(|&(i, _)| i).unwrap_or(text.len());
+        let input = unsafe { text.slice_unchecked(start, end) };
+        let value = track_try!(Num::from_str_radix(input, radix),
+                               "input={:?}, radix={}",
+                               input,
+                               radix);
+        let text = unsafe { text.slice_unchecked(0, end) };
+        Ok(IntegerToken { value, text })
+    }
+    pub fn value(&self) -> &BigUint {
+        &self.value
+    }
+    pub fn text(&self) -> &str {
+        self.text
+    }
+}
 
 // /// Variable token.
 // #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -255,16 +314,6 @@ impl<'a> FloatToken<'a> {
 //             Whitespace::Newline => '\n',
 //             Whitespace::NoBreakSpace => '\u{A0}',
 //         }
-//     }
-// }
-
-// /// Integer token.
-// #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub struct Int(pub BigUint);
-// impl Deref for Int {
-//     type Target = BigUint;
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
 //     }
 // }
 
