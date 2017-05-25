@@ -2,6 +2,8 @@
 //!
 //! # Examples
 //!
+//! Tokenizes the Erlang code `io:format("Hello").`:
+//!
 //! ```
 //! use erl_tokenize::{Tokenizer, TokenKind};
 //!

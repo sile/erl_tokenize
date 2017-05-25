@@ -13,6 +13,8 @@ Erlang source code tokenizer written in Rust.
 Examples
 --------
 
+Tokenizes the Erlang code `io:format("Hello").`:
+
 ```rust
 use erl_tokenize::{Tokenizer, TokenKind};
 
@@ -28,8 +30,50 @@ assert_eq!(tokens.iter().map(|t| t.text()).collect::<Vec<_>>(),
            ["io", ":", "format", "(", r#""Hello""#, ")", "."]);
 ```
 
+Executes the example `tokenize` command:
+
+```bash
+$ cargo run --example tokenize -- /dev/stdin <<EOS
+-module(foo).
+
+-export([bar/0]).
+
+bar() -> qux.
+EOS
+
+[line:1] Symbol(SymbolToken { value: Hyphen, text: "-" })
+[line:1] Atom(AtomToken { value: "module", text: "module" })
+[line:1] Symbol(SymbolToken { value: OpenParen, text: "(" })
+[line:1] Atom(AtomToken { value: "foo", text: "foo" })
+[line:1] Symbol(SymbolToken { value: CloseParen, text: ")" })
+[line:1] Symbol(SymbolToken { value: Dot, text: "." })
+[line:1] Whitespace(WhitespaceToken { value: Newline, text: "\n" })
+[line:2] Whitespace(WhitespaceToken { value: Newline, text: "\n" })
+[line:3] Symbol(SymbolToken { value: Hyphen, text: "-" })
+[line:3] Atom(AtomToken { value: "export", text: "export" })
+[line:3] Symbol(SymbolToken { value: OpenParen, text: "(" })
+[line:3] Symbol(SymbolToken { value: OpenSquare, text: "[" })
+[line:3] Atom(AtomToken { value: "bar", text: "bar" })
+[line:3] Symbol(SymbolToken { value: Slash, text: "/" })
+[line:3] Integer(IntegerToken { value: BigUint { data: [] }, text: "0" })
+[line:3] Symbol(SymbolToken { value: CloseSquare, text: "]" })
+[line:3] Symbol(SymbolToken { value: CloseParen, text: ")" })
+[line:3] Symbol(SymbolToken { value: Dot, text: "." })
+[line:3] Whitespace(WhitespaceToken { value: Newline, text: "\n" })
+[line:4] Whitespace(WhitespaceToken { value: Newline, text: "\n" })
+[line:5] Atom(AtomToken { value: "bar", text: "bar" })
+[line:5] Symbol(SymbolToken { value: OpenParen, text: "(" })
+[line:5] Symbol(SymbolToken { value: CloseParen, text: ")" })
+[line:5] Whitespace(WhitespaceToken { value: Space, text: " " })
+[line:5] Symbol(SymbolToken { value: RightAllow, text: "->" })
+[line:5] Whitespace(WhitespaceToken { value: Space, text: " " })
+[line:5] Atom(AtomToken { value: "qux", text: "qux" })
+[line:5] Symbol(SymbolToken { value: Dot, text: "." })
+[line:5] Whitespace(WhitespaceToken { value: Newline, text: "\n" })
+```
+
 References
 ----------
 
-- [erl_scan][erl_scan] module
-- [Erlang Data Types][Data Types]
+- [erl_scan](http://erlang.org/doc/man/erl_scan.html) module
+- [Erlang Data Types](http://erlang.org/doc/reference_manual/data_types.html)
