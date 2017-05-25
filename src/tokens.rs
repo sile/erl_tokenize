@@ -294,7 +294,7 @@ impl<'a> KeywordToken<'a> {
         let end = text.find(|c| if let 'a'...'z' = c { false } else { true })
             .unwrap_or(text.len());
         let text = unsafe { text.slice_unchecked(0, end) };
-        let value = track_try!(Keyword::from_str(text).ok_or(ErrorKind::InvalidInput));
+        let value = track_try!(text.parse());
         Ok(KeywordToken { value, text })
     }
     pub fn value(&self) -> Keyword {

@@ -5,7 +5,7 @@ use trackable::error::{ErrorKind as TrackableErrorKind, ErrorKindExt};
 
 pub type Error = TrackableError<ErrorKind>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorKind {
     InvalidInput,
     UnexpectedEos,

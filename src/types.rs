@@ -1,135 +1,106 @@
+//! Miscellaneous types.
+use std::str::FromStr;
+
+use {Result, Error, ErrorKind};
+
 /// Keyword (a.k.a., reserved word).
 ///
 /// Reference: [Erlang's Reserved Words][Reserved Words]
 ///
 /// [Reserved Words]: http://erlang.org/doc/reference_manual/introduction.html#id61721
+///
+/// # Examples
+///
+/// ```
+/// use erl_tokenize::types::Keyword;
+///
+/// assert_eq!("bor".parse().ok(), Some(Keyword::Bor));
+/// assert!("foo".parse::<Keyword>().is_err());
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Keyword {
     /// `after`
     After,
 
-    /// `and`.
+    /// `and`
     And,
 
-    /// `andalso`.
+    /// `andalso`
     Andalso,
 
-    /// `band`.
+    /// `band`
     Band,
 
-    /// `begin`.
+    /// `begin`
     Begin,
 
-    /// `bnot`.
+    /// `bnot`
     Bnot,
 
-    /// `bor`.
+    /// `bor`
     Bor,
 
-    /// `bsl`.
+    /// `bsl`
     Bsl,
 
-    /// `bsr`.
+    /// `bsr`
     Bsr,
 
-    /// `bxor`.
+    /// `bxor`
     Bxor,
 
-    /// `case`.
+    /// `case`
     Case,
 
-    /// `catch`.
+    /// `catch`
     Catch,
 
-    /// `cond`.
+    /// `cond`
     Cond,
 
-    /// `div`.
+    /// `div`
     Div,
 
-    /// `end`.
+    /// `end`
     End,
 
-    /// `fun`.
+    /// `fun`
     Fun,
 
-    /// `if`.
+    /// `if`
     If,
 
-    /// `let`.
+    /// `let`
     Let,
 
-    /// `not`.
+    /// `not`
     Not,
 
-    /// `of`.
+    /// `of`
     Of,
 
-    /// `or`.
+    /// `or`
     Or,
 
-    /// `orelse`.
+    /// `orelse`
     Orelse,
 
-    /// `receive`.
+    /// `receive`
     Receive,
 
-    /// `rem`.
+    /// `rem`
     Rem,
 
-    /// `try`.
+    /// `try`
     Try,
 
-    /// `when`.
+    /// `when`
     When,
 
-    /// `xor`.
+    /// `xor`
     Xor,
 }
 impl Keyword {
-    /// Tries to convert from a string to a `Keyword` instance.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use erl_tokenize::types::Keyword;
-    ///
-    /// assert_eq!(Keyword::from_str("bor"), Some(Keyword::Bor));
-    /// assert_eq!(Keyword::from_str("foo"), None);
-    /// ```
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "after" => Some(Keyword::After),
-            "and" => Some(Keyword::And),
-            "andalso" => Some(Keyword::Andalso),
-            "band" => Some(Keyword::Band),
-            "begin" => Some(Keyword::Begin),
-            "bnot" => Some(Keyword::Bnot),
-            "bor" => Some(Keyword::Bor),
-            "bsl" => Some(Keyword::Bsl),
-            "bsr" => Some(Keyword::Bsr),
-            "bxor" => Some(Keyword::Bxor),
-            "case" => Some(Keyword::Case),
-            "catch" => Some(Keyword::Catch),
-            "cond" => Some(Keyword::Cond),
-            "div" => Some(Keyword::Div),
-            "end" => Some(Keyword::End),
-            "fun" => Some(Keyword::Fun),
-            "if" => Some(Keyword::If),
-            "let" => Some(Keyword::Let),
-            "not" => Some(Keyword::Not),
-            "of" => Some(Keyword::Of),
-            "or" => Some(Keyword::Or),
-            "orelse" => Some(Keyword::Orelse),
-            "receive" => Some(Keyword::Receive),
-            "rem" => Some(Keyword::Rem),
-            "try" => Some(Keyword::Try),
-            "when" => Some(Keyword::When),
-            "xor" => Some(Keyword::Xor),
-            _ => None,
-        }
-    }
-
     /// Returns the string representation of this keyword.
     pub fn as_str(&self) -> &'static str {
         match *self {
@@ -160,6 +131,41 @@ impl Keyword {
             Keyword::Try => "try",
             Keyword::When => "when",
             Keyword::Xor => "xor",
+        }
+    }
+}
+impl FromStr for Keyword {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "after" => Ok(Keyword::After),
+            "and" => Ok(Keyword::And),
+            "andalso" => Ok(Keyword::Andalso),
+            "band" => Ok(Keyword::Band),
+            "begin" => Ok(Keyword::Begin),
+            "bnot" => Ok(Keyword::Bnot),
+            "bor" => Ok(Keyword::Bor),
+            "bsl" => Ok(Keyword::Bsl),
+            "bsr" => Ok(Keyword::Bsr),
+            "bxor" => Ok(Keyword::Bxor),
+            "case" => Ok(Keyword::Case),
+            "catch" => Ok(Keyword::Catch),
+            "cond" => Ok(Keyword::Cond),
+            "div" => Ok(Keyword::Div),
+            "end" => Ok(Keyword::End),
+            "fun" => Ok(Keyword::Fun),
+            "if" => Ok(Keyword::If),
+            "let" => Ok(Keyword::Let),
+            "not" => Ok(Keyword::Not),
+            "of" => Ok(Keyword::Of),
+            "or" => Ok(Keyword::Or),
+            "orelse" => Ok(Keyword::Orelse),
+            "receive" => Ok(Keyword::Receive),
+            "rem" => Ok(Keyword::Rem),
+            "try" => Ok(Keyword::Try),
+            "when" => Ok(Keyword::When),
+            "xor" => Ok(Keyword::Xor),
+            _ => track_panic!(ErrorKind::InvalidInput, "Undefined keyword: {:?}", s),
         }
     }
 }
