@@ -1,3 +1,4 @@
+use {Result, ErrorKind};
 use tokens;
 
 #[derive(Debug, Clone)]
@@ -14,6 +15,40 @@ pub enum Token<'a> {
     Whitespace(tokens::WhitespaceToken<'a>),
 }
 impl<'a> Token<'a> {
+    pub fn from_text(text: &'a str) -> Result<Self> {
+        let head = track_try!(text.chars().nth(0).ok_or(ErrorKind::UnexpectedEos));
+        match head {
+            ' ' | '\t' | '\r' | '\n' | '\u{A0}' => {
+                track!(tokens::WhitespaceToken::from_text(text)).map(Token::from)
+            }
+            'A'...'Z' | '_' => track!(tokens::VariableToken::from_text(text)).map(Token::from),
+            '0'...'9' => {
+                let maybe_float = text.find(|c: char| !c.is_digit(10))
+                    .map(|i| text.as_bytes()[i]) == Some(b'.');
+                if maybe_float {
+                    track!(tokens::FloatToken::from_text(text)).map(Token::from)
+                } else {
+                    track!(tokens::IntegerToken::from_text(text)).map(Token::from)
+                }
+            }
+            '$' => track!(tokens::CharToken::from_text(text)).map(Token::from),
+            '"' => track!(tokens::StringToken::from_text(text)).map(Token::from),
+            '\'' => track!(tokens::AtomToken::from_text(text)).map(Token::from),
+            '%' => track!(tokens::CommentToken::from_text(text)).map(Token::from),
+            _ => {
+                if head.is_alphabetic() {
+                    let atom = track_try!(tokens::AtomToken::from_text(text));
+                    if let Ok(keyword) = tokens::KeywordToken::from_text(atom.text()) {
+                        Ok(Token::from(keyword))
+                    } else {
+                        Ok(Token::from(atom))
+                    }
+                } else {
+                    track!(tokens::SymbolToken::from_text(text)).map(Token::from)
+                }
+            }
+        }
+    }
     pub fn text(&self) -> &'a str {
         match *self {
             Token::Atom(ref t) => t.text(),

@@ -155,6 +155,7 @@ impl<'a> CommentToken<'a> {
 /// assert_eq!(FloatToken::from_text("12.3e-1  ").unwrap().value(), 1.23);
 ///
 /// // Err
+/// assert!(FloatToken::from_text("123").is_err());
 /// assert!(FloatToken::from_text(".123").is_err());
 /// ```
 #[derive(Debug, Clone)]
@@ -172,10 +173,10 @@ impl<'a> FloatToken<'a> {
         track_assert_ne!(chars.peek().map(|&(i, _)| i),
                          Some(0),
                          ErrorKind::InvalidInput);
+        track_assert_eq!(chars.next().map(|(_, c)| c),
+                         Some('.'),
+                         ErrorKind::InvalidInput);
 
-        if let Some((_, '.')) = chars.peek().cloned() {
-            let _ = chars.next();
-        }
         while let Some((_, '0'...'9')) = chars.peek().cloned() {
             let _ = chars.next();
         }

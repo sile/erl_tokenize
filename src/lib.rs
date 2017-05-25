@@ -28,16 +28,15 @@ extern crate trackable;
 
 pub use error::{Error, ErrorKind};
 pub use token::Token;
-// pub use tokenizer::Tokenizer;
+pub use tokenizer::Tokenizer;
 
 pub mod tokens;
 pub mod types;
 
-// mod char_reader;
 mod error;
 mod misc;
 mod token;
-// mod tokenizer;
+mod tokenizer;
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
