@@ -320,7 +320,7 @@ impl<'a> KeywordToken<'a> {
             "try" => Keyword::Try,
             "when" => Keyword::When,
             "xor" => Keyword::Xor,
-            s => track_panic!(ErrorKind::InvalidInput, "Undefined keyword: {:?}", s),            
+            s => track_panic!(ErrorKind::InvalidInput, "Undefined keyword: {:?}", s),
         };
         let text = atom.text();
         Ok(KeywordToken { value, text })
@@ -463,15 +463,45 @@ impl<'a> SymbolToken<'a> {
     }
 }
 
-// /// Variable token.
-// #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub struct Var(pub String);
-// impl Deref for Var {
-//     type Target = str;
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
+/// Variable token.
+///
+/// # Examples
+///
+/// ```
+/// use erl_tokenize::tokens::VariableToken;
+///
+/// // Ok
+/// assert_eq!(VariableToken::from_text("Foo").unwrap().value(), "Foo");
+/// assert_eq!(VariableToken::from_text("_  ").unwrap().value(), "_");
+/// assert_eq!(VariableToken::from_text("_foo@bar").unwrap().value(), "_foo@bar");
+///
+/// // Err
+/// assert!(VariableToken::from_text("foo").is_err());
+/// assert!(VariableToken::from_text("  Foo").is_err());
+/// ```
+#[derive(Debug, Clone)]
+pub struct VariableToken<'a> {
+    text: &'a str,
+}
+impl<'a> VariableToken<'a> {
+    pub fn from_text(text: &'a str) -> Result<Self> {
+        let mut chars = text.char_indices();
+        let (_, head) = track_try!(chars.next().ok_or(ErrorKind::InvalidInput));
+        track_assert!(misc::is_variable_head_char(head), ErrorKind::InvalidInput);
+        let end = chars
+            .find(|&(_, c)| !misc::is_variable_non_head_char(c))
+            .map(|(i, _)| i)
+            .unwrap_or(text.len());
+        let text = unsafe { text.slice_unchecked(0, end) };
+        Ok(VariableToken { text })
+    }
+    pub fn value(&self) -> &str {
+        self.text
+    }
+    pub fn text(&self) -> &'a str {
+        self.text
+    }
+}
 
 // /// White space token.
 // #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

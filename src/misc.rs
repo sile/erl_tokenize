@@ -16,6 +16,20 @@ pub fn is_atom_non_head_char(c: char) -> bool {
     }
 }
 
+pub fn is_variable_head_char(c: char) -> bool {
+    match c {
+        'A'...'Z' | '_' => true,
+        _ => false,
+    }
+}
+
+pub fn is_variable_non_head_char(c: char) -> bool {
+    match c {
+        'a'...'z' | 'A'...'Z' | '@' | '_' | '0'...'9' => true,
+        _ => false,
+    }
+}
+
 pub fn parse_string(input: &str, terminator: char) -> Result<(Cow<str>, usize)> {
     let maybe_end = track_try!(input.find(terminator).ok_or(ErrorKind::InvalidInput));
     let maybe_escaped = unsafe { input.slice_unchecked(0, maybe_end).contains('\\') };
