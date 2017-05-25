@@ -305,20 +305,47 @@ impl<'a> KeywordToken<'a> {
     }
 }
 
+/// String token.
+///
+/// # Examples
+///
+/// ```
+/// use erl_tokenize::tokens::StringToken;
+///
+/// // Ok
+/// assert_eq!(StringToken::from_text(r#""foo""#).unwrap().value(), "foo");
+/// assert_eq!(StringToken::from_text(r#""foo"  "#).unwrap().value(), "foo");
+/// assert_eq!(StringToken::from_text(r#""f\x6Fo""#).unwrap().value(), "foo");
+///
+/// // Err
+/// assert!(StringToken::from_text(r#"  "foo""#).is_err());
+/// ```
+#[derive(Debug, Clone)]
+pub struct StringToken<'a> {
+    value: Cow<'a, str>,
+    text: &'a str,
+}
+impl<'a> StringToken<'a> {
+    pub fn from_text(text: &'a str) -> Result<Self> {
+        track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
+        let (head, tail) = text.split_at(1);
+        track_assert_eq!(head, "\"", ErrorKind::InvalidInput);
+        let (value, end) = track_try!(misc::parse_string(tail, '"'));
+        let text = unsafe { text.slice_unchecked(0, 1 + end + 1) };
+        Ok(StringToken { value, text })
+    }
+    pub fn value(&self) -> &str {
+        self.value.as_ref()
+    }
+    pub fn text(&self) -> &'a str {
+        self.text
+    }
+}
+
 // /// Variable token.
 // #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 // pub struct Var(pub String);
 // impl Deref for Var {
-//     type Target = str;
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
-
-// /// String token.
-// #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub struct Str(pub String);
-// impl Deref for Str {
 //     type Target = str;
 //     fn deref(&self) -> &Self::Target {
 //         &self.0

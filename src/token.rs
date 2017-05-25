@@ -8,7 +8,7 @@ pub enum Token<'a> {
     Float(tokens::FloatToken<'a>),
     Integer(tokens::IntegerToken<'a>),
     Keyword(tokens::KeywordToken<'a>),
-    // String(tokens::StringToken),
+    String(tokens::StringToken<'a>),
     // Symbol(tokens::SymbolToken),
     // Variable(tokens::VariableToken),
     // Whitespace(tokens::WhitespaceToken)
@@ -22,6 +22,7 @@ impl<'a> Token<'a> {
             Token::Float(ref t) => t.text(),
             Token::Integer(ref t) => t.text(),
             Token::Keyword(ref t) => t.text(),
+            Token::String(ref t) => t.text(),
         }
     }
 }
@@ -55,6 +56,11 @@ impl<'a> From<tokens::KeywordToken<'a>> for Token<'a> {
         Token::Keyword(f)
     }
 }
+impl<'a> From<tokens::StringToken<'a>> for Token<'a> {
+    fn from(f: tokens::StringToken<'a>) -> Self {
+        Token::String(f)
+    }
+}
 // impl From<tokens::Symbol> for Token {
 //     fn from(f: tokens::Symbol) -> Self {
 //         Token::Symbol(f)
@@ -63,16 +69,6 @@ impl<'a> From<tokens::KeywordToken<'a>> for Token<'a> {
 // impl From<tokens::Var> for Token {
 //     fn from(f: tokens::Var) -> Self {
 //         Token::Var(f)
-//     }
-// }
-// impl From<tokens::Str> for Token {
-//     fn from(f: tokens::Str) -> Self {
-//         Token::Str(f)
-//     }
-// }
-// impl From<tokens::Comment> for Token {
-//     fn from(f: tokens::Comment) -> Self {
-//         Token::Comment(f)
 //     }
 // }
 // impl From<tokens::Whitespace> for Token {
