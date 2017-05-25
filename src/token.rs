@@ -1,6 +1,11 @@
+use num::BigUint;
+
 use {Result, ErrorKind};
 use tokens;
+use values::{Keyword, Symbol, Whitespace};
 
+/// Token.
+#[allow(missing_docs)]
 #[derive(Debug, Clone)]
 pub enum Token<'a> {
     Atom(tokens::AtomToken<'a>),
@@ -15,6 +20,21 @@ pub enum Token<'a> {
     Whitespace(tokens::WhitespaceToken<'a>),
 }
 impl<'a> Token<'a> {
+    /// Tries to convert from any prefixes of the text to a token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::{Token, TokenValue};
+    /// use erl_tokenize::values::Symbol;
+    ///
+    /// // Atom
+    /// assert_eq!(Token::from_text("foo").unwrap().value(), TokenValue::Atom("foo"));
+    ///
+    /// // Symbol
+    /// assert_eq!(Token::from_text("[foo]").unwrap().value(),
+    ///            TokenValue::Symbol(Symbol::OpenSquare));
+    /// ```
     pub fn from_text(text: &'a str) -> Result<Self> {
         let head = track_try!(text.chars().nth(0).ok_or(ErrorKind::UnexpectedEos));
         match head {
@@ -49,6 +69,48 @@ impl<'a> Token<'a> {
             }
         }
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::{Token, TokenValue};
+    ///
+    /// // Comment
+    /// assert_eq!(Token::from_text("% foo").unwrap().value(), TokenValue::Comment(" foo"));
+    ///
+    /// // Float
+    /// assert_eq!(Token::from_text("1.23").unwrap().value(), TokenValue::Float(1.23));
+    /// ```
+    pub fn value(&self) -> TokenValue {
+        match *self {
+            Token::Atom(ref t) => TokenValue::Atom(t.value()),
+            Token::Char(ref t) => TokenValue::Char(t.value()),
+            Token::Comment(ref t) => TokenValue::Comment(t.value()),
+            Token::Float(ref t) => TokenValue::Float(t.value()),
+            Token::Integer(ref t) => TokenValue::Integer(t.value()),
+            Token::Keyword(ref t) => TokenValue::Keyword(t.value()),
+            Token::String(ref t) => TokenValue::String(t.value()),
+            Token::Symbol(ref t) => TokenValue::Symbol(t.value()),
+            Token::Variable(ref t) => TokenValue::Variable(t.value()),
+            Token::Whitespace(ref t) => TokenValue::Whitespace(t.value()),
+        }
+    }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Token;
+    ///
+    /// // Comment
+    /// assert_eq!(Token::from_text("% foo").unwrap().text(), "% foo");
+    ///
+    /// // Char
+    /// assert_eq!(Token::from_text(r#"$\t"#).unwrap().text(), r#"$\t"#);
+    /// ```
     pub fn text(&self) -> &'a str {
         match *self {
             Token::Atom(ref t) => t.text(),
@@ -63,6 +125,18 @@ impl<'a> Token<'a> {
             Token::Whitespace(ref t) => t.text(),
         }
     }
+
+    /// Returns the kind of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::{Token, TokenKind};
+    ///
+    /// assert_eq!(Token::from_text("foo").unwrap().kind(), TokenKind::Atom);
+    /// assert_eq!(Token::from_text("123").unwrap().kind(), TokenKind::Integer);
+    /// assert_eq!(Token::from_text(" ").unwrap().kind(), TokenKind::Whitespace);
+    /// ```
     pub fn kind(&self) -> TokenKind {
         match *self {
             Token::Atom(_) => TokenKind::Atom,
@@ -129,6 +203,8 @@ impl<'a> From<tokens::WhitespaceToken<'a>> for Token<'a> {
     }
 }
 
+/// Token kind.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     Atom,

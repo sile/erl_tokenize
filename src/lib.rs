@@ -30,7 +30,7 @@ extern crate num;
 extern crate trackable;
 
 pub use error::{Error, ErrorKind};
-pub use token::{Token, TokenKind};
+pub use token::{Token, TokenKind, TokenValue};
 pub use tokenizer::Tokenizer;
 
 pub mod tokens;
@@ -41,6 +41,7 @@ mod token;
 mod tokenizer;
 mod util;
 
+/// This crate specific `Result` type.
 pub type Result<T> = ::std::result::Result<T, Error>;
 
 #[cfg(test)]

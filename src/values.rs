@@ -238,6 +238,7 @@ pub enum Symbol {
     LessEq,
 }
 impl Symbol {
+    /// Returns the textual representation of this symbol.
     pub fn as_str(&self) -> &'static str {
         match *self {
             Symbol::OpenSquare => "[",

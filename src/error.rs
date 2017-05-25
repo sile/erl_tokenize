@@ -3,11 +3,16 @@ use num;
 use trackable::error::{TrackableError, IntoTrackableError};
 use trackable::error::{ErrorKind as TrackableErrorKind, ErrorKindExt};
 
+/// This crate specific error type.
 pub type Error = TrackableError<ErrorKind>;
 
+/// The list of the possible error kinds
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorKind {
+    /// Input text is invalid.
     InvalidInput,
+
+    /// Unexpected End-Of-String.
     UnexpectedEos,
 }
 

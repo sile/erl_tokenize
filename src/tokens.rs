@@ -30,6 +30,7 @@ pub struct AtomToken<'a> {
     text: &'a str,
 }
 impl<'a> AtomToken<'a> {
+    /// Tries to convert from any prefixes of the input text to an `AtomToken`.
     pub fn from_text(text: &'a str) -> Result<Self> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (head, tail) = text.split_at(1);
@@ -47,9 +48,33 @@ impl<'a> AtomToken<'a> {
         };
         Ok(AtomToken { value, text })
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::AtomToken;
+    ///
+    /// assert_eq!(AtomToken::from_text("foo").unwrap().value(), "foo");
+    /// assert_eq!(AtomToken::from_text("'foo'").unwrap().value(), "foo");
+    /// assert_eq!(AtomToken::from_text(r"'f\x6Fo'").unwrap().value(), "foo");
+    /// ```
     pub fn value(&self) -> &str {
         self.value.as_ref()
     }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::AtomToken;
+    ///
+    /// assert_eq!(AtomToken::from_text("foo").unwrap().text(), "foo");
+    /// assert_eq!(AtomToken::from_text("'foo'").unwrap().text(), "'foo'");
+    /// assert_eq!(AtomToken::from_text(r"'f\x6Fo'").unwrap().text(), r"'f\x6Fo'");
+    /// ```
     pub fn text(&self) -> &'a str {
         self.text
     }
@@ -82,6 +107,7 @@ pub struct CharToken<'a> {
     text: &'a str,
 }
 impl<'a> CharToken<'a> {
+    /// Tries to convert from any prefixes of the text to a `CharToken`.
     pub fn from_text(text: &'a str) -> Result<Self> {
         let mut chars = text.char_indices();
         track_assert_eq!(chars.next().map(|(_, c)| c),
@@ -102,9 +128,31 @@ impl<'a> CharToken<'a> {
         let text = unsafe { text.slice_unchecked(0, end) };
         Ok(CharToken { value, text })
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::CharToken;
+    ///
+    /// assert_eq!(CharToken::from_text("$a").unwrap().value(), 'a');
+    /// assert_eq!(CharToken::from_text(r"$\123").unwrap().value(), 'I');
+    /// ```
     pub fn value(&self) -> char {
         self.value
     }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::CharToken;
+    ///
+    /// assert_eq!(CharToken::from_text("$a").unwrap().text(), "$a");
+    /// assert_eq!(CharToken::from_text(r"$\123").unwrap().text(), r#"$\123"#);
+    /// ```
     pub fn text(&self) -> &'a str {
         self.text
     }
@@ -129,15 +177,38 @@ pub struct CommentToken<'a> {
     text: &'a str,
 }
 impl<'a> CommentToken<'a> {
+    /// Tries to convert from any prefixes of the text to a `CommentToken`.
     pub fn from_text(text: &'a str) -> Result<Self> {
         track_assert_eq!(text.chars().nth(0), Some('%'), ErrorKind::InvalidInput);
         let end = text.find('\n').unwrap_or(text.len());
         let text = unsafe { text.slice_unchecked(0, end) };
         Ok(CommentToken { text })
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::CommentToken;
+    ///
+    /// assert_eq!(CommentToken::from_text("%").unwrap().value(), "");
+    /// assert_eq!(CommentToken::from_text("%% foo ").unwrap().value(), "% foo ");
+    /// ```
     pub fn value(&self) -> &str {
         unsafe { self.text.slice_unchecked(1, self.text.len()) }
     }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::CommentToken;
+    ///
+    /// assert_eq!(CommentToken::from_text("%").unwrap().text(), "%");
+    /// assert_eq!(CommentToken::from_text("%% foo ").unwrap().text(), "%% foo ");
+    /// ```
     pub fn text(&self) -> &'a str {
         self.text
     }
@@ -164,6 +235,7 @@ pub struct FloatToken<'a> {
     text: &'a str,
 }
 impl<'a> FloatToken<'a> {
+    /// Tries to convert from any prefixes of the text to a `FloatToken`.
     pub fn from_text(text: &'a str) -> Result<Self> {
         let mut chars = text.char_indices().peekable();
 
@@ -201,9 +273,31 @@ impl<'a> FloatToken<'a> {
         let value = track_try!(text.parse());
         Ok(FloatToken { value, text })
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::FloatToken;
+    ///
+    /// assert_eq!(FloatToken::from_text("0.1").unwrap().value(), 0.1);
+    /// assert_eq!(FloatToken::from_text("12.3e-1").unwrap().value(), 1.23);
+    /// ```
     pub fn value(&self) -> f64 {
         self.value
     }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::FloatToken;
+    ///
+    /// assert_eq!(FloatToken::from_text("0.1").unwrap().text(), "0.1");
+    /// assert_eq!(FloatToken::from_text("12.3e-1").unwrap().text(), "12.3e-1");
+    /// ```
     pub fn text(&self) -> &'a str {
         self.text
     }
@@ -234,6 +328,7 @@ pub struct IntegerToken<'a> {
     text: &'a str,
 }
 impl<'a> IntegerToken<'a> {
+    /// Tries to convert from any prefixes of the text to an `IntegerToken`.
     pub fn from_text(text: &'a str) -> Result<Self> {
         let mut start = 0;
         let mut radix = 10;
@@ -260,9 +355,36 @@ impl<'a> IntegerToken<'a> {
         let text = unsafe { text.slice_unchecked(0, end) };
         Ok(IntegerToken { value, text })
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate num;
+    /// # extern crate erl_tokenize;
+    /// use erl_tokenize::tokens::IntegerToken;
+    /// use num::traits::ToPrimitive;
+    ///
+    /// # fn main() {
+    /// assert_eq!(IntegerToken::from_text("10").unwrap().value().to_u32(), Some(10u32));
+    /// assert_eq!(IntegerToken::from_text("16#ab0e").unwrap().value().to_u32(), Some(0xab0e));
+    /// # }
+    /// ```
     pub fn value(&self) -> &BigUint {
         &self.value
     }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::IntegerToken;
+    ///
+    /// assert_eq!(IntegerToken::from_text("10").unwrap().text(), "10");
+    /// assert_eq!(IntegerToken::from_text("16#ab0e").unwrap().text(), "16#ab0e");
+    /// ```
     pub fn text(&self) -> &'a str {
         self.text
     }
@@ -291,6 +413,7 @@ pub struct KeywordToken<'a> {
     text: &'a str,
 }
 impl<'a> KeywordToken<'a> {
+    /// Tries to convert from any prefixes of the text to a `KeywordToken`.
     pub fn from_text(text: &'a str) -> Result<Self> {
         let atom = track_try!(AtomToken::from_text(text));
         let value = match atom.text() {
@@ -326,9 +449,32 @@ impl<'a> KeywordToken<'a> {
         let text = atom.text();
         Ok(KeywordToken { value, text })
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::KeywordToken;
+    /// use erl_tokenize::values::Keyword;
+    ///
+    /// assert_eq!(KeywordToken::from_text("receive").unwrap().value(), Keyword::Receive);
+    /// assert_eq!(KeywordToken::from_text("and  ").unwrap().value(), Keyword::And);
+    /// ```
     pub fn value(&self) -> Keyword {
         self.value
     }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::KeywordToken;
+    ///
+    /// assert_eq!(KeywordToken::from_text("receive").unwrap().text(), "receive");
+    /// assert_eq!(KeywordToken::from_text("and  ").unwrap().text(), "and");
+    /// ```
     pub fn text(&self) -> &'a str {
         self.text
     }
@@ -355,6 +501,7 @@ pub struct StringToken<'a> {
     text: &'a str,
 }
 impl<'a> StringToken<'a> {
+    /// Tries to convert from any prefixes of the text to a `StringToken`.
     pub fn from_text(text: &'a str) -> Result<Self> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (head, tail) = text.split_at(1);
@@ -363,9 +510,33 @@ impl<'a> StringToken<'a> {
         let text = unsafe { text.slice_unchecked(0, 1 + end + 1) };
         Ok(StringToken { value, text })
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::StringToken;
+    ///
+    /// assert_eq!(StringToken::from_text(r#""foo""#).unwrap().value(), "foo");
+    /// assert_eq!(StringToken::from_text(r#""foo"  "#).unwrap().value(), "foo");
+    /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#).unwrap().value(), "foo");
+    /// ```
     pub fn value(&self) -> &str {
         self.value.as_ref()
     }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::StringToken;
+    ///
+    /// assert_eq!(StringToken::from_text(r#""foo""#).unwrap().text(), r#""foo""#);
+    /// assert_eq!(StringToken::from_text(r#""foo"  "#).unwrap().text(), r#""foo""#);
+    /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#).unwrap().text(), r#""f\x6Fo""#);
+    /// ```
     pub fn text(&self) -> &'a str {
         self.text
     }
@@ -393,6 +564,7 @@ pub struct SymbolToken<'a> {
     text: &'a str,
 }
 impl<'a> SymbolToken<'a> {
+    /// Tries to convert from any prefixes of the text to a `SymbolToken`.
     pub fn from_text(text: &'a str) -> Result<Self> {
         let bytes = text.as_bytes();
         let mut symbol = None;
@@ -456,9 +628,32 @@ impl<'a> SymbolToken<'a> {
             track_panic!(ErrorKind::InvalidInput);
         }
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::SymbolToken;
+    /// use erl_tokenize::values::Symbol;
+    ///
+    /// assert_eq!(SymbolToken::from_text(".").unwrap().value(), Symbol::Dot);
+    /// assert_eq!(SymbolToken::from_text(":=  ").unwrap().value(), Symbol::MapMatch);
+    /// ```
     pub fn value(&self) -> Symbol {
         self.value
     }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::SymbolToken;
+    ///
+    /// assert_eq!(SymbolToken::from_text(".").unwrap().text(), ".");
+    /// assert_eq!(SymbolToken::from_text(":=  ").unwrap().text(), ":=");
+    /// ```
     pub fn text(&self) -> &'a str {
         self.text
     }
@@ -485,6 +680,7 @@ pub struct VariableToken<'a> {
     text: &'a str,
 }
 impl<'a> VariableToken<'a> {
+    /// Tries to convert from any prefixes of the text to a `VariableToken`.
     pub fn from_text(text: &'a str) -> Result<Self> {
         let mut chars = text.char_indices();
         let (_, head) = track_try!(chars.next().ok_or(ErrorKind::InvalidInput));
@@ -496,9 +692,31 @@ impl<'a> VariableToken<'a> {
         let text = unsafe { text.slice_unchecked(0, end) };
         Ok(VariableToken { text })
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::VariableToken;
+    ///
+    /// assert_eq!(VariableToken::from_text("Foo").unwrap().value(), "Foo");
+    /// assert_eq!(VariableToken::from_text("_foo  ").unwrap().value(), "_foo");
+    /// ```
     pub fn value(&self) -> &str {
         self.text
     }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::VariableToken;
+    ///
+    /// assert_eq!(VariableToken::from_text("Foo").unwrap().text(), "Foo");
+    /// assert_eq!(VariableToken::from_text("_foo  ").unwrap().text(), "_foo");
+    /// ```
     pub fn text(&self) -> &'a str {
         self.text
     }
@@ -525,6 +743,7 @@ pub struct WhitespaceToken<'a> {
     text: &'a str,
 }
 impl<'a> WhitespaceToken<'a> {
+    /// Tries to convert from any prefixes of the text to a `WhitespaceToken`.
     pub fn from_text(text: &'a str) -> Result<Self> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (text, _) = text.split_at(1);
@@ -538,9 +757,32 @@ impl<'a> WhitespaceToken<'a> {
         };
         Ok(WhitespaceToken { value, text })
     }
+
+    /// Returns the value of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::WhitespaceToken;
+    /// use erl_tokenize::values::Whitespace;
+    ///
+    /// assert_eq!(WhitespaceToken::from_text(" ").unwrap().value(), Whitespace::Space);
+    /// assert_eq!(WhitespaceToken::from_text("\t ").unwrap().value(), Whitespace::Tab);
+    /// ```
     pub fn value(&self) -> Whitespace {
         self.value
     }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::tokens::WhitespaceToken;
+    ///
+    /// assert_eq!(WhitespaceToken::from_text(" ").unwrap().text(), " ");
+    /// assert_eq!(WhitespaceToken::from_text("\t ").unwrap().text(), "\t");
+    /// ```
     pub fn text(&self) -> &'a str {
         self.text
     }
