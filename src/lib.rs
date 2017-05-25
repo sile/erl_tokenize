@@ -34,9 +34,9 @@ pub mod tokens;
 pub mod types;
 
 mod error;
-mod misc;
 mod token;
 mod tokenizer;
+mod util;
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 

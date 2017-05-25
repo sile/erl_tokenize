@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use num::{Num, BigUint};
 
 use {Result, ErrorKind};
-use misc;
+use util;
 use types::{Keyword, Symbol, Whitespace};
 
 /// Atom token.
@@ -34,13 +34,13 @@ impl<'a> AtomToken<'a> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (head, tail) = text.split_at(1);
         let (value, text) = if head == "'" {
-            let (value, end) = track_try!(misc::parse_string(tail, '\''));
+            let (value, end) = track_try!(util::parse_string(tail, '\''));
             (value, unsafe { text.slice_unchecked(0, 1 + end + 1) })
         } else {
             let head = head.chars().nth(0).expect("Never fails");
-            track_assert!(misc::is_atom_head_char(head), ErrorKind::InvalidInput);
+            track_assert!(util::is_atom_head_char(head), ErrorKind::InvalidInput);
             let end = head.len_utf8() +
-                      tail.find(|c| !misc::is_atom_non_head_char(c))
+                      tail.find(|c| !util::is_atom_non_head_char(c))
                           .unwrap_or(tail.len());
             let text_slice = unsafe { text.slice_unchecked(0, end) };
             (Cow::Borrowed(text_slice), text_slice)
@@ -91,7 +91,7 @@ impl<'a> CharToken<'a> {
         let (_, c) = track_try!(chars.next().ok_or(ErrorKind::UnexpectedEos));
         let (value, end) = if c == '\\' {
             let mut chars = chars.peekable();
-            let value = track_try!(misc::parse_escaped_char(&mut chars));
+            let value = track_try!(util::parse_escaped_char(&mut chars));
             let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
             (value, end)
         } else {
@@ -359,7 +359,7 @@ impl<'a> StringToken<'a> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (head, tail) = text.split_at(1);
         track_assert_eq!(head, "\"", ErrorKind::InvalidInput);
-        let (value, end) = track_try!(misc::parse_string(tail, '"'));
+        let (value, end) = track_try!(util::parse_string(tail, '"'));
         let text = unsafe { text.slice_unchecked(0, 1 + end + 1) };
         Ok(StringToken { value, text })
     }
@@ -488,9 +488,9 @@ impl<'a> VariableToken<'a> {
     pub fn from_text(text: &'a str) -> Result<Self> {
         let mut chars = text.char_indices();
         let (_, head) = track_try!(chars.next().ok_or(ErrorKind::InvalidInput));
-        track_assert!(misc::is_variable_head_char(head), ErrorKind::InvalidInput);
+        track_assert!(util::is_variable_head_char(head), ErrorKind::InvalidInput);
         let end = chars
-            .find(|&(_, c)| !misc::is_variable_non_head_char(c))
+            .find(|&(_, c)| !util::is_variable_non_head_char(c))
             .map(|(i, _)| i)
             .unwrap_or(text.len());
         let text = unsafe { text.slice_unchecked(0, end) };
