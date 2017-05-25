@@ -2,17 +2,19 @@
 //!
 //! # Examples
 //!
-//! ```text
-//! use erl_tokenize::Tokenizer;
-//! use erl_tokenize::tokens::{Atom, Symbol, Str};
+//! ```
+//! use erl_tokenize::{Tokenizer, TokenKind};
 //!
 //! let src = r#"io:format("Hello")."#;
-//! let tokenizer = Tokenizer::new(src.chars());
+//! let tokenizer = Tokenizer::new(src);
 //! let tokens = tokenizer.collect::<Result<Vec<_>, _>>().unwrap();
-//! assert_eq!(tokens,
-//!            [Atom("io".into()).into(), Symbol::Colon.into(), Atom("format".into()).into(),
-//!             Symbol::OpenParen.into(), Str("Hello".into()).into(), Symbol::CloseParen.into(),
-//!             Symbol::Dot.into()]);
+//!
+//! assert_eq!(tokens.iter().map(|t| t.kind()).collect::<Vec<_>>(),
+//!            [TokenKind::Atom, TokenKind::Symbol, TokenKind::Atom, TokenKind::Symbol,
+//!             TokenKind::String, TokenKind::Symbol, TokenKind::Symbol]);
+//!
+//! assert_eq!(tokens.iter().map(|t| t.text()).collect::<Vec<_>>(),
+//!            ["io", ":", "format", "(", r#""Hello""#, ")", "."]);
 //! ```
 //!
 //! # References
@@ -27,7 +29,7 @@ extern crate num;
 extern crate trackable;
 
 pub use error::{Error, ErrorKind};
-pub use token::Token;
+pub use token::{Token, TokenKind};
 pub use tokenizer::Tokenizer;
 
 pub mod tokens;

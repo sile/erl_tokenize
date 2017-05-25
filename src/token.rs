@@ -63,6 +63,20 @@ impl<'a> Token<'a> {
             Token::Whitespace(ref t) => t.text(),
         }
     }
+    pub fn kind(&self) -> TokenKind {
+        match *self {
+            Token::Atom(_) => TokenKind::Atom,
+            Token::Char(_) => TokenKind::Char,
+            Token::Comment(_) => TokenKind::Comment,
+            Token::Float(_) => TokenKind::Float,
+            Token::Integer(_) => TokenKind::Integer,
+            Token::Keyword(_) => TokenKind::Keyword,
+            Token::String(_) => TokenKind::String,
+            Token::Symbol(_) => TokenKind::Symbol,
+            Token::Variable(_) => TokenKind::Variable,
+            Token::Whitespace(_) => TokenKind::Whitespace,
+        }
+    }
 }
 impl<'a> From<tokens::AtomToken<'a>> for Token<'a> {
     fn from(f: tokens::AtomToken<'a>) -> Self {
@@ -113,4 +127,18 @@ impl<'a> From<tokens::WhitespaceToken<'a>> for Token<'a> {
     fn from(f: tokens::WhitespaceToken<'a>) -> Self {
         Token::Whitespace(f)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TokenKind {
+    Atom,
+    Char,
+    Comment,
+    Float,
+    Integer,
+    Keyword,
+    String,
+    Symbol,
+    Variable,
+    Whitespace,
 }
