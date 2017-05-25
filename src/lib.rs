@@ -24,6 +24,7 @@
 //!
 //! [erl_scan]: http://erlang.org/doc/man/erl_scan.html
 //! [Data Types]: http://erlang.org/doc/reference_manual/data_types.html
+#![warn(missing_docs)]
 extern crate num;
 #[macro_use]
 extern crate trackable;
@@ -33,7 +34,7 @@ pub use token::{Token, TokenKind};
 pub use tokenizer::Tokenizer;
 
 pub mod tokens;
-pub mod types;
+pub mod values;
 
 mod error;
 mod token;

@@ -5,7 +5,7 @@ use num::{Num, BigUint};
 
 use {Result, ErrorKind};
 use util;
-use types::{Keyword, Symbol, Whitespace};
+use values::{Keyword, Symbol, Whitespace};
 
 /// Atom token.
 ///
@@ -274,7 +274,7 @@ impl<'a> IntegerToken<'a> {
 ///
 /// ```
 /// use erl_tokenize::tokens::KeywordToken;
-/// use erl_tokenize::types::Keyword;
+/// use erl_tokenize::values::Keyword;
 ///
 /// // Ok
 /// assert_eq!(KeywordToken::from_text("receive").unwrap().value(), Keyword::Receive);
@@ -377,7 +377,7 @@ impl<'a> StringToken<'a> {
 ///
 /// ```
 /// use erl_tokenize::tokens::SymbolToken;
-/// use erl_tokenize::types::Symbol;
+/// use erl_tokenize::values::Symbol;
 ///
 /// // Ok
 /// assert_eq!(SymbolToken::from_text(".").unwrap().value(), Symbol::Dot);
@@ -510,7 +510,7 @@ impl<'a> VariableToken<'a> {
 ///
 /// ```
 /// use erl_tokenize::tokens::WhitespaceToken;
-/// use erl_tokenize::types::Whitespace;
+/// use erl_tokenize::values::Whitespace;
 ///
 /// // Ok
 /// assert_eq!(WhitespaceToken::from_text(" ").unwrap().value(), Whitespace::Space);

@@ -1,4 +1,4 @@
-//! Miscellaneous types.
+//! Token values.
 
 /// Keyword (a.k.a., reserved word).
 ///
