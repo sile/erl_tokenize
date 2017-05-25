@@ -14,7 +14,7 @@ pub enum Token<'a> {
     // Whitespace(tokens::WhitespaceToken)
 }
 impl<'a> Token<'a> {
-    pub fn text(&self) -> &str {
+    pub fn text(&self) -> &'a str {
         match *self {
             Token::Atom(ref t) => t.text(),
             Token::Char(ref t) => t.text(),

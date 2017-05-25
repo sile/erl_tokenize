@@ -50,7 +50,7 @@ impl<'a> AtomToken<'a> {
     pub fn value(&self) -> &str {
         self.value.as_ref()
     }
-    pub fn text(&self) -> &str {
+    pub fn text(&self) -> &'a str {
         self.text
     }
 }
@@ -105,7 +105,7 @@ impl<'a> CharToken<'a> {
     pub fn value(&self) -> char {
         self.value
     }
-    pub fn text(&self) -> &str {
+    pub fn text(&self) -> &'a str {
         self.text
     }
 }
@@ -138,7 +138,7 @@ impl<'a> CommentToken<'a> {
     pub fn value(&self) -> &str {
         unsafe { self.text.slice_unchecked(1, self.text.len()) }
     }
-    pub fn text(&self) -> &str {
+    pub fn text(&self) -> &'a str {
         self.text
     }
 }
@@ -203,7 +203,7 @@ impl<'a> FloatToken<'a> {
     pub fn value(&self) -> f64 {
         self.value
     }
-    pub fn text(&self) -> &str {
+    pub fn text(&self) -> &'a str {
         self.text
     }
 }
@@ -262,7 +262,7 @@ impl<'a> IntegerToken<'a> {
     pub fn value(&self) -> &BigUint {
         &self.value
     }
-    pub fn text(&self) -> &str {
+    pub fn text(&self) -> &'a str {
         self.text
     }
 }
@@ -300,7 +300,7 @@ impl<'a> KeywordToken<'a> {
     pub fn value(&self) -> Keyword {
         self.value
     }
-    pub fn text(&self) -> &str {
+    pub fn text(&self) -> &'a str {
         self.text
     }
 }
