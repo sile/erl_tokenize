@@ -577,6 +577,7 @@ impl<'a> SymbolToken<'a> {
         }
         if symbol.is_none() && bytes.len() >= 2 {
             symbol = match &bytes[0..2] {
+                b"::" => Some(Symbol::DoubleColon),
                 b":=" => Some(Symbol::MapMatch),
                 b"||" => Some(Symbol::DoubleVerticalBar),
                 b"--" => Some(Symbol::MinusMinus),

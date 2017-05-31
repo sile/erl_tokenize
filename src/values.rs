@@ -159,6 +159,9 @@ pub enum Symbol {
     /// `:`
     Colon,
 
+    /// `::`
+    DoubleColon,
+
     /// `;`
     Semicolon,
 
@@ -252,6 +255,7 @@ impl Symbol {
             Symbol::Dot => ".",
             Symbol::Comma => ",",
             Symbol::Colon => ":",
+            Symbol::DoubleColon => "::",
             Symbol::Semicolon => ";",
             Symbol::Match => "=",
             Symbol::MapMatch => ":=",
