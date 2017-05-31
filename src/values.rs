@@ -180,6 +180,9 @@ pub enum Symbol {
     /// `?`
     Question,
 
+    /// `??`
+    DoubleQuestion,
+
     /// `!`
     Not,
 
@@ -262,6 +265,7 @@ impl Symbol {
             Symbol::VerticalBar => "|",
             Symbol::DoubleVerticalBar => "||",
             Symbol::Question => "?",
+            Symbol::DoubleQuestion => "??",
             Symbol::Not => "!",
             Symbol::Hyphen => "-",
             Symbol::MinusMinus => "--",
