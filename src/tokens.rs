@@ -228,6 +228,7 @@ impl<'a> CommentToken<'a> {
 /// // Err
 /// assert!(FloatToken::from_text("123").is_err());
 /// assert!(FloatToken::from_text(".123").is_err());
+/// assert!(FloatToken::from_text("1.").is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct FloatToken<'a> {
@@ -247,6 +248,9 @@ impl<'a> FloatToken<'a> {
                          ErrorKind::InvalidInput);
         track_assert_eq!(chars.next().map(|(_, c)| c),
                          Some('.'),
+                         ErrorKind::InvalidInput);
+        track_assert_eq!(chars.next().map(|(_, c)| c.is_digit(10)),
+                         Some(true),
                          ErrorKind::InvalidInput);
 
         while let Some((_, '0'...'9')) = chars.peek().cloned() {
