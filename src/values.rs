@@ -156,6 +156,9 @@ pub enum Symbol {
     /// `..`
     DoubleDot,
 
+    /// `...`
+    TripleDot,
+
     /// `,`
     Comma,
 
@@ -260,6 +263,7 @@ impl Symbol {
             Symbol::Slash => "/",
             Symbol::Dot => ".",
             Symbol::DoubleDot => "..",
+            Symbol::TripleDot => "...",
             Symbol::Comma => ",",
             Symbol::Colon => ":",
             Symbol::DoubleColon => "::",

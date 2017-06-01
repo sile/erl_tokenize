@@ -572,6 +572,7 @@ impl<'a> SymbolToken<'a> {
             symbol = match &bytes[0..3] {
                 b"=:=" => Some(Symbol::ExactEq),
                 b"=/=" => Some(Symbol::ExactNotEq),
+                b"..." => Some(Symbol::TripleDot),
                 _ => None,
             };
         }
