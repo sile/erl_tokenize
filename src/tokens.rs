@@ -593,6 +593,7 @@ impl<'a> SymbolToken<'a> {
                 b">=" => Some(Symbol::GreaterEq),
                 b"=<" => Some(Symbol::LessEq),
                 b"??" => Some(Symbol::DoubleQuestion),
+                b".." => Some(Symbol::DoubleDot),
                 _ => None,
             };
         }
