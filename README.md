@@ -65,7 +65,7 @@ EOS
 [line:5] Symbol(SymbolToken { value: OpenParen, text: "(" })
 [line:5] Symbol(SymbolToken { value: CloseParen, text: ")" })
 [line:5] Whitespace(WhitespaceToken { value: Space, text: " " })
-[line:5] Symbol(SymbolToken { value: RightAllow, text: "->" })
+[line:5] Symbol(SymbolToken { value: RightArrow, text: "->" })
 [line:5] Whitespace(WhitespaceToken { value: Space, text: " " })
 [line:5] Atom(AtomToken { value: "qux", text: "qux" })
 [line:5] Symbol(SymbolToken { value: Dot, text: "." })

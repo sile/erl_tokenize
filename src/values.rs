@@ -208,16 +208,16 @@ pub enum Symbol {
     Multiply,
 
     /// `->`
-    RightAllow,
+    RightArrow,
 
     /// `<-`
-    LeftAllow,
+    LeftArrow,
 
     /// `=>`
-    DoubleRightAllow,
+    DoubleRightArrow,
 
     /// `<=`
-    DoubleLeftAllow,
+    DoubleLeftArrow,
 
     /// `>>`
     DoubleRightAngle,
@@ -280,10 +280,10 @@ impl Symbol {
             Symbol::Plus => "+",
             Symbol::PlusPlus => "++",
             Symbol::Multiply => "*",
-            Symbol::RightAllow => "->",
-            Symbol::LeftAllow => "<-",
-            Symbol::DoubleRightAllow => "=>",
-            Symbol::DoubleLeftAllow => "<=",
+            Symbol::RightArrow => "->",
+            Symbol::LeftArrow => "<-",
+            Symbol::DoubleRightArrow => "=>",
+            Symbol::DoubleLeftArrow => "<=",
             Symbol::DoubleRightAngle => ">>",
             Symbol::DoubleLeftAngle => "<<",
             Symbol::Eq => "==",
