@@ -327,6 +327,8 @@ impl Whitespace {
             Whitespace::NoBreakSpace => '\u{A0}',
         }
     }
+
+    /// Coverts to the corresponding string.
     pub fn as_str(&self) -> &'static str {
         match *self {
             Whitespace::Space => " ",
