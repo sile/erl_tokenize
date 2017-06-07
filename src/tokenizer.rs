@@ -20,7 +20,6 @@ use values;
 #[derive(Debug)]
 pub struct Tokenizer<'a> {
     text: &'a str,
-    cur_pos: Position,
     next_pos: Position,
 }
 impl<'a> Tokenizer<'a> {
@@ -29,8 +28,7 @@ impl<'a> Tokenizer<'a> {
         let init_pos = Position::new();
         Tokenizer {
             text,
-            cur_pos: init_pos.clone(),
-            next_pos: init_pos.clone()
+            next_pos: init_pos.clone(),
         }
     }
 
@@ -77,25 +75,24 @@ impl<'a> Iterator for Tokenizer<'a> {
             None
         } else {
             let text = unsafe {
-                self.text.slice_unchecked(self.next_pos.offset(), self.text.len())
+                self.text
+                    .slice_unchecked(self.next_pos.offset(), self.text.len())
             };
             match track!(Token::from_text(text)) {
-                Err(e) => {
-                    Some(Err(e))
-                }
+                Err(e) => Some(Err(e)),
                 Ok(t) => {
-                    self.cur_pos = self.next_pos.clone();
+                    let cur_pos = self.next_pos.clone();
                     match t {
-                        Token::Whitespace(ref v @ tokens::WhitespaceToken{..})
-                            if v.value() == values::Whitespace::Newline =>
-                        {
+                        Token::Whitespace(ref v @ tokens::WhitespaceToken { .. })
+                            if v.value() ==
+                               values::Whitespace::Newline => {
                             self.next_pos.new_line();
-                        },
+                        }
                         _ => {
                             self.next_pos.step(t.text().len());
                         }
                     }
-                    Some(Ok((t, self.cur_pos.clone())))
+                    Some(Ok((t, cur_pos)))
                 }
             }
         }
