@@ -327,4 +327,13 @@ impl Whitespace {
             Whitespace::NoBreakSpace => '\u{A0}',
         }
     }
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            Whitespace::Space => " ",
+            Whitespace::Tab => "\t",
+            Whitespace::Return => "\r",
+            Whitespace::Newline => "\n",
+            Whitespace::NoBreakSpace => "\u{A0}",
+        }
+    }
 }
