@@ -1,6 +1,6 @@
 //! Tokens.
-use std::str;
 use std::borrow::Cow;
+use std::str;
 use num::{Num, BigUint};
 
 use {Result, ErrorKind};
@@ -25,17 +25,18 @@ use values::{Keyword, Symbol, Whitespace};
 /// assert!(AtomToken::from_text("123").is_err());
 /// ```
 #[derive(Debug, Clone)]
-pub struct AtomToken<'a> {
-    value: Cow<'a, str>,
-    text: &'a str,
+pub struct AtomToken {
+    value: Option<String>,
+    text: String,
 }
-impl<'a> AtomToken<'a> {
+impl AtomToken {
     /// Tries to convert from any prefixes of the input text to an `AtomToken`.
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (head, tail) = text.split_at(1);
         let (value, text) = if head == "'" {
             let (value, end) = track_try!(util::parse_string(tail, '\''));
+            let value = Some(value.to_string());
             (value, unsafe { text.slice_unchecked(0, 1 + end + 1) })
         } else {
             let head = head.chars().nth(0).expect("Never fails");
@@ -44,8 +45,9 @@ impl<'a> AtomToken<'a> {
                       tail.find(|c| !util::is_atom_non_head_char(c))
                           .unwrap_or(tail.len());
             let text_slice = unsafe { text.slice_unchecked(0, end) };
-            (Cow::Borrowed(text_slice), text_slice)
+            (None, text_slice)
         };
+        let text = text.to_owned();
         Ok(AtomToken { value, text })
     }
 
@@ -61,7 +63,7 @@ impl<'a> AtomToken<'a> {
     /// assert_eq!(AtomToken::from_text(r"'f\x6Fo'").unwrap().value(), "foo");
     /// ```
     pub fn value(&self) -> &str {
-        self.value.as_ref()
+        self.value.as_ref().unwrap_or(&self.text)
     }
 
     /// Returns the original textual representation of this token.
@@ -75,8 +77,8 @@ impl<'a> AtomToken<'a> {
     /// assert_eq!(AtomToken::from_text("'foo'").unwrap().text(), "'foo'");
     /// assert_eq!(AtomToken::from_text(r"'f\x6Fo'").unwrap().text(), r"'f\x6Fo'");
     /// ```
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &str {
+        &self.text
     }
 }
 
@@ -102,13 +104,13 @@ impl<'a> AtomToken<'a> {
 /// assert!(CharToken::from_text("a").is_err());
 /// ```
 #[derive(Debug, Clone)]
-pub struct CharToken<'a> {
+pub struct CharToken {
     value: char,
-    text: &'a str,
+    text: String,
 }
-impl<'a> CharToken<'a> {
+impl CharToken {
     /// Tries to convert from any prefixes of the text to a `CharToken`.
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         let mut chars = text.char_indices();
         track_assert_eq!(chars.next().map(|(_, c)| c),
                          Some('$'),
@@ -125,7 +127,7 @@ impl<'a> CharToken<'a> {
             let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
             (value, end)
         };
-        let text = unsafe { text.slice_unchecked(0, end) };
+        let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
         Ok(CharToken { value, text })
     }
 
@@ -153,8 +155,8 @@ impl<'a> CharToken<'a> {
     /// assert_eq!(CharToken::from_text("$a").unwrap().text(), "$a");
     /// assert_eq!(CharToken::from_text(r"$\123").unwrap().text(), r#"$\123"#);
     /// ```
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &str {
+        &self.text
     }
 }
 
@@ -173,15 +175,15 @@ impl<'a> CharToken<'a> {
 /// assert!(CommentToken::from_text("  % foo").is_err());
 /// ```
 #[derive(Debug, Clone)]
-pub struct CommentToken<'a> {
-    text: &'a str,
+pub struct CommentToken {
+    text: String,
 }
-impl<'a> CommentToken<'a> {
+impl CommentToken {
     /// Tries to convert from any prefixes of the text to a `CommentToken`.
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         track_assert_eq!(text.chars().nth(0), Some('%'), ErrorKind::InvalidInput);
         let end = text.find('\n').unwrap_or(text.len());
-        let text = unsafe { text.slice_unchecked(0, end) };
+        let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
         Ok(CommentToken { text })
     }
 
@@ -196,7 +198,7 @@ impl<'a> CommentToken<'a> {
     /// assert_eq!(CommentToken::from_text("%% foo ").unwrap().value(), "% foo ");
     /// ```
     pub fn value(&self) -> &str {
-        unsafe { self.text.slice_unchecked(1, self.text.len()) }
+        unsafe { self.text().slice_unchecked(1, self.text.len()) }
     }
 
     /// Returns the original textual representation of this token.
@@ -209,8 +211,8 @@ impl<'a> CommentToken<'a> {
     /// assert_eq!(CommentToken::from_text("%").unwrap().text(), "%");
     /// assert_eq!(CommentToken::from_text("%% foo ").unwrap().text(), "%% foo ");
     /// ```
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &str {
+        &self.text
     }
 }
 
@@ -231,13 +233,13 @@ impl<'a> CommentToken<'a> {
 /// assert!(FloatToken::from_text("1.").is_err());
 /// ```
 #[derive(Debug, Clone)]
-pub struct FloatToken<'a> {
+pub struct FloatToken {
     value: f64,
-    text: &'a str,
+    text: String,
 }
-impl<'a> FloatToken<'a> {
+impl FloatToken {
     /// Tries to convert from any prefixes of the text to a `FloatToken`.
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         let mut chars = text.char_indices().peekable();
 
         while let Some((_, '0'...'9')) = chars.peek().cloned() {
@@ -273,7 +275,7 @@ impl<'a> FloatToken<'a> {
         }
 
         let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
-        let text = unsafe { text.slice_unchecked(0, end) };
+        let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
         let value = track_try!(text.parse());
         Ok(FloatToken { value, text })
     }
@@ -302,8 +304,8 @@ impl<'a> FloatToken<'a> {
     /// assert_eq!(FloatToken::from_text("0.1").unwrap().text(), "0.1");
     /// assert_eq!(FloatToken::from_text("12.3e-1").unwrap().text(), "12.3e-1");
     /// ```
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &str {
+        &self.text
     }
 }
 
@@ -327,13 +329,13 @@ impl<'a> FloatToken<'a> {
 /// # }
 /// ```
 #[derive(Debug, Clone)]
-pub struct IntegerToken<'a> {
+pub struct IntegerToken {
     value: BigUint,
-    text: &'a str,
+    text: String,
 }
-impl<'a> IntegerToken<'a> {
+impl IntegerToken {
     /// Tries to convert from any prefixes of the text to an `IntegerToken`.
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         let mut start = 0;
         let mut radix = 10;
         let mut chars = text.char_indices().peekable();
@@ -356,7 +358,7 @@ impl<'a> IntegerToken<'a> {
                                "input={:?}, radix={}",
                                input,
                                radix);
-        let text = unsafe { text.slice_unchecked(0, end) };
+        let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
         Ok(IntegerToken { value, text })
     }
 
@@ -389,8 +391,8 @@ impl<'a> IntegerToken<'a> {
     /// assert_eq!(IntegerToken::from_text("10").unwrap().text(), "10");
     /// assert_eq!(IntegerToken::from_text("16#ab0e").unwrap().text(), "16#ab0e");
     /// ```
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &str {
+        &self.text
     }
 }
 
@@ -412,13 +414,12 @@ impl<'a> IntegerToken<'a> {
 /// assert!(KeywordToken::from_text("andfoo").is_err());
 /// ```
 #[derive(Debug, Clone)]
-pub struct KeywordToken<'a> {
+pub struct KeywordToken {
     value: Keyword,
-    text: &'a str,
 }
-impl<'a> KeywordToken<'a> {
+impl KeywordToken {
     /// Tries to convert from any prefixes of the text to a `KeywordToken`.
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         let atom = track_try!(AtomToken::from_text(text));
         let value = match atom.text() {
             "after" => Keyword::After,
@@ -450,8 +451,7 @@ impl<'a> KeywordToken<'a> {
             "xor" => Keyword::Xor,
             s => track_panic!(ErrorKind::InvalidInput, "Undefined keyword: {:?}", s),
         };
-        let text = atom.text();
-        Ok(KeywordToken { value, text })
+        Ok(KeywordToken { value })
     }
 
     /// Returns the value of this token.
@@ -479,8 +479,8 @@ impl<'a> KeywordToken<'a> {
     /// assert_eq!(KeywordToken::from_text("receive").unwrap().text(), "receive");
     /// assert_eq!(KeywordToken::from_text("and  ").unwrap().text(), "and");
     /// ```
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &'static str {
+        self.value.as_str()
     }
 }
 
@@ -500,18 +500,22 @@ impl<'a> KeywordToken<'a> {
 /// assert!(StringToken::from_text(r#"  "foo""#).is_err());
 /// ```
 #[derive(Debug, Clone)]
-pub struct StringToken<'a> {
-    value: Cow<'a, str>,
-    text: &'a str,
+pub struct StringToken {
+    value: Option<String>,
+    text: String,
 }
-impl<'a> StringToken<'a> {
+impl StringToken {
     /// Tries to convert from any prefixes of the text to a `StringToken`.
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (head, tail) = text.split_at(1);
         track_assert_eq!(head, "\"", ErrorKind::InvalidInput);
         let (value, end) = track_try!(util::parse_string(tail, '"'));
-        let text = unsafe { text.slice_unchecked(0, 1 + end + 1) };
+        let value = match value {
+            Cow::Borrowed(_) => None,
+            Cow::Owned(v) => Some(v),
+        };
+        let text = unsafe { text.slice_unchecked(0, 1 + end + 1) }.to_owned();
         Ok(StringToken { value, text })
     }
 
@@ -527,7 +531,12 @@ impl<'a> StringToken<'a> {
     /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#).unwrap().value(), "foo");
     /// ```
     pub fn value(&self) -> &str {
-        self.value.as_ref()
+        if let Some(v) = self.value.as_ref() {
+            v
+        } else {
+            let len = self.text.len();
+            unsafe { self.text.slice_unchecked(1, len - 1) }
+        }
     }
 
     /// Returns the original textual representation of this token.
@@ -541,8 +550,8 @@ impl<'a> StringToken<'a> {
     /// assert_eq!(StringToken::from_text(r#""foo"  "#).unwrap().text(), r#""foo""#);
     /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#).unwrap().text(), r#""f\x6Fo""#);
     /// ```
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &str {
+        &self.text
     }
 }
 
@@ -563,13 +572,12 @@ impl<'a> StringToken<'a> {
 /// assert!(SymbolToken::from_text("foo").is_err());
 /// ```
 #[derive(Debug, Clone)]
-pub struct SymbolToken<'a> {
+pub struct SymbolToken {
     value: Symbol,
-    text: &'a str,
 }
-impl<'a> SymbolToken<'a> {
+impl SymbolToken {
     /// Tries to convert from any prefixes of the text to a `SymbolToken`.
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         let bytes = text.as_bytes();
         let mut symbol = None;
         if bytes.len() >= 3 {
@@ -629,9 +637,7 @@ impl<'a> SymbolToken<'a> {
             };
         }
         if let Some(value) = symbol {
-            let end = value.as_str().len();
-            let text = unsafe { text.slice_unchecked(0, end) };
-            Ok(SymbolToken { value, text })
+            Ok(SymbolToken { value })
         } else {
             track_panic!(ErrorKind::InvalidInput);
         }
@@ -662,8 +668,8 @@ impl<'a> SymbolToken<'a> {
     /// assert_eq!(SymbolToken::from_text(".").unwrap().text(), ".");
     /// assert_eq!(SymbolToken::from_text(":=  ").unwrap().text(), ":=");
     /// ```
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &'static str {
+        self.value.as_str()
     }
 }
 
@@ -684,12 +690,12 @@ impl<'a> SymbolToken<'a> {
 /// assert!(VariableToken::from_text("  Foo").is_err());
 /// ```
 #[derive(Debug, Clone)]
-pub struct VariableToken<'a> {
-    text: &'a str,
+pub struct VariableToken {
+    text: String,
 }
-impl<'a> VariableToken<'a> {
+impl VariableToken {
     /// Tries to convert from any prefixes of the text to a `VariableToken`.
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         let mut chars = text.char_indices();
         let (_, head) = track_try!(chars.next().ok_or(ErrorKind::InvalidInput));
         track_assert!(util::is_variable_head_char(head), ErrorKind::InvalidInput);
@@ -697,7 +703,7 @@ impl<'a> VariableToken<'a> {
             .find(|&(_, c)| !util::is_variable_non_head_char(c))
             .map(|(i, _)| i)
             .unwrap_or(text.len());
-        let text = unsafe { text.slice_unchecked(0, end) };
+        let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
         Ok(VariableToken { text })
     }
 
@@ -712,7 +718,7 @@ impl<'a> VariableToken<'a> {
     /// assert_eq!(VariableToken::from_text("_foo  ").unwrap().value(), "_foo");
     /// ```
     pub fn value(&self) -> &str {
-        self.text
+        &self.text
     }
 
     /// Returns the original textual representation of this token.
@@ -725,8 +731,8 @@ impl<'a> VariableToken<'a> {
     /// assert_eq!(VariableToken::from_text("Foo").unwrap().text(), "Foo");
     /// assert_eq!(VariableToken::from_text("_foo  ").unwrap().text(), "_foo");
     /// ```
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &str {
+        &self.text
     }
 }
 
@@ -746,13 +752,12 @@ impl<'a> VariableToken<'a> {
 /// assert!(WhitespaceToken::from_text("foo").is_err());
 /// ```
 #[derive(Debug, Clone)]
-pub struct WhitespaceToken<'a> {
+pub struct WhitespaceToken {
     value: Whitespace,
-    text: &'a str,
 }
-impl<'a> WhitespaceToken<'a> {
+impl WhitespaceToken {
     /// Tries to convert from any prefixes of the text to a `WhitespaceToken`.
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (text, _) = text.split_at(1);
         let value = match text.as_bytes()[0] {
@@ -763,7 +768,7 @@ impl<'a> WhitespaceToken<'a> {
             0xA0 => Whitespace::NoBreakSpace,
             _ => track_panic!(ErrorKind::InvalidInput, "Not a whitespace: {:?}", text),
         };
-        Ok(WhitespaceToken { value, text })
+        Ok(WhitespaceToken { value })
     }
 
     /// Returns the value of this token.
@@ -791,7 +796,7 @@ impl<'a> WhitespaceToken<'a> {
     /// assert_eq!(WhitespaceToken::from_text(" ").unwrap().text(), " ");
     /// assert_eq!(WhitespaceToken::from_text("\t ").unwrap().text(), "\t");
     /// ```
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &'static str {
+        self.value.as_str()
     }
 }

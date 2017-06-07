@@ -50,7 +50,7 @@ impl<'a> Tokenizer<'a> {
     /// let mut tokenizer = Tokenizer::new(src);
     /// assert_eq!(tokenizer.next_position().offset(), 0);
     ///
-    /// assert_eq!(tokenizer.next().unwrap().map(|(t, _)| t.text()).unwrap(), "io");
+    /// assert_eq!(tokenizer.next().unwrap().map(|(t, _)| t.text().to_owned()).unwrap(), "io");
     /// assert_eq!(tokenizer.next_position().offset(), 2);
     /// tokenizer.next(); // ':'
     /// tokenizer.next(); // 'format'
@@ -59,7 +59,7 @@ impl<'a> Tokenizer<'a> {
     /// assert_eq!(tokenizer.next_position().offset(), 11);
     /// assert_eq!(tokenizer.next_position().line(), 2);
     /// assert_eq!(tokenizer.next_position().column(), 1);
-    /// assert_eq!(tokenizer.next().unwrap().map(|(t, _)| t.text()).unwrap(), " ");
+    /// assert_eq!(tokenizer.next().unwrap().map(|(t, _)| t.text().to_owned()).unwrap(), " ");
     /// assert_eq!(tokenizer.next_position().offset(), 12);
     /// assert_eq!(tokenizer.next_position().line(), 2);
     /// assert_eq!(tokenizer.next_position().column(), 2);
@@ -69,7 +69,7 @@ impl<'a> Tokenizer<'a> {
     }
 }
 impl<'a> Iterator for Tokenizer<'a> {
-    type Item = Result<(Token<'a>, Position)>;
+    type Item = Result<(Token, Position)>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.next_pos.offset() >= self.text.len() {
             None

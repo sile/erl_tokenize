@@ -7,19 +7,19 @@ use values::{Keyword, Symbol, Whitespace};
 /// Token.
 #[allow(missing_docs)]
 #[derive(Debug, Clone)]
-pub enum Token<'a> {
-    Atom(tokens::AtomToken<'a>),
-    Char(tokens::CharToken<'a>),
-    Comment(tokens::CommentToken<'a>),
-    Float(tokens::FloatToken<'a>),
-    Integer(tokens::IntegerToken<'a>),
-    Keyword(tokens::KeywordToken<'a>),
-    String(tokens::StringToken<'a>),
-    Symbol(tokens::SymbolToken<'a>),
-    Variable(tokens::VariableToken<'a>),
-    Whitespace(tokens::WhitespaceToken<'a>),
+pub enum Token {
+    Atom(tokens::AtomToken),
+    Char(tokens::CharToken),
+    Comment(tokens::CommentToken),
+    Float(tokens::FloatToken),
+    Integer(tokens::IntegerToken),
+    Keyword(tokens::KeywordToken),
+    String(tokens::StringToken),
+    Symbol(tokens::SymbolToken),
+    Variable(tokens::VariableToken),
+    Whitespace(tokens::WhitespaceToken),
 }
-impl<'a> Token<'a> {
+impl Token {
     /// Tries to convert from any prefixes of the text to a token.
     ///
     /// # Examples
@@ -35,7 +35,7 @@ impl<'a> Token<'a> {
     /// assert_eq!(Token::from_text("[foo]").unwrap().value(),
     ///            TokenValue::Symbol(Symbol::OpenSquare));
     /// ```
-    pub fn from_text(text: &'a str) -> Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         let head = track_try!(text.chars().nth(0).ok_or(ErrorKind::UnexpectedEos));
         match head {
             ' ' | '\t' | '\r' | '\n' | '\u{A0}' => {
@@ -117,7 +117,7 @@ impl<'a> Token<'a> {
     /// // Char
     /// assert_eq!(Token::from_text(r#"$\t"#).unwrap().text(), r#"$\t"#);
     /// ```
-    pub fn text(&self) -> &'a str {
+    pub fn text(&self) -> &str {
         match *self {
             Token::Atom(ref t) => t.text(),
             Token::Char(ref t) => t.text(),
@@ -158,53 +158,53 @@ impl<'a> Token<'a> {
         }
     }
 }
-impl<'a> From<tokens::AtomToken<'a>> for Token<'a> {
-    fn from(f: tokens::AtomToken<'a>) -> Self {
+impl From<tokens::AtomToken> for Token {
+    fn from(f: tokens::AtomToken) -> Self {
         Token::Atom(f)
     }
 }
-impl<'a> From<tokens::CharToken<'a>> for Token<'a> {
-    fn from(f: tokens::CharToken<'a>) -> Self {
+impl From<tokens::CharToken> for Token {
+    fn from(f: tokens::CharToken) -> Self {
         Token::Char(f)
     }
 }
-impl<'a> From<tokens::CommentToken<'a>> for Token<'a> {
-    fn from(f: tokens::CommentToken<'a>) -> Self {
+impl From<tokens::CommentToken> for Token {
+    fn from(f: tokens::CommentToken) -> Self {
         Token::Comment(f)
     }
 }
-impl<'a> From<tokens::FloatToken<'a>> for Token<'a> {
-    fn from(f: tokens::FloatToken<'a>) -> Self {
+impl From<tokens::FloatToken> for Token {
+    fn from(f: tokens::FloatToken) -> Self {
         Token::Float(f)
     }
 }
-impl<'a> From<tokens::IntegerToken<'a>> for Token<'a> {
-    fn from(f: tokens::IntegerToken<'a>) -> Self {
+impl From<tokens::IntegerToken> for Token {
+    fn from(f: tokens::IntegerToken) -> Self {
         Token::Integer(f)
     }
 }
-impl<'a> From<tokens::KeywordToken<'a>> for Token<'a> {
-    fn from(f: tokens::KeywordToken<'a>) -> Self {
+impl From<tokens::KeywordToken> for Token {
+    fn from(f: tokens::KeywordToken) -> Self {
         Token::Keyword(f)
     }
 }
-impl<'a> From<tokens::StringToken<'a>> for Token<'a> {
-    fn from(f: tokens::StringToken<'a>) -> Self {
+impl From<tokens::StringToken> for Token {
+    fn from(f: tokens::StringToken) -> Self {
         Token::String(f)
     }
 }
-impl<'a> From<tokens::SymbolToken<'a>> for Token<'a> {
-    fn from(f: tokens::SymbolToken<'a>) -> Self {
+impl From<tokens::SymbolToken> for Token {
+    fn from(f: tokens::SymbolToken) -> Self {
         Token::Symbol(f)
     }
 }
-impl<'a> From<tokens::VariableToken<'a>> for Token<'a> {
-    fn from(f: tokens::VariableToken<'a>) -> Self {
+impl From<tokens::VariableToken> for Token {
+    fn from(f: tokens::VariableToken) -> Self {
         Token::Variable(f)
     }
 }
-impl<'a> From<tokens::WhitespaceToken<'a>> for Token<'a> {
-    fn from(f: tokens::WhitespaceToken<'a>) -> Self {
+impl From<tokens::WhitespaceToken> for Token {
+    fn from(f: tokens::WhitespaceToken) -> Self {
         Token::Whitespace(f)
     }
 }
