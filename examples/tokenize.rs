@@ -18,14 +18,9 @@ fn main() {
     let mut file = File::open(src_file).expect("Cannot open file");
     file.read_to_string(&mut src).expect("Cannot read file");
 
-    let mut line = 1;
     let tokenizer = Tokenizer::new(&src);
-    for token in tokenizer {
-        let token = track_try_unwrap!(token, "line={}", line);
-        println!("[line:{}] {:?}", line, token);
-
-        if token.text() == "\n" {
-            line += 1;
-        }
+    for result in tokenizer {
+        let (token, pos) = track_try_unwrap!(result);
+        println!("[pos:{:?}] {:?}", pos, token);
     }
 }
