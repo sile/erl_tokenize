@@ -50,23 +50,23 @@ impl<'a> Tokenizer<'a> {
     ///   "Hello")."#;
     ///
     /// let mut tokenizer = Tokenizer::new(src);
-    /// assert_eq!(tokenizer.next_pos().offset(), 0);
+    /// assert_eq!(tokenizer.next_position().offset(), 0);
     ///
     /// assert_eq!(tokenizer.next().unwrap().map(|(t, _)| t.text()).unwrap(), "io");
-    /// assert_eq!(tokenizer.next_pos().offset(), 2);
+    /// assert_eq!(tokenizer.next_position().offset(), 2);
     /// tokenizer.next(); // ':'
     /// tokenizer.next(); // 'format'
     /// tokenizer.next(); // '('
     /// tokenizer.next(); // '\n'
-    /// assert_eq!(tokenizer.next_pos().offset(), 11);
-    /// assert_eq!(tokenizer.next_pos().line(), 2);
-    /// assert_eq!(tokenizer.next_pos().column(), 1);
+    /// assert_eq!(tokenizer.next_position().offset(), 11);
+    /// assert_eq!(tokenizer.next_position().line(), 2);
+    /// assert_eq!(tokenizer.next_position().column(), 1);
     /// assert_eq!(tokenizer.next().unwrap().map(|(t, _)| t.text()).unwrap(), " ");
-    /// assert_eq!(tokenizer.next_pos().offset(), 12);
-    /// assert_eq!(tokenizer.next_pos().line(), 2);
-    /// assert_eq!(tokenizer.next_pos().column(), 2);
+    /// assert_eq!(tokenizer.next_position().offset(), 12);
+    /// assert_eq!(tokenizer.next_position().line(), 2);
+    /// assert_eq!(tokenizer.next_position().column(), 2);
     /// ```
-    pub fn next_pos(&self) -> Position {
+    pub fn next_position(&self) -> Position {
         self.next_pos.clone()
     }
 }
