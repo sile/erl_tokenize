@@ -1,4 +1,5 @@
 //! Tokens.
+use std::borrow::Cow;
 use std::str;
 use num::{Num, BigUint};
 
@@ -34,7 +35,6 @@ impl AtomToken {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (head, tail) = text.split_at(1);
         let (value, text) = if head == "'" {
-            // TODO:
             let (value, end) = track_try!(util::parse_string(tail, '\''));
             let value = Some(value.to_string());
             (value, unsafe { text.slice_unchecked(0, 1 + end + 1) })
@@ -511,7 +511,10 @@ impl StringToken {
         let (head, tail) = text.split_at(1);
         track_assert_eq!(head, "\"", ErrorKind::InvalidInput);
         let (value, end) = track_try!(util::parse_string(tail, '"'));
-        let value = Some(value.to_string()); // TODO
+        let value = match value {
+            Cow::Borrowed(_) => None,
+            Cow::Owned(v) => Some(v),
+        };
         let text = unsafe { text.slice_unchecked(0, 1 + end + 1) }.to_owned();
         Ok(StringToken { value, text })
     }
@@ -528,7 +531,12 @@ impl StringToken {
     /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#).unwrap().value(), "foo");
     /// ```
     pub fn value(&self) -> &str {
-        self.value.as_ref().unwrap_or(&self.text)
+        if let Some(v) = self.value.as_ref() {
+            v
+        } else {
+            let len = self.text.len();
+            unsafe { self.text.slice_unchecked(1, len - 1) }
+        }
     }
 
     /// Returns the original textual representation of this token.
