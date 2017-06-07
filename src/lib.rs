@@ -9,13 +9,13 @@
 //!
 //! let src = r#"io:format("Hello")."#;
 //! let tokenizer = Tokenizer::new(src);
-//! let tokens = tokenizer.collect::<Result<Vec<_>, _>>().unwrap();
+//! let tokens = tokenizer.collect::<Result<Vec<(_, _)>, _>>().unwrap();
 //!
-//! assert_eq!(tokens.iter().map(|t| t.kind()).collect::<Vec<_>>(),
+//! assert_eq!(tokens.iter().map(|&(ref t, _)| t.kind()).collect::<Vec<_>>(),
 //!            [TokenKind::Atom, TokenKind::Symbol, TokenKind::Atom, TokenKind::Symbol,
 //!             TokenKind::String, TokenKind::Symbol, TokenKind::Symbol]);
 //!
-//! assert_eq!(tokens.iter().map(|t| t.text()).collect::<Vec<_>>(),
+//! assert_eq!(tokens.iter().map(|&(ref t, _)| t.text()).collect::<Vec<_>>(),
 //!            ["io", ":", "format", "(", r#""Hello""#, ")", "."]);
 //! ```
 //!
@@ -33,6 +33,7 @@ extern crate trackable;
 
 pub use error::{Error, ErrorKind};
 pub use token::{Token, TokenKind, TokenValue};
+pub use position::Position;
 pub use tokenizer::Tokenizer;
 
 pub mod tokens;
@@ -40,6 +41,7 @@ pub mod values;
 
 mod error;
 mod token;
+mod position;
 mod tokenizer;
 mod util;
 
