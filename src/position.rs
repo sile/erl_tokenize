@@ -31,13 +31,13 @@ impl Position {
     }
 
     /// Step a position.
-    pub fn step(&mut self, witdh: usize) {
+    pub(crate) fn step(&mut self, witdh: usize) {
         self.offset += witdh;
         self.column += witdh;
     }
 
     /// Step a position as a newline.
-    pub fn new_line(&mut self) {
+    pub(crate) fn new_line(&mut self) {
         self.offset += 1;
         self.line += 1;
         self.column = 1;

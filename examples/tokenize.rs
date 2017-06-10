@@ -25,9 +25,9 @@ fn main() {
     let mut count = 0;
     let tokenizer = Tokenizer::new(&src);
     for result in tokenizer {
-        let (token, pos) = track_try_unwrap!(result);
+        let token = track_try_unwrap!(result);
         if !silent {
-            println!("[pos:{:?}] {:?}", pos, token);
+            println!("[pos:{:?}] {:?}", token.position(), token.value());
         }
         count += 1;
     }

@@ -12,9 +12,9 @@ use values;
 /// use erl_tokenize::{Tokenizer, TokenKind};
 ///
 /// let src = r#"io:format("Hello")."#;
-/// let tokens = Tokenizer::new(src).collect::<Result<Vec<(_, _)>, _>>().unwrap();
+/// let tokens = Tokenizer::new(src).collect::<Result<Vec<_>, _>>().unwrap();
 ///
-/// assert_eq!(tokens.iter().map(|&(ref t, _)| t.text()).collect::<Vec<_>>(),
+/// assert_eq!(tokens.iter().map(|t| t.text()).collect::<Vec<_>>(),
 ///            ["io", ":", "format", "(", r#""Hello""#, ")", "."]);
 /// ```
 #[derive(Debug)]
@@ -50,7 +50,7 @@ impl<'a> Tokenizer<'a> {
     /// let mut tokenizer = Tokenizer::new(src);
     /// assert_eq!(tokenizer.next_position().offset(), 0);
     ///
-    /// assert_eq!(tokenizer.next().unwrap().map(|(t, _)| t.text().to_owned()).unwrap(), "io");
+    /// assert_eq!(tokenizer.next().unwrap().map(|t| t.text().to_owned()).unwrap(), "io");
     /// assert_eq!(tokenizer.next_position().offset(), 2);
     /// tokenizer.next(); // ':'
     /// tokenizer.next(); // 'format'
@@ -59,7 +59,7 @@ impl<'a> Tokenizer<'a> {
     /// assert_eq!(tokenizer.next_position().offset(), 11);
     /// assert_eq!(tokenizer.next_position().line(), 2);
     /// assert_eq!(tokenizer.next_position().column(), 1);
-    /// assert_eq!(tokenizer.next().unwrap().map(|(t, _)| t.text().to_owned()).unwrap(), " ");
+    /// assert_eq!(tokenizer.next().unwrap().map(|t| t.text().to_owned()).unwrap(), " ");
     /// assert_eq!(tokenizer.next_position().offset(), 12);
     /// assert_eq!(tokenizer.next_position().line(), 2);
     /// assert_eq!(tokenizer.next_position().column(), 2);
@@ -69,7 +69,7 @@ impl<'a> Tokenizer<'a> {
     }
 }
 impl<'a> Iterator for Tokenizer<'a> {
-    type Item = Result<(Token, Position)>;
+    type Item = Result<Token>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.next_pos.offset() >= self.text.len() {
             None
@@ -78,10 +78,10 @@ impl<'a> Iterator for Tokenizer<'a> {
                 self.text
                     .slice_unchecked(self.next_pos.offset(), self.text.len())
             };
-            match track!(Token::from_text(text)) {
+            let cur_pos = self.next_pos.clone();
+            match track!(Token::from_text(text, cur_pos)) {
                 Err(e) => Some(Err(e)),
                 Ok(t) => {
-                    let cur_pos = self.next_pos.clone();
                     match t {
                         Token::Whitespace(ref v @ tokens::WhitespaceToken { .. })
                             if v.value() ==
@@ -92,7 +92,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                             self.next_pos.step(t.text().len());
                         }
                     }
-                    Some(Ok((t, cur_pos)))
+                    Some(Ok(t))
                 }
             }
         }

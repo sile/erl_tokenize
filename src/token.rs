@@ -1,6 +1,6 @@
 use num::BigUint;
 
-use {Result, ErrorKind};
+use {Result, ErrorKind, Position};
 use tokens;
 use values::{Keyword, Symbol, Whitespace};
 
@@ -25,23 +25,25 @@ impl Token {
     /// # Examples
     ///
     /// ```
-    /// use erl_tokenize::{Token, TokenValue};
+    /// use erl_tokenize::{Token, TokenValue, Position};
     /// use erl_tokenize::values::Symbol;
     ///
+    /// let pos = Position::new();
+    ///
     /// // Atom
-    /// assert_eq!(Token::from_text("foo").unwrap().value(), TokenValue::Atom("foo"));
+    /// assert_eq!(Token::from_text("foo", pos.clone()).unwrap().value(), TokenValue::Atom("foo"));
     ///
     /// // Symbol
-    /// assert_eq!(Token::from_text("[foo]").unwrap().value(),
+    /// assert_eq!(Token::from_text("[foo]", pos.clone()).unwrap().value(),
     ///            TokenValue::Symbol(Symbol::OpenSquare));
     /// ```
-    pub fn from_text(text: &str) -> Result<Self> {
+    pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let head = track_try!(text.chars().nth(0).ok_or(ErrorKind::UnexpectedEos));
         match head {
             ' ' | '\t' | '\r' | '\n' | '\u{A0}' => {
-                track!(tokens::WhitespaceToken::from_text(text)).map(Token::from)
+                track!(tokens::WhitespaceToken::from_text(text, pos)).map(Token::from)
             }
-            'A'...'Z' | '_' => track!(tokens::VariableToken::from_text(text)).map(Token::from),
+            'A'...'Z' | '_' => track!(tokens::VariableToken::from_text(text, pos)).map(Token::from),
             '0'...'9' => {
                 let maybe_float = if let Some(i) = text.find(|c: char| !c.is_digit(10)) {
                     text.as_bytes()[i] == b'.' &&
@@ -52,25 +54,25 @@ impl Token {
                     false
                 };
                 if maybe_float {
-                    track!(tokens::FloatToken::from_text(text)).map(Token::from)
+                    track!(tokens::FloatToken::from_text(text, pos)).map(Token::from)
                 } else {
-                    track!(tokens::IntegerToken::from_text(text)).map(Token::from)
+                    track!(tokens::IntegerToken::from_text(text, pos)).map(Token::from)
                 }
             }
-            '$' => track!(tokens::CharToken::from_text(text)).map(Token::from),
-            '"' => track!(tokens::StringToken::from_text(text)).map(Token::from),
-            '\'' => track!(tokens::AtomToken::from_text(text)).map(Token::from),
-            '%' => track!(tokens::CommentToken::from_text(text)).map(Token::from),
+            '$' => track!(tokens::CharToken::from_text(text, pos)).map(Token::from),
+            '"' => track!(tokens::StringToken::from_text(text, pos)).map(Token::from),
+            '\'' => track!(tokens::AtomToken::from_text(text, pos)).map(Token::from),
+            '%' => track!(tokens::CommentToken::from_text(text, pos)).map(Token::from),
             _ => {
                 if head.is_alphabetic() {
-                    let atom = track_try!(tokens::AtomToken::from_text(text));
-                    if let Ok(keyword) = tokens::KeywordToken::from_text(atom.text()) {
+                    let atom = track_try!(tokens::AtomToken::from_text(text, pos.clone()));
+                    if let Ok(keyword) = tokens::KeywordToken::from_text(atom.text(), pos) {
                         Ok(Token::from(keyword))
                     } else {
                         Ok(Token::from(atom))
                     }
                 } else {
-                    track!(tokens::SymbolToken::from_text(text)).map(Token::from)
+                    track!(tokens::SymbolToken::from_text(text, pos)).map(Token::from)
                 }
             }
         }
@@ -81,13 +83,17 @@ impl Token {
     /// # Examples
     ///
     /// ```
-    /// use erl_tokenize::{Token, TokenValue};
+    /// use erl_tokenize::{Token, TokenValue, Position};
+    ///
+    /// let pos = Position::new();
     ///
     /// // Comment
-    /// assert_eq!(Token::from_text("% foo").unwrap().value(), TokenValue::Comment(" foo"));
+    /// assert_eq!(Token::from_text("% foo", pos.clone()).unwrap().value(),
+    ///            TokenValue::Comment(" foo"));
     ///
     /// // Float
-    /// assert_eq!(Token::from_text("1.23").unwrap().value(), TokenValue::Float(1.23));
+    /// assert_eq!(Token::from_text("1.23", pos.clone()).unwrap().value(),
+    ///            TokenValue::Float(1.23));
     /// ```
     pub fn value(&self) -> TokenValue {
         match *self {
@@ -109,13 +115,15 @@ impl Token {
     /// # Examples
     ///
     /// ```
-    /// use erl_tokenize::Token;
+    /// use erl_tokenize::{Token, Position};
+    ///
+    /// let pos = Position::new();
     ///
     /// // Comment
-    /// assert_eq!(Token::from_text("% foo").unwrap().text(), "% foo");
+    /// assert_eq!(Token::from_text("% foo", pos.clone()).unwrap().text(), "% foo");
     ///
     /// // Char
-    /// assert_eq!(Token::from_text(r#"$\t"#).unwrap().text(), r#"$\t"#);
+    /// assert_eq!(Token::from_text(r#"$\t"#, pos.clone()).unwrap().text(), r#"$\t"#);
     /// ```
     pub fn text(&self) -> &str {
         match *self {
@@ -132,16 +140,33 @@ impl Token {
         }
     }
 
+    /// Returns the start position of the begnning of this token.
+    pub fn position(&self) -> &Position {
+        match *self {
+            Token::Atom(ref t) => t.position(),
+            Token::Char(ref t) => t.position(),
+            Token::Comment(ref t) => t.position(),
+            Token::Float(ref t) => t.position(),
+            Token::Integer(ref t) => t.position(),
+            Token::Keyword(ref t) => t.position(),
+            Token::String(ref t) => t.position(),
+            Token::Symbol(ref t) => t.position(),
+            Token::Variable(ref t) => t.position(),
+            Token::Whitespace(ref t) => t.position(),
+        }
+    }
+
     /// Returns the kind of this token.
     ///
     /// # Examples
     ///
     /// ```
-    /// use erl_tokenize::{Token, TokenKind};
+    /// use erl_tokenize::{Token, TokenKind, Position};
     ///
-    /// assert_eq!(Token::from_text("foo").unwrap().kind(), TokenKind::Atom);
-    /// assert_eq!(Token::from_text("123").unwrap().kind(), TokenKind::Integer);
-    /// assert_eq!(Token::from_text(" ").unwrap().kind(), TokenKind::Whitespace);
+    /// let pos = Position::new();
+    /// assert_eq!(Token::from_text("foo", pos.clone()).unwrap().kind(), TokenKind::Atom);
+    /// assert_eq!(Token::from_text("123", pos.clone()).unwrap().kind(), TokenKind::Integer);
+    /// assert_eq!(Token::from_text(" ", pos.clone()).unwrap().kind(), TokenKind::Whitespace);
     /// ```
     pub fn kind(&self) -> TokenKind {
         match *self {
