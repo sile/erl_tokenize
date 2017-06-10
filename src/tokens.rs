@@ -384,8 +384,10 @@ impl FloatToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().to_u32(), Some(10u32));
-/// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().to_u32(), Some(0xab0e));
+/// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().to_u32(),
+///            Some(10u32));
+/// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().to_u32(),
+///            Some(0xab0e));
 ///
 /// // Err
 /// assert!(IntegerToken::from_text("-10", pos.clone()).is_err());
@@ -440,8 +442,10 @@ impl IntegerToken {
     /// # fn main() {
     /// let pos = Position::new();
     ///
-    /// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().to_u32(), Some(10u32));
-    /// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().to_u32(), Some(0xab0e));
+    /// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().to_u32(),
+    ///            Some(10u32));
+    /// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().to_u32(),
+    ///            Some(0xab0e));
     /// # }
     /// ```
     pub fn value(&self) -> &BigUint {
@@ -544,8 +548,10 @@ impl KeywordToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(KeywordToken::from_text("receive", pos.clone()).unwrap().value(), Keyword::Receive);
-    /// assert_eq!(KeywordToken::from_text("and  ", pos.clone()).unwrap().value(), Keyword::And);
+    /// assert_eq!(KeywordToken::from_text("receive", pos.clone()).unwrap().value(),
+    ///            Keyword::Receive);
+    /// assert_eq!(KeywordToken::from_text("and  ", pos.clone()).unwrap().value(),
+    ///            Keyword::And);
     /// ```
     pub fn value(&self) -> Keyword {
         self.value
@@ -646,9 +652,12 @@ impl StringToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(StringToken::from_text(r#""foo""#, pos.clone()).unwrap().text(), r#""foo""#);
-    /// assert_eq!(StringToken::from_text(r#""foo"  "#, pos.clone()).unwrap().text(), r#""foo""#);
-    /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#, pos.clone()).unwrap().text(), r#""f\x6Fo""#);
+    /// assert_eq!(StringToken::from_text(r#""foo""#, pos.clone()).unwrap().text(),
+    ///            r#""foo""#);
+    /// assert_eq!(StringToken::from_text(r#""foo"  "#, pos.clone()).unwrap().text(),
+    ///            r#""foo""#);
+    /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#, pos.clone()).unwrap().text(),
+    ///            r#""f\x6Fo""#);
     /// ```
     pub fn text(&self) -> &str {
         &self.text
@@ -921,8 +930,10 @@ impl WhitespaceToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(WhitespaceToken::from_text(" ", pos.clone()).unwrap().value(), Whitespace::Space);
-    /// assert_eq!(WhitespaceToken::from_text("\t ", pos.clone()).unwrap().value(), Whitespace::Tab);
+    /// assert_eq!(WhitespaceToken::from_text(" ", pos.clone()).unwrap().value(),
+    ///            Whitespace::Space);
+    /// assert_eq!(WhitespaceToken::from_text("\t ", pos.clone()).unwrap().value(),
+    ///            Whitespace::Tab);
     /// ```
     pub fn value(&self) -> Whitespace {
         self.value
