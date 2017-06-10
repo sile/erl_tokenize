@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use {Result, Token, Position};
 use tokens;
 use values;
@@ -30,6 +32,11 @@ impl<'a> Tokenizer<'a> {
             text,
             next_pos: init_pos.clone(),
         }
+    }
+
+    /// Sets the file path of the succeeding tokens.
+    pub fn set_filepath<P: AsRef<Path>>(&mut self, filepath: P) {
+        self.next_pos.set_filepath(filepath);
     }
 
     /// Returns the input text.

@@ -1,6 +1,10 @@
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+
 /// Position of token.
 #[derive(Debug, Clone)]
 pub struct Position {
+    filepath: Option<Rc<PathBuf>>,
     offset: usize,
     line: usize,
     column: usize,
@@ -9,10 +13,16 @@ impl Position {
     /// Returns an initial position.
     pub fn new() -> Position {
         Position {
+            filepath: None,
             line: 1,
             column: 1,
             offset: 0,
         }
+    }
+
+    /// Returns the file path where this token is located.
+    pub fn filepath(&self) -> Option<&PathBuf> {
+        self.filepath.as_ref().map(|p| p.as_ref())
     }
 
     /// Returns an offset from the beginning of the buffer.
@@ -28,6 +38,11 @@ impl Position {
     /// Returns a column number from the beginning of the line (1-based).
     pub fn column(&self) -> usize {
         self.column
+    }
+
+    /// Sets the file path where this token is located.
+    pub(crate) fn set_filepath<P: AsRef<Path>>(&mut self, path: P) {
+        self.filepath = Some(Rc::new(path.as_ref().to_path_buf()));
     }
 
     /// Step a position.
