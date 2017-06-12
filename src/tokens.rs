@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use std::str;
 use num::{Num, BigUint};
 
-use {Result, ErrorKind, Position};
+use {Result, ErrorKind, Position, PositionRange};
 use util;
 use values::{Keyword, Symbol, Whitespace};
 
@@ -90,10 +90,17 @@ impl AtomToken {
     pub fn text(&self) -> &str {
         &self.text
     }
-
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        &self.pos
+}
+impl PositionRange for AtomToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+    fn end_position(&self) -> Position {
+        if self.value.is_none() {
+            self.pos.clone().step_by_width(self.text.len())
+        } else {
+            self.pos.clone().step_by_text(&self.text)
+        }
     }
 }
 
@@ -183,10 +190,13 @@ impl CharToken {
     pub fn text(&self) -> &str {
         &self.text
     }
-
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        &self.pos
+}
+impl PositionRange for CharToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_text(&self.text)
     }
 }
 
@@ -254,10 +264,13 @@ impl CommentToken {
     pub fn text(&self) -> &str {
         &self.text
     }
-
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        &self.pos
+}
+impl PositionRange for CommentToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_width(self.text.len())
     }
 }
 
@@ -362,10 +375,13 @@ impl FloatToken {
     pub fn text(&self) -> &str {
         &self.text
     }
-
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        &self.pos
+}
+impl PositionRange for FloatToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_width(self.text.len())
     }
 }
 
@@ -468,10 +484,13 @@ impl IntegerToken {
     pub fn text(&self) -> &str {
         &self.text
     }
-
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        &self.pos
+}
+impl PositionRange for IntegerToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_width(self.text.len())
     }
 }
 
@@ -573,10 +592,13 @@ impl KeywordToken {
     pub fn text(&self) -> &'static str {
         self.value.as_str()
     }
-
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        &self.pos
+}
+impl PositionRange for KeywordToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_width(self.text().len())
     }
 }
 
@@ -662,10 +684,13 @@ impl StringToken {
     pub fn text(&self) -> &str {
         &self.text
     }
-
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        &self.pos
+}
+impl PositionRange for StringToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_text(&self.text)
     }
 }
 
@@ -795,10 +820,13 @@ impl SymbolToken {
     pub fn text(&self) -> &'static str {
         self.value.as_str()
     }
-
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        &self.pos
+}
+impl PositionRange for SymbolToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_width(self.text().len())
     }
 }
 
@@ -873,10 +901,13 @@ impl VariableToken {
     pub fn text(&self) -> &str {
         &self.text
     }
-
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        &self.pos
+}
+impl PositionRange for VariableToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_width(self.text.len())
     }
 }
 
@@ -955,9 +986,12 @@ impl WhitespaceToken {
     pub fn text(&self) -> &'static str {
         self.value.as_str()
     }
-
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        &self.pos
+}
+impl PositionRange for WhitespaceToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_text(self.text())
     }
 }

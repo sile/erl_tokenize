@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::Read;
 use std::time::{Duration, Instant};
 use clap::{App, Arg};
-use erl_tokenize::Tokenizer;
+use erl_tokenize::{Tokenizer, PositionRange};
 
 fn main() {
     let matches = App::new("tokenize")
@@ -27,7 +27,7 @@ fn main() {
     for result in tokenizer {
         let token = track_try_unwrap!(result);
         if !silent {
-            println!("[{:?}] {:?}", token.position(), token.value());
+            println!("[{:?}] {:?}", token.start_position(), token.value());
         }
         count += 1;
     }

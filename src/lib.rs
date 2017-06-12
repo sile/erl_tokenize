@@ -33,7 +33,7 @@ extern crate trackable;
 
 pub use error::{Error, ErrorKind};
 pub use token::{Token, TokenKind, TokenValue};
-pub use position::Position;
+pub use position::{Position, PositionRange};
 pub use tokenizer::Tokenizer;
 
 pub mod tokens;

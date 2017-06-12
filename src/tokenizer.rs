@@ -1,8 +1,6 @@
 use std::path::Path;
 
-use {Result, Token, Position};
-use tokens;
-use values;
+use {Result, Token, Position, PositionRange};
 
 /// Tokenizer.
 ///
@@ -89,16 +87,7 @@ impl<'a> Iterator for Tokenizer<'a> {
             match track!(Token::from_text(text, cur_pos)) {
                 Err(e) => Some(Err(e)),
                 Ok(t) => {
-                    match t {
-                        Token::Whitespace(ref v @ tokens::WhitespaceToken { .. })
-                            if v.value() ==
-                               values::Whitespace::Newline => {
-                            self.next_pos.new_line();
-                        }
-                        _ => {
-                            self.next_pos.step(t.text().len());
-                        }
-                    }
+                    self.next_pos = t.end_position();
                     Some(Ok(t))
                 }
             }

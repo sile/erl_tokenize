@@ -45,16 +45,32 @@ impl Position {
         self.filepath = Some(Rc::new(path.as_ref().to_path_buf()));
     }
 
-    /// Step a position.
-    pub(crate) fn step(&mut self, witdh: usize) {
+    /// Step a position by the given width.
+    pub(crate) fn step_by_width(mut self, witdh: usize) -> Position {
         self.offset += witdh;
         self.column += witdh;
+        self
     }
 
-    /// Step a position as a newline.
-    pub(crate) fn new_line(&mut self) {
-        self.offset += 1;
-        self.line += 1;
-        self.column = 1;
+    /// Step a position by the given text.
+    pub(crate) fn step_by_text(mut self, mut text: &str) -> Position {
+        while let Some(i) = text.find('\n') {
+            self.offset += i + 1;
+            self.line += 1;
+            let len = text.len();
+            text = unsafe { text.slice_unchecked(i + 1, len) };
+        }
+        self.offset += text.len();
+        self.column = text.len() + 1;
+        self
     }
+}
+
+/// This trait allows to get a (half-open) range where the subject is located.
+pub trait PositionRange {
+    /// Returns the (inclusive) start position of this.
+    fn start_position(&self) -> Position;
+
+    /// Returns the (exclusive) end position of this.
+    fn end_position(&self) -> Position;
 }

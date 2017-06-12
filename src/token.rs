@@ -1,6 +1,6 @@
 use num::BigUint;
 
-use {Result, ErrorKind, Position};
+use {Result, ErrorKind, Position, PositionRange};
 use tokens;
 use values::{Keyword, Symbol, Whitespace};
 
@@ -140,22 +140,6 @@ impl Token {
         }
     }
 
-    /// Returns the start position of the begnning of this token.
-    pub fn position(&self) -> &Position {
-        match *self {
-            Token::Atom(ref t) => t.position(),
-            Token::Char(ref t) => t.position(),
-            Token::Comment(ref t) => t.position(),
-            Token::Float(ref t) => t.position(),
-            Token::Integer(ref t) => t.position(),
-            Token::Keyword(ref t) => t.position(),
-            Token::String(ref t) => t.position(),
-            Token::Symbol(ref t) => t.position(),
-            Token::Variable(ref t) => t.position(),
-            Token::Whitespace(ref t) => t.position(),
-        }
-    }
-
     /// Returns the kind of this token.
     ///
     /// # Examples
@@ -231,6 +215,36 @@ impl From<tokens::VariableToken> for Token {
 impl From<tokens::WhitespaceToken> for Token {
     fn from(f: tokens::WhitespaceToken) -> Self {
         Token::Whitespace(f)
+    }
+}
+impl PositionRange for Token {
+    fn start_position(&self) -> Position {
+        match *self {
+            Token::Atom(ref t) => t.start_position(),
+            Token::Char(ref t) => t.start_position(),
+            Token::Comment(ref t) => t.start_position(),
+            Token::Float(ref t) => t.start_position(),
+            Token::Integer(ref t) => t.start_position(),
+            Token::Keyword(ref t) => t.start_position(),
+            Token::String(ref t) => t.start_position(),
+            Token::Symbol(ref t) => t.start_position(),
+            Token::Variable(ref t) => t.start_position(),
+            Token::Whitespace(ref t) => t.start_position(),
+        }
+    }
+    fn end_position(&self) -> Position {
+        match *self {
+            Token::Atom(ref t) => t.end_position(),
+            Token::Char(ref t) => t.end_position(),
+            Token::Comment(ref t) => t.end_position(),
+            Token::Float(ref t) => t.end_position(),
+            Token::Integer(ref t) => t.end_position(),
+            Token::Keyword(ref t) => t.end_position(),
+            Token::String(ref t) => t.end_position(),
+            Token::Symbol(ref t) => t.end_position(),
+            Token::Variable(ref t) => t.end_position(),
+            Token::Whitespace(ref t) => t.end_position(),
+        }
     }
 }
 
