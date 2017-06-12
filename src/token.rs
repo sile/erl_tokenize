@@ -1,3 +1,4 @@
+use std::fmt;
 use num::BigUint;
 
 use {Result, ErrorKind, Position, PositionRange};
@@ -245,6 +246,11 @@ impl PositionRange for Token {
             Token::Variable(ref t) => t.end_position(),
             Token::Whitespace(ref t) => t.end_position(),
         }
+    }
+}
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
     }
 }
 

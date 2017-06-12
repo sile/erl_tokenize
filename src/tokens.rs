@@ -1,5 +1,6 @@
 //! Tokens.
 use std::borrow::Cow;
+use std::fmt;
 use std::str;
 use num::{Num, BigUint};
 
@@ -103,6 +104,11 @@ impl PositionRange for AtomToken {
         }
     }
 }
+impl fmt::Display for AtomToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
+    }
+}
 
 /// Character token.
 ///
@@ -199,6 +205,11 @@ impl PositionRange for CharToken {
         self.pos.clone().step_by_text(&self.text)
     }
 }
+impl fmt::Display for CharToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
+    }
+}
 
 /// Comment token.
 ///
@@ -271,6 +282,11 @@ impl PositionRange for CommentToken {
     }
     fn end_position(&self) -> Position {
         self.pos.clone().step_by_width(self.text.len())
+    }
+}
+impl fmt::Display for CommentToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
     }
 }
 
@@ -384,6 +400,11 @@ impl PositionRange for FloatToken {
         self.pos.clone().step_by_width(self.text.len())
     }
 }
+impl fmt::Display for FloatToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
+    }
+}
 
 /// Integer token.
 ///
@@ -491,6 +512,11 @@ impl PositionRange for IntegerToken {
     }
     fn end_position(&self) -> Position {
         self.pos.clone().step_by_width(self.text.len())
+    }
+}
+impl fmt::Display for IntegerToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
     }
 }
 
@@ -601,6 +627,11 @@ impl PositionRange for KeywordToken {
         self.pos.clone().step_by_width(self.text().len())
     }
 }
+impl fmt::Display for KeywordToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
+    }
+}
 
 /// String token.
 ///
@@ -691,6 +722,11 @@ impl PositionRange for StringToken {
     }
     fn end_position(&self) -> Position {
         self.pos.clone().step_by_text(&self.text)
+    }
+}
+impl fmt::Display for StringToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
     }
 }
 
@@ -829,6 +865,11 @@ impl PositionRange for SymbolToken {
         self.pos.clone().step_by_width(self.text().len())
     }
 }
+impl fmt::Display for SymbolToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
+    }
+}
 
 /// Variable token.
 ///
@@ -908,6 +949,11 @@ impl PositionRange for VariableToken {
     }
     fn end_position(&self) -> Position {
         self.pos.clone().step_by_width(self.text.len())
+    }
+}
+impl fmt::Display for VariableToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
     }
 }
 
@@ -993,5 +1039,10 @@ impl PositionRange for WhitespaceToken {
     }
     fn end_position(&self) -> Position {
         self.pos.clone().step_by_text(self.text())
+    }
+}
+impl fmt::Display for WhitespaceToken {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.text().fmt(f)
     }
 }
