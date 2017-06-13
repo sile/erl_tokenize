@@ -18,13 +18,15 @@ use {Result, Token, Position, PositionRange};
 ///            ["io", ":", "format", "(", r#""Hello""#, ")", "."]);
 /// ```
 #[derive(Debug)]
-pub struct Tokenizer<'a> {
-    text: &'a str,
+pub struct Tokenizer<T> {
+    text: T,
     next_pos: Position,
 }
-impl<'a> Tokenizer<'a> {
+impl<T> Tokenizer<T>
+    where T: AsRef<str>
+{
     /// Makes a new `Tokenizer` instance which tokenize the Erlang source code text.
-    pub fn new(text: &'a str) -> Self {
+    pub fn new(text: T) -> Self {
         let init_pos = Position::new();
         Tokenizer {
             text,
@@ -38,8 +40,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Returns the input text.
-    pub fn text(&self) -> &'a str {
-        self.text
+    pub fn text(&self) -> &str {
+        self.text.as_ref()
     }
 
     /// Returns the cursor position from which this tokenizer will start to scan the next token.
@@ -73,15 +75,18 @@ impl<'a> Tokenizer<'a> {
         self.next_pos.clone()
     }
 }
-impl<'a> Iterator for Tokenizer<'a> {
+impl<T> Iterator for Tokenizer<T>
+    where T: AsRef<str>
+{
     type Item = Result<Token>;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.next_pos.offset() >= self.text.len() {
+        if self.next_pos.offset() >= self.text.as_ref().len() {
             None
         } else {
             let text = unsafe {
                 self.text
-                    .slice_unchecked(self.next_pos.offset(), self.text.len())
+                    .as_ref()
+                    .slice_unchecked(self.next_pos.offset(), self.text.as_ref().len())
             };
             let cur_pos = self.next_pos.clone();
             match track!(Token::from_text(text, cur_pos)) {
