@@ -1,7 +1,7 @@
 use std::fmt;
 use num::BigUint;
 
-use {Result, ErrorKind, Position, PositionRange, HiddenToken};
+use {Result, ErrorKind, Position, PositionRange, HiddenToken, LexicalToken};
 use tokens;
 use values::{Keyword, Symbol, Whitespace};
 
@@ -243,6 +243,20 @@ impl From<HiddenToken> for Token {
         match f {
             HiddenToken::Comment(t) => t.into(),
             HiddenToken::Whitespace(t) => t.into(),
+        }
+    }
+}
+impl From<LexicalToken> for Token {
+    fn from(f: LexicalToken) -> Self {
+        match f {
+            LexicalToken::Atom(t) => t.into(),
+            LexicalToken::Char(t) => t.into(),
+            LexicalToken::Float(t) => t.into(),
+            LexicalToken::Integer(t) => t.into(),
+            LexicalToken::Keyword(t) => t.into(),
+            LexicalToken::String(t) => t.into(),
+            LexicalToken::Symbol(t) => t.into(),
+            LexicalToken::Variable(t) => t.into(),
         }
     }
 }
