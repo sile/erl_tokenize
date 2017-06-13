@@ -50,10 +50,10 @@ impl AtomToken {
     pub fn from_value(value: &str, pos: Position) -> Self {
         let mut text = "'".to_string();
         for c in value.chars() {
-            if c == '\'' {
-                text.push_str("\\'");
-            } else {
-                text.push(c);
+            match c {
+                '\'' => text.push_str("\\'"),
+                '\\' => text.push_str("\\\\"),
+                _ => text.push(c),
             }
         }
         text.push('\'');
