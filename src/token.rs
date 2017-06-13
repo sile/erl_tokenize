@@ -1,7 +1,7 @@
 use std::fmt;
 use num::BigUint;
 
-use {Result, ErrorKind, Position, PositionRange};
+use {Result, ErrorKind, Position, PositionRange, HiddenToken};
 use tokens;
 use values::{Keyword, Symbol, Whitespace};
 
@@ -236,6 +236,14 @@ impl From<tokens::VariableToken> for Token {
 impl From<tokens::WhitespaceToken> for Token {
     fn from(f: tokens::WhitespaceToken) -> Self {
         Token::Whitespace(f)
+    }
+}
+impl From<HiddenToken> for Token {
+    fn from(f: HiddenToken) -> Self {
+        match f {
+            HiddenToken::Comment(t) => t.into(),
+            HiddenToken::Whitespace(t) => t.into(),
+        }
     }
 }
 impl PositionRange for Token {
