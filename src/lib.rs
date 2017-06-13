@@ -29,6 +29,7 @@ extern crate trackable;
 
 pub use error::{Error, ErrorKind};
 pub use hidden_token::HiddenToken;
+pub use lexer::Lexer;
 pub use lexical_token::LexicalToken;
 pub use position::{Position, PositionRange};
 pub use token::Token;
@@ -39,6 +40,7 @@ pub mod values;
 
 mod error;
 mod hidden_token;
+mod lexer;
 mod lexical_token;
 mod position;
 mod token;

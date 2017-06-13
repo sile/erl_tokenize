@@ -44,6 +44,11 @@ impl<T> Tokenizer<T>
         self.text.as_ref()
     }
 
+    /// Finishes tokenization and returns the target text.
+    pub fn finish(self) -> T {
+        self.text
+    }
+
     /// Returns the cursor position from which this tokenizer will start to scan the next token.
     ///
     /// # Examples
