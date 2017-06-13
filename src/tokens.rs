@@ -35,6 +35,35 @@ pub struct AtomToken {
     pos: Position,
 }
 impl AtomToken {
+    /// Makes a new `AtomToken` instance from the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::AtomToken;
+    ///
+    /// let pos = Position::new();
+    /// assert_eq!(AtomToken::from_value("foo", pos.clone()).text(), "'foo'");
+    /// assert_eq!(AtomToken::from_value("foo's", pos.clone()).text(), r"'foo\'s'");
+    /// ```
+    pub fn from_value(value: &str, pos: Position) -> Self {
+        let mut text = "'".to_string();
+        for c in value.chars() {
+            if c == '\'' {
+                text.push_str("\\'");
+            } else {
+                text.push(c);
+            }
+        }
+        text.push('\'');
+        AtomToken {
+            value: Some(value.to_string()),
+            text: text,
+            pos,
+        }
+    }
+
     /// Tries to convert from any prefixes of the input text to an `AtomToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
@@ -141,6 +170,26 @@ pub struct CharToken {
     pos: Position,
 }
 impl CharToken {
+    /// Makes a new `CharToken` instance from the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::CharToken;
+    ///
+    /// let pos = Position::new();
+    /// assert_eq!(CharToken::from_value('a', pos.clone()).text(), "$a");
+    /// ```
+    pub fn from_value(value: char, pos: Position) -> Self {
+        let text = if value == '\\' {
+            r"$\\".to_string()
+        } else {
+            format!("${}", value)
+        };
+        CharToken { value, text, pos }
+    }
+
     /// Tries to convert from any prefixes of the text to a `CharToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let mut chars = text.char_indices();
@@ -234,6 +283,23 @@ pub struct CommentToken {
     pos: Position,
 }
 impl CommentToken {
+    /// Makes a new `CommentToken` instance from the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::CommentToken;
+    ///
+    /// let pos = Position::new();
+    /// assert_eq!(CommentToken::from_value("foo", pos.clone()).unwrap().text(), "%foo");
+    /// ```
+    pub fn from_value(value: &str, pos: Position) -> Result<Self> {
+        track_assert!(value.find('\n').is_none(), ErrorKind::InvalidInput);
+        let text = format!("%{}", value);
+        Ok(CommentToken { text, pos })
+    }
+
     /// Tries to convert from any prefixes of the text to a `CommentToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         track_assert_eq!(text.chars().nth(0), Some('%'), ErrorKind::InvalidInput);
@@ -316,6 +382,22 @@ pub struct FloatToken {
     pos: Position,
 }
 impl FloatToken {
+    /// Makes a new `FloatToken` instance from the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::FloatToken;
+    ///
+    /// let pos = Position::new();
+    /// assert_eq!(FloatToken::from_value(1.23, pos.clone()).text(), "1.23");
+    /// ```
+    pub fn from_value(value: f64, pos: Position) -> Self {
+        let text = format!("{}", value);
+        FloatToken { value, text, pos }
+    }
+
     /// Tries to convert from any prefixes of the text to a `FloatToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let mut chars = text.char_indices().peekable();
@@ -437,6 +519,22 @@ pub struct IntegerToken {
     pos: Position,
 }
 impl IntegerToken {
+    /// Makes a new `IntegerToken` instance from the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::IntegerToken;
+    ///
+    /// let pos = Position::new();
+    /// assert_eq!(IntegerToken::from_value(123u32.into(), pos.clone()).text(), "123");
+    /// ```
+    pub fn from_value(value: BigUint, pos: Position) -> Self {
+        let text = format!("{}", value);
+        IntegerToken { value, text, pos }
+    }
+
     /// Tries to convert from any prefixes of the text to an `IntegerToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let mut start = 0;
@@ -546,6 +644,22 @@ pub struct KeywordToken {
     pos: Position,
 }
 impl KeywordToken {
+    /// Makes a new `KeywordToken` instance from the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::KeywordToken;
+    /// use erl_tokenize::values::Keyword;
+    ///
+    /// let pos = Position::new();
+    /// assert_eq!(KeywordToken::from_value(Keyword::Case, pos.clone()).text(), "case");
+    /// ```
+    pub fn from_value(value: Keyword, pos: Position) -> Self {
+        KeywordToken { value, pos }
+    }
+
     /// Tries to convert from any prefixes of the text to a `KeywordToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let atom = track_try!(AtomToken::from_text(text, pos.clone()));
@@ -658,6 +772,26 @@ pub struct StringToken {
     pos: Position,
 }
 impl StringToken {
+    /// Makes a new `StringToken` instance from the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::StringToken;
+    ///
+    /// let pos = Position::new();
+    /// assert_eq!(StringToken::from_value("foo", pos.clone()).text(), r#""foo""#);
+    /// ```
+    pub fn from_value(value: &str, pos: Position) -> Self {
+        let text = format!("{:?}", value);
+        StringToken {
+            value: Some(value.to_string()),
+            text,
+            pos,
+        }
+    }
+
     /// Tries to convert from any prefixes of the text to a `StringToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
@@ -755,6 +889,22 @@ pub struct SymbolToken {
     pos: Position,
 }
 impl SymbolToken {
+    /// Makes a new `SymbolToken` instance from the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::SymbolToken;
+    /// use erl_tokenize::values::Symbol;
+    ///
+    /// let pos = Position::new();
+    /// assert_eq!(SymbolToken::from_value(Symbol::Dot, pos.clone()).text(), ".");
+    /// ```
+    pub fn from_value(value: Symbol, pos: Position) -> Self {
+        SymbolToken { value, pos }
+    }
+
     /// Tries to convert from any prefixes of the text to a `SymbolToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let bytes = text.as_bytes();
@@ -896,6 +1046,23 @@ pub struct VariableToken {
     pos: Position,
 }
 impl VariableToken {
+    /// Makes a new `VariableToken` instance from the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::VariableToken;
+    ///
+    /// let pos = Position::new();
+    /// assert_eq!(VariableToken::from_value("Foo", pos.clone()).unwrap().text(), "Foo");
+    /// ```
+    pub fn from_value(value: &str, pos: Position) -> Result<Self> {
+        let var = track_try!(Self::from_text(value, pos));
+        track_assert_eq!(var.text().len(), value.len(), ErrorKind::InvalidInput);
+        Ok(var)
+    }
+
     /// Tries to convert from any prefixes of the text to a `VariableToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let mut chars = text.char_indices();
@@ -981,6 +1148,22 @@ pub struct WhitespaceToken {
     pos: Position,
 }
 impl WhitespaceToken {
+    /// Makes a new `WhitespaceToken` instance from the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::WhitespaceToken;
+    /// use erl_tokenize::values::Whitespace;
+    ///
+    /// let pos = Position::new();
+    /// assert_eq!(WhitespaceToken::from_value(Whitespace::Space, pos.clone()).text(), " ");
+    /// ```
+    pub fn from_value(value: Whitespace, pos: Position) -> Self {
+        WhitespaceToken { value, pos }
+    }
+
     /// Tries to convert from any prefixes of the text to a `WhitespaceToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);

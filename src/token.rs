@@ -21,6 +21,26 @@ pub enum Token {
     Whitespace(tokens::WhitespaceToken),
 }
 impl Token {
+    /// Makes a new `Token` from the value.
+    pub fn from_value(value: TokenValue, pos: Position) -> Result<Self> {
+        match value {
+            TokenValue::Atom(v) => Ok(tokens::AtomToken::from_value(v, pos).into()),
+            TokenValue::Char(v) => Ok(tokens::CharToken::from_value(v, pos).into()),
+            TokenValue::Comment(v) => {
+                track!(tokens::CommentToken::from_value(v, pos)).map(Token::from)
+            }
+            TokenValue::Float(v) => Ok(tokens::FloatToken::from_value(v, pos).into()),
+            TokenValue::Integer(v) => Ok(tokens::IntegerToken::from_value(v.clone(), pos).into()),
+            TokenValue::Keyword(v) => Ok(tokens::KeywordToken::from_value(v, pos).into()),
+            TokenValue::String(v) => Ok(tokens::StringToken::from_value(v, pos).into()),
+            TokenValue::Symbol(v) => Ok(tokens::SymbolToken::from_value(v, pos).into()),
+            TokenValue::Variable(v) => {
+                track!(tokens::VariableToken::from_value(v, pos)).map(Token::from)
+            }
+            TokenValue::Whitespace(v) => Ok(tokens::WhitespaceToken::from_value(v, pos).into()),
+        }
+    }
+
     /// Tries to convert from any prefixes of the text to a token.
     ///
     /// # Examples
