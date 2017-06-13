@@ -1,6 +1,6 @@
 use std::fmt;
 
-use {Result, ErrorKind, Position, PositionRange, HiddenToken, LexicalToken};
+use {ErrorKind, Position, PositionRange, HiddenToken, LexicalToken};
 use tokens::{AtomToken, CharToken, FloatToken, IntegerToken, KeywordToken, StringToken,
              SymbolToken, VariableToken, CommentToken, WhitespaceToken};
 
@@ -38,7 +38,7 @@ impl Token {
     /// let token = Token::from_text("[foo]", pos.clone()).unwrap();
     /// assert_eq!(token.as_symbol_token().map(|t| t.value()), Some(Symbol::OpenSquare));
     /// ```
-    pub fn from_text(text: &str, pos: Position) -> Result<Self> {
+    pub fn from_text(text: &str, pos: Position) -> ::Result<Self> {
         let head = track_try!(text.chars().nth(0).ok_or(ErrorKind::UnexpectedEos));
         match head {
             ' ' | '\t' | '\r' | '\n' | '\u{A0}' => {
@@ -106,6 +106,224 @@ impl Token {
             Token::Symbol(ref t) => t.text(),
             Token::Variable(ref t) => t.text(),
             Token::Whitespace(ref t) => t.text(),
+        }
+    }
+
+    /// Returns `true` if this is a lexical token, otherwise `false`.
+    pub fn is_lexical_token(&self) -> bool {
+        !self.is_hidden_token()
+    }
+
+    /// Returns `true` if this is a hidden token, otherwise `false`.
+    pub fn is_hidden_token(&self) -> bool {
+        match *self {
+            Token::Whitespace(_) |
+            Token::Comment(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Tries to convert into `LexicalToken`.
+    pub fn into_lexical_token(self) -> Result<LexicalToken, Self> {
+        match self {
+            Token::Atom(t) => Ok(t.into()),
+            Token::Char(t) => Ok(t.into()),
+            Token::Float(t) => Ok(t.into()),
+            Token::Integer(t) => Ok(t.into()),
+            Token::Keyword(t) => Ok(t.into()),
+            Token::String(t) => Ok(t.into()),
+            Token::Symbol(t) => Ok(t.into()),
+            Token::Variable(t) => Ok(t.into()),
+            _ => Err(self),
+        }
+    }
+
+    /// Tries to convert into `HiddenToken`.
+    pub fn into_hidden_token(self) -> Result<HiddenToken, Self> {
+        match self {
+            Token::Comment(t) => Ok(t.into()),
+            Token::Whitespace(t) => Ok(t.into()),
+            _ => Err(self),
+        }
+    }
+
+    /// Tries to return the reference to the inner `AtomToken`.
+    pub fn as_atom_token(&self) -> Option<&AtomToken> {
+        if let Token::Atom(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the reference to the inner `CharToken`.
+    pub fn as_char_token(&self) -> Option<&CharToken> {
+        if let Token::Char(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the reference to the inner `FloatToken`.
+    pub fn as_float_token(&self) -> Option<&FloatToken> {
+        if let Token::Float(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the reference to the inner `IntegerToken`.
+    pub fn as_integer_token(&self) -> Option<&IntegerToken> {
+        if let Token::Integer(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the reference to the inner `KeywordToken`.
+    pub fn as_keyword_token(&self) -> Option<&KeywordToken> {
+        if let Token::Keyword(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the reference to the inner `StringToken`.
+    pub fn as_string_token(&self) -> Option<&StringToken> {
+        if let Token::String(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the reference to the inner `SymbolToken`.
+    pub fn as_symbol_token(&self) -> Option<&SymbolToken> {
+        if let Token::Symbol(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the reference to the inner `VariableToken`.
+    pub fn as_variable_token(&self) -> Option<&VariableToken> {
+        if let Token::Variable(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the reference to the inner `CommentToken`.
+    pub fn as_comment_token(&self) -> Option<&CommentToken> {
+        if let Token::Comment(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the reference to the inner `WhitespaceToken`.
+    pub fn as_whitespace_token(&self) -> Option<&WhitespaceToken> {
+        if let Token::Whitespace(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the inner `AtomToken`.
+    pub fn into_atom_token(self) -> Result<AtomToken, Self> {
+        if let Token::Atom(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Tries to return the inner `CharToken`.
+    pub fn into_char_token(self) -> Result<CharToken, Self> {
+        if let Token::Char(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Tries to return the inner `FloatToken`.
+    pub fn into_float_token(self) -> Result<FloatToken, Self> {
+        if let Token::Float(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Tries to return the inner `IntegerToken`.
+    pub fn into_integer_token(self) -> Result<IntegerToken, Self> {
+        if let Token::Integer(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Tries to return the inner `KeywordToken`.
+    pub fn into_keyword_token(self) -> Result<KeywordToken, Self> {
+        if let Token::Keyword(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Tries to return the inner `StringToken`.
+    pub fn into_string_token(self) -> Result<StringToken, Self> {
+        if let Token::String(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Tries to return the inner `SymbolToken`.
+    pub fn into_symbol_token(self) -> Result<SymbolToken, Self> {
+        if let Token::Symbol(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Tries to return the inner `VariableToken`.
+    pub fn into_variable_token(self) -> Result<VariableToken, Self> {
+        if let Token::Variable(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Tries to return the inner `CommentToken`.
+    pub fn into_comment_token(self) -> Result<CommentToken, Self> {
+        if let Token::Comment(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Tries to return the inner `WhitespaceToken`.
+    pub fn into_whitespace_token(self) -> Result<WhitespaceToken, Self> {
+        if let Token::Whitespace(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
         }
     }
 }
