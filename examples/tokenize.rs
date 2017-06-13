@@ -27,7 +27,7 @@ fn main() {
     for result in tokenizer {
         let token = track_try_unwrap!(result);
         if !silent {
-            println!("[{:?}] {:?}", token.start_position(), token.value());
+            println!("[{:?}] {:?}", token.start_position(), token.text());
         }
         count += 1;
     }

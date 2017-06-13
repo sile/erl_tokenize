@@ -9,7 +9,7 @@ use {Result, Token, Position, PositionRange};
 /// # Examples
 ///
 /// ```
-/// use erl_tokenize::{Tokenizer, TokenKind};
+/// use erl_tokenize::Tokenizer;
 ///
 /// let src = r#"io:format("Hello")."#;
 /// let tokens = Tokenizer::new(src).collect::<Result<Vec<_>, _>>().unwrap();

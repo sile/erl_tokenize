@@ -5,15 +5,11 @@
 //! Tokenizes the Erlang code `io:format("Hello").`:
 //!
 //! ```
-//! use erl_tokenize::{Tokenizer, TokenKind};
+//! use erl_tokenize::Tokenizer;
 //!
 //! let src = r#"io:format("Hello")."#;
 //! let tokenizer = Tokenizer::new(src);
 //! let tokens = tokenizer.collect::<Result<Vec<_>, _>>().unwrap();
-//!
-//! assert_eq!(tokens.iter().map(|t| t.kind()).collect::<Vec<_>>(),
-//!            [TokenKind::Atom, TokenKind::Symbol, TokenKind::Atom, TokenKind::Symbol,
-//!             TokenKind::String, TokenKind::Symbol, TokenKind::Symbol]);
 //!
 //! assert_eq!(tokens.iter().map(|t| t.text()).collect::<Vec<_>>(),
 //!            ["io", ":", "format", "(", r#""Hello""#, ")", "."]);
@@ -35,7 +31,7 @@ pub use error::{Error, ErrorKind};
 pub use hidden_token::HiddenToken;
 pub use lexical_token::LexicalToken;
 pub use position::{Position, PositionRange};
-pub use token::{Token, TokenKind, TokenValue};
+pub use token::Token;
 pub use tokenizer::Tokenizer;
 
 pub mod tokens;
