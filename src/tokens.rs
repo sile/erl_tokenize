@@ -3,8 +3,9 @@ use std::borrow::Cow;
 use std::fmt;
 use std::str;
 use num::{Num, BigUint};
+use trackable::error::ErrorKindExt;
 
-use {Result, ErrorKind, Position, PositionRange};
+use {Result, Error, ErrorKind, Position, PositionRange};
 use util;
 use values::{Keyword, Symbol, Whitespace};
 
@@ -69,7 +70,7 @@ impl AtomToken {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (head, tail) = text.split_at(1);
         let (value, text) = if head == "'" {
-            let (value, end) = track_try!(util::parse_string(tail, '\''));
+            let (value, end) = track!(util::parse_string(tail, '\''))?;
             let value = Some(value.to_string());
             (value, unsafe { text.slice_unchecked(0, 1 + end + 1) })
         } else {
@@ -197,10 +198,10 @@ impl CharToken {
                          Some('$'),
                          ErrorKind::InvalidInput);
 
-        let (_, c) = track_try!(chars.next().ok_or(ErrorKind::UnexpectedEos));
+        let (_, c) = track!(chars.next().ok_or(ErrorKind::UnexpectedEos.error()))?;
         let (value, end) = if c == '\\' {
             let mut chars = chars.peekable();
-            let value = track_try!(util::parse_escaped_char(&mut chars));
+            let value = track!(util::parse_escaped_char(&mut chars))?;
             let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
             (value, end)
         } else {
@@ -436,7 +437,7 @@ impl FloatToken {
 
         let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
         let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
-        let value = track_try!(text.parse());
+        let value = track!(text.parse().map_err(Error::from))?;
         Ok(FloatToken { value, text, pos })
     }
 
@@ -543,7 +544,9 @@ impl IntegerToken {
         while let Some((i, c)) = chars.peek().cloned() {
             if c == '#' && start == 0 {
                 start = i + 1;
-                radix = track_try!(unsafe { text.slice_unchecked(0, i) }.parse());
+                radix = track!(unsafe { text.slice_unchecked(0, i) }
+                                   .parse()
+                                   .map_err(Error::from))?;
                 track_assert!(1 < radix && radix < 37,
                               ErrorKind::InvalidInput,
                               "radix={}",
@@ -555,10 +558,10 @@ impl IntegerToken {
         }
         let end = chars.peek().map(|&(i, _)| i).unwrap_or(text.len());
         let input = unsafe { text.slice_unchecked(start, end) };
-        let value = track_try!(Num::from_str_radix(input, radix),
-                               "input={:?}, radix={}",
-                               input,
-                               radix);
+        let value = track!(Num::from_str_radix(input, radix).map_err(Error::from),
+                           "input={:?}, radix={}",
+                           input,
+                           radix)?;
         let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
         Ok(IntegerToken { value, text, pos })
     }
@@ -662,7 +665,7 @@ impl KeywordToken {
 
     /// Tries to convert from any prefixes of the text to a `KeywordToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let atom = track_try!(AtomToken::from_text(text, pos.clone()));
+        let atom = track!(AtomToken::from_text(text, pos.clone()))?;
         let value = match atom.text() {
             "after" => Keyword::After,
             "and" => Keyword::And,
@@ -797,7 +800,7 @@ impl StringToken {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
         let (head, tail) = text.split_at(1);
         track_assert_eq!(head, "\"", ErrorKind::InvalidInput);
-        let (value, end) = track_try!(util::parse_string(tail, '"'));
+        let (value, end) = track!(util::parse_string(tail, '"'))?;
         let value = match value {
             Cow::Borrowed(_) => None,
             Cow::Owned(v) => Some(v),
@@ -1058,7 +1061,7 @@ impl VariableToken {
     /// assert_eq!(VariableToken::from_value("Foo", pos.clone()).unwrap().text(), "Foo");
     /// ```
     pub fn from_value(value: &str, pos: Position) -> Result<Self> {
-        let var = track_try!(Self::from_text(value, pos));
+        let var = track!(Self::from_text(value, pos))?;
         track_assert_eq!(var.text().len(), value.len(), ErrorKind::InvalidInput);
         Ok(var)
     }
@@ -1066,7 +1069,7 @@ impl VariableToken {
     /// Tries to convert from any prefixes of the text to a `VariableToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let mut chars = text.char_indices();
-        let (_, head) = track_try!(chars.next().ok_or(ErrorKind::InvalidInput));
+        let (_, head) = track!(chars.next().ok_or(ErrorKind::InvalidInput.error()))?;
         track_assert!(util::is_variable_head_char(head), ErrorKind::InvalidInput);
         let end = chars
             .find(|&(_, c)| !util::is_variable_non_head_char(c))
