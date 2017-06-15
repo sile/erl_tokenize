@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Position of token.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Position {
-    filepath: Option<Rc<PathBuf>>,
+    filepath: Option<Arc<PathBuf>>,
     offset: usize,
     line: usize,
     column: usize,
@@ -42,7 +42,7 @@ impl Position {
 
     /// Sets the file path where this token is located.
     pub(crate) fn set_filepath<P: AsRef<Path>>(&mut self, path: P) {
-        self.filepath = Some(Rc::new(path.as_ref().to_path_buf()));
+        self.filepath = Some(Arc::new(path.as_ref().to_path_buf()));
     }
 
     /// Step a position by the given width.
