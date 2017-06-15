@@ -23,7 +23,8 @@ pub struct Tokenizer<T> {
     next_pos: Position,
 }
 impl<T> Tokenizer<T>
-    where T: AsRef<str>
+where
+    T: AsRef<str>,
 {
     /// Makes a new `Tokenizer` instance which tokenize the Erlang source code text.
     pub fn new(text: T) -> Self {
@@ -81,7 +82,8 @@ impl<T> Tokenizer<T>
     }
 }
 impl<T> Iterator for Tokenizer<T>
-    where T: AsRef<str>
+where
+    T: AsRef<str>,
 {
     type Item = Result<Token>;
     fn next(&mut self) -> Option<Self::Item> {
@@ -89,9 +91,10 @@ impl<T> Iterator for Tokenizer<T>
             None
         } else {
             let text = unsafe {
-                self.text
-                    .as_ref()
-                    .slice_unchecked(self.next_pos.offset(), self.text.as_ref().len())
+                self.text.as_ref().slice_unchecked(
+                    self.next_pos.offset(),
+                    self.text.as_ref().len(),
+                )
             };
             let cur_pos = self.next_pos.clone();
             match track!(Token::from_text(text, cur_pos)) {

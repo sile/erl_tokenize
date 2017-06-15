@@ -32,8 +32,10 @@ fn main() {
         count += 1;
     }
     println!("TOKEN COUNT: {}", count);
-    println!("ELAPSED: {:?} seconds",
-             to_seconds(Instant::now() - start_time));
+    println!(
+        "ELAPSED: {:?} seconds",
+        to_seconds(Instant::now() - start_time)
+    );
 }
 
 fn to_seconds(duration: Duration) -> f64 {

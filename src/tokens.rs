@@ -77,8 +77,9 @@ impl AtomToken {
             let head = head.chars().nth(0).expect("Never fails");
             track_assert!(util::is_atom_head_char(head), ErrorKind::InvalidInput);
             let end = head.len_utf8() +
-                      tail.find(|c| !util::is_atom_non_head_char(c))
-                          .unwrap_or(tail.len());
+                tail.find(|c| !util::is_atom_non_head_char(c)).unwrap_or(
+                    tail.len(),
+                );
             let text_slice = unsafe { text.slice_unchecked(0, end) };
             (None, text_slice)
         };
@@ -194,9 +195,11 @@ impl CharToken {
     /// Tries to convert from any prefixes of the text to a `CharToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let mut chars = text.char_indices();
-        track_assert_eq!(chars.next().map(|(_, c)| c),
-                         Some('$'),
-                         ErrorKind::InvalidInput);
+        track_assert_eq!(
+            chars.next().map(|(_, c)| c),
+            Some('$'),
+            ErrorKind::InvalidInput
+        );
 
         let (_, c) = track!(chars.next().ok_or(ErrorKind::UnexpectedEos.error()))?;
         let (value, end) = if c == '\\' {
@@ -406,15 +409,21 @@ impl FloatToken {
         while let Some((_, '0'...'9')) = chars.peek().cloned() {
             let _ = chars.next();
         }
-        track_assert_ne!(chars.peek().map(|&(i, _)| i),
-                         Some(0),
-                         ErrorKind::InvalidInput);
-        track_assert_eq!(chars.next().map(|(_, c)| c),
-                         Some('.'),
-                         ErrorKind::InvalidInput);
-        track_assert_eq!(chars.next().map(|(_, c)| c.is_digit(10)),
-                         Some(true),
-                         ErrorKind::InvalidInput);
+        track_assert_ne!(
+            chars.peek().map(|&(i, _)| i),
+            Some(0),
+            ErrorKind::InvalidInput
+        );
+        track_assert_eq!(
+            chars.next().map(|(_, c)| c),
+            Some('.'),
+            ErrorKind::InvalidInput
+        );
+        track_assert_eq!(
+            chars.next().map(|(_, c)| c.is_digit(10)),
+            Some(true),
+            ErrorKind::InvalidInput
+        );
 
         while let Some((_, '0'...'9')) = chars.peek().cloned() {
             let _ = chars.next();
@@ -544,13 +553,15 @@ impl IntegerToken {
         while let Some((i, c)) = chars.peek().cloned() {
             if c == '#' && start == 0 {
                 start = i + 1;
-                radix = track!(unsafe { text.slice_unchecked(0, i) }
-                                   .parse()
-                                   .map_err(Error::from))?;
-                track_assert!(1 < radix && radix < 37,
-                              ErrorKind::InvalidInput,
-                              "radix={}",
-                              radix);
+                radix = track!(unsafe { text.slice_unchecked(0, i) }.parse().map_err(
+                    Error::from,
+                ))?;
+                track_assert!(
+                    1 < radix && radix < 37,
+                    ErrorKind::InvalidInput,
+                    "radix={}",
+                    radix
+                );
             } else if !c.is_digit(radix) {
                 break;
             }
@@ -558,10 +569,12 @@ impl IntegerToken {
         }
         let end = chars.peek().map(|&(i, _)| i).unwrap_or(text.len());
         let input = unsafe { text.slice_unchecked(start, end) };
-        let value = track!(Num::from_str_radix(input, radix).map_err(Error::from),
-                           "input={:?}, radix={}",
-                           input,
-                           radix)?;
+        let value = track!(
+            Num::from_str_radix(input, radix).map_err(Error::from),
+            "input={:?}, radix={}",
+            input,
+            radix
+        )?;
         let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
         Ok(IntegerToken { value, text, pos })
     }

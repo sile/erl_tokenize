@@ -32,9 +32,9 @@ pub fn is_variable_non_head_char(c: char) -> bool {
 }
 
 pub fn parse_string(input: &str, terminator: char) -> Result<(Cow<str>, usize)> {
-    let maybe_end = track!(input
-                               .find(terminator)
-                               .ok_or(Error::from(ErrorKind::InvalidInput)))?;
+    let maybe_end = track!(input.find(terminator).ok_or(
+        Error::from(ErrorKind::InvalidInput),
+    ))?;
     let maybe_escaped = unsafe { input.slice_unchecked(0, maybe_end).contains('\\') };
     if maybe_escaped {
         let (s, end) = track!(parse_string_owned(input, terminator))?;
@@ -63,7 +63,8 @@ fn parse_string_owned(input: &str, terminator: char) -> Result<(String, usize)> 
 
 // http://erlang.org/doc/reference_manual/data_types.html#id76758
 pub fn parse_escaped_char<I>(chars: &mut Peekable<I>) -> Result<char>
-    where I: Iterator<Item = (usize, char)>
+where
+    I: Iterator<Item = (usize, char)>,
 {
     let (_, c) = track!(chars.next().ok_or(ErrorKind::UnexpectedEos.error()))?;
     match c {
@@ -87,10 +88,9 @@ pub fn parse_escaped_char<I>(chars: &mut Peekable<I>) -> Result<char>
             } else {
                 let mut buf = String::with_capacity(2);
                 buf.push(c);
-                buf.push(track!(chars
-                                    .next()
-                                    .map(|(_, c)| c)
-                                    .ok_or(ErrorKind::UnexpectedEos.error()))?);
+                buf.push(track!(chars.next().map(|(_, c)| c).ok_or(
+                    ErrorKind::UnexpectedEos.error(),
+                ))?);
                 buf
             };
             let code: u32 = track!(Num::from_str_radix(&buf, 16).map_err(Error::from))?;

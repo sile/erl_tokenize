@@ -9,7 +9,8 @@ use {Result, Tokenizer, LexicalToken, Position};
 #[derive(Debug)]
 pub struct Lexer<T>(Tokenizer<T>);
 impl<T> Lexer<T>
-    where T: AsRef<str>
+where
+    T: AsRef<str>,
 {
     /// Makes a new `Lexer` instance which tokenize the Erlang source code text.
     pub fn new(text: T) -> Self {
@@ -59,7 +60,8 @@ impl<T> Lexer<T>
     }
 }
 impl<T> Iterator for Lexer<T>
-    where T: AsRef<str>
+where
+    T: AsRef<str>,
 {
     type Item = Result<LexicalToken>;
     fn next(&mut self) -> Option<Self::Item> {

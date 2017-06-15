@@ -49,9 +49,10 @@ impl Token {
             '0'...'9' => {
                 let maybe_float = if let Some(i) = text.find(|c: char| !c.is_digit(10)) {
                     text.as_bytes()[i] == b'.' &&
-                    text.as_bytes()
-                        .get(i + 1)
-                        .map_or(false, |c| (*c as char).is_digit(10))
+                        text.as_bytes().get(i + 1).map_or(
+                            false,
+                            |c| (*c as char).is_digit(10),
+                        )
                 } else {
                     false
                 };
