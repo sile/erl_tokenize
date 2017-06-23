@@ -68,7 +68,7 @@ impl AtomToken {
     /// Tries to convert from any prefixes of the input text to an `AtomToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         track_assert!(!text.is_empty(), ErrorKind::InvalidInput);
-        let (head, tail) = text.split_at(1);
+        let (head, tail) = text.split_at(text.chars().nth(0).unwrap().len_utf8());
         let (value, text) = if head == "'" {
             let (value, end) = track!(util::parse_string(tail, '\''))?;
             let value = Some(value.to_string());

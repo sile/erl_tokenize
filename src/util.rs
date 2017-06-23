@@ -7,7 +7,11 @@ use trackable::error::ErrorKindExt;
 use {Result, Error, ErrorKind};
 
 pub fn is_atom_head_char(c: char) -> bool {
-    if let 'a'...'z' = c { true } else { false }
+    if let 'a'...'z' = c {
+        true
+    } else {
+        c.is_lowercase() && c.is_alphabetic()
+    }
 }
 
 pub fn is_atom_non_head_char(c: char) -> bool {
