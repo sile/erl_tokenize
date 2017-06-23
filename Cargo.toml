@@ -12,6 +12,7 @@ license = "MIT"
 
 [badges]
 travis-ci = {repository = "sile/erl_tokenize"}
+codecov = {repository = "sile/erl_tokenize"}
 
 [dependencies]
 num = "0.1"
