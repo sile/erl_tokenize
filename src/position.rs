@@ -65,6 +65,11 @@ impl Position {
         self
     }
 }
+impl Default for Position {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// This trait allows to get a (half-open) range where the subject is located.
 pub trait PositionRange {

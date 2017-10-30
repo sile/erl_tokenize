@@ -3,7 +3,6 @@ use std::borrow::Cow;
 use std::fmt;
 use std::str;
 use num::{Num, BigUint};
-use trackable::error::ErrorKindExt;
 
 use {Result, Error, ErrorKind, Position, PositionRange};
 use util;
@@ -77,9 +76,8 @@ impl AtomToken {
             let head = head.chars().nth(0).expect("Never fails");
             track_assert!(util::is_atom_head_char(head), ErrorKind::InvalidInput);
             let end = head.len_utf8() +
-                tail.find(|c| !util::is_atom_non_head_char(c)).unwrap_or(
-                    tail.len(),
-                );
+                tail.find(|c| !util::is_atom_non_head_char(c))
+                    .unwrap_or_else(|| tail.len());
             let text_slice = unsafe { text.slice_unchecked(0, end) };
             (None, text_slice)
         };
@@ -201,15 +199,15 @@ impl CharToken {
             ErrorKind::InvalidInput
         );
 
-        let (_, c) = track!(chars.next().ok_or(ErrorKind::UnexpectedEos.error()))?;
+        let (_, c) = track_assert_some!(chars.next(), ErrorKind::UnexpectedEos);
         let (value, end) = if c == '\\' {
             let mut chars = chars.peekable();
             let value = track!(util::parse_escaped_char(&mut chars))?;
-            let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
+            let end = chars.next().map(|(i, _)| i).unwrap_or_else(|| text.len());
             (value, end)
         } else {
             let value = c;
-            let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
+            let end = chars.next().map(|(i, _)| i).unwrap_or_else(|| text.len());
             (value, end)
         };
         let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
@@ -307,7 +305,7 @@ impl CommentToken {
     /// Tries to convert from any prefixes of the text to a `CommentToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         track_assert_eq!(text.chars().nth(0), Some('%'), ErrorKind::InvalidInput);
-        let end = text.find('\n').unwrap_or(text.len());
+        let end = text.find('\n').unwrap_or_else(|| text.len());
         let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
         Ok(CommentToken { text, pos })
     }
@@ -444,7 +442,7 @@ impl FloatToken {
             let _ = chars.next();
         }
 
-        let end = chars.next().map(|(i, _)| i).unwrap_or(text.len());
+        let end = chars.next().map(|(i, _)| i).unwrap_or_else(|| text.len());
         let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
         let value = track!(text.parse().map_err(Error::from))?;
         Ok(FloatToken { value, text, pos })
@@ -567,7 +565,7 @@ impl IntegerToken {
             }
             chars.next();
         }
-        let end = chars.peek().map(|&(i, _)| i).unwrap_or(text.len());
+        let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
         let input = unsafe { text.slice_unchecked(start, end) };
         let value = track!(
             Num::from_str_radix(input, radix).map_err(Error::from),
@@ -924,15 +922,16 @@ impl SymbolToken {
     /// Tries to convert from any prefixes of the text to a `SymbolToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let bytes = text.as_bytes();
-        let mut symbol = None;
-        if bytes.len() >= 3 {
-            symbol = match &bytes[0..3] {
+        let mut symbol = if bytes.len() >= 3 {
+            match &bytes[0..3] {
                 b"=:=" => Some(Symbol::ExactEq),
                 b"=/=" => Some(Symbol::ExactNotEq),
                 b"..." => Some(Symbol::TripleDot),
                 _ => None,
-            };
-        }
+            }
+        } else {
+            None
+        };
         if symbol.is_none() && bytes.len() >= 2 {
             symbol = match &bytes[0..2] {
                 b"::" => Some(Symbol::DoubleColon),
@@ -984,7 +983,7 @@ impl SymbolToken {
         if let Some(value) = symbol {
             Ok(SymbolToken { value, pos })
         } else {
-            track_panic!(ErrorKind::InvalidInput);
+            track_panic!(ErrorKind::InvalidInput, "text={:?}, pos={:?}", text, pos);
         }
     }
 
@@ -1082,12 +1081,12 @@ impl VariableToken {
     /// Tries to convert from any prefixes of the text to a `VariableToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let mut chars = text.char_indices();
-        let (_, head) = track!(chars.next().ok_or(ErrorKind::InvalidInput.error()))?;
+        let (_, head) = track_assert_some!(chars.next(), ErrorKind::InvalidInput);
         track_assert!(util::is_variable_head_char(head), ErrorKind::InvalidInput);
         let end = chars
             .find(|&(_, c)| !util::is_variable_non_head_char(c))
             .map(|(i, _)| i)
-            .unwrap_or(text.len());
+            .unwrap_or_else(|| text.len());
         let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
         Ok(VariableToken { text, pos })
     }

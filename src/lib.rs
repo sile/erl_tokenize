@@ -17,7 +17,7 @@
 //!
 //! # References
 //!
-//! - [erl_scan][erl_scan] module
+//! - [`erl_scan`][erl_scan] module
 //! - [Erlang Data Types][Data Types]
 //!
 //! [erl_scan]: http://erlang.org/doc/man/erl_scan.html

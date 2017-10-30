@@ -1,5 +1,4 @@
 use std::fmt;
-use trackable::error::ErrorKindExt;
 
 use {ErrorKind, Position, PositionRange, HiddenToken, LexicalToken};
 use tokens::{AtomToken, CharToken, FloatToken, IntegerToken, KeywordToken, StringToken,
@@ -40,7 +39,7 @@ impl Token {
     /// assert_eq!(token.as_symbol_token().map(|t| t.value()), Some(Symbol::OpenSquare));
     /// ```
     pub fn from_text(text: &str, pos: Position) -> ::Result<Self> {
-        let head = track!(text.chars().nth(0).ok_or(ErrorKind::UnexpectedEos.error()))?;
+        let head = track_assert_some!(text.chars().nth(0), ErrorKind::UnexpectedEos);
         match head {
             ' ' | '\t' | '\r' | '\n' | '\u{A0}' => {
                 track!(WhitespaceToken::from_text(text, pos)).map(Token::from)
