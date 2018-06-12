@@ -1,9 +1,9 @@
+use num::Num;
 use std::borrow::Cow;
 use std::char;
 use std::iter::Peekable;
-use num::Num;
 
-use {Result, Error, ErrorKind};
+use {Error, ErrorKind, Result};
 
 pub fn is_atom_head_char(c: char) -> bool {
     if let 'a'...'z' = c {
@@ -69,10 +69,10 @@ where
 {
     let (_, c) = track_assert_some!(chars.next(), ErrorKind::UnexpectedEos);
     match c {
-        'b' => Ok(8 as char), // Back Space
+        'b' => Ok(8 as char),   // Back Space
         'd' => Ok(127 as char), // Delete
-        'e' => Ok(27 as char), // Escape,
-        'f' => Ok(12 as char), // Form Feed
+        'e' => Ok(27 as char),  // Escape,
+        'f' => Ok(12 as char),  // Form Feed
         'n' => Ok('\n'),
         'r' => Ok('\r'),
         's' => Ok(' '),

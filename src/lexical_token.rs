@@ -1,8 +1,8 @@
 use std::fmt;
 
-use {Position, PositionRange};
 use tokens::{AtomToken, CharToken, FloatToken, IntegerToken, KeywordToken, StringToken,
              SymbolToken, VariableToken};
+use {Position, PositionRange};
 
 /// Lexical token.
 ///

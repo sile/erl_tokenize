@@ -1,12 +1,12 @@
 //! Tokens.
+use num::{BigUint, Num};
 use std::borrow::Cow;
 use std::fmt;
 use std::str;
-use num::{Num, BigUint};
 
-use {Result, Error, ErrorKind, Position, PositionRange};
 use util;
 use values::{Keyword, Symbol, Whitespace};
+use {Error, ErrorKind, Position, PositionRange, Result};
 
 /// Atom token.
 ///
@@ -75,8 +75,8 @@ impl AtomToken {
         } else {
             let head = head.chars().nth(0).expect("Never fails");
             track_assert!(util::is_atom_head_char(head), ErrorKind::InvalidInput);
-            let end = head.len_utf8() +
-                tail.find(|c| !util::is_atom_non_head_char(c))
+            let end = head.len_utf8()
+                + tail.find(|c| !util::is_atom_non_head_char(c))
                     .unwrap_or_else(|| tail.len());
             let text_slice = unsafe { text.slice_unchecked(0, end) };
             (None, text_slice)
@@ -551,9 +551,11 @@ impl IntegerToken {
         while let Some((i, c)) = chars.peek().cloned() {
             if c == '#' && start == 0 {
                 start = i + 1;
-                radix = track!(unsafe { text.slice_unchecked(0, i) }.parse().map_err(
-                    Error::from,
-                ))?;
+                radix = track!(
+                    unsafe { text.slice_unchecked(0, i) }
+                        .parse()
+                        .map_err(Error::from,)
+                )?;
                 track_assert!(
                     1 < radix && radix < 37,
                     ErrorKind::InvalidInput,

@@ -1,7 +1,7 @@
 use std::fmt;
 
-use {Position, PositionRange};
 use tokens::{CommentToken, WhitespaceToken};
+use {Position, PositionRange};
 
 /// Hidden token.
 ///

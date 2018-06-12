@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use {Result, Tokenizer, LexicalToken, Position};
+use {LexicalToken, Position, Result, Tokenizer};
 
 /// Lexer.
 ///

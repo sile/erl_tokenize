@@ -1,8 +1,8 @@
 use std::fmt;
 
-use {ErrorKind, Position, PositionRange, HiddenToken, LexicalToken};
-use tokens::{AtomToken, CharToken, FloatToken, IntegerToken, KeywordToken, StringToken,
-             SymbolToken, VariableToken, CommentToken, WhitespaceToken};
+use tokens::{AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken,
+             StringToken, SymbolToken, VariableToken, WhitespaceToken};
+use {ErrorKind, HiddenToken, LexicalToken, Position, PositionRange};
 
 /// Token.
 #[allow(missing_docs)]
@@ -47,11 +47,10 @@ impl Token {
             'A'...'Z' | '_' => track!(VariableToken::from_text(text, pos)).map(Token::from),
             '0'...'9' => {
                 let maybe_float = if let Some(i) = text.find(|c: char| !c.is_digit(10)) {
-                    text.as_bytes()[i] == b'.' &&
-                        text.as_bytes().get(i + 1).map_or(
-                            false,
-                            |c| (*c as char).is_digit(10),
-                        )
+                    text.as_bytes()[i] == b'.'
+                        && text.as_bytes()
+                            .get(i + 1)
+                            .map_or(false, |c| (*c as char).is_digit(10))
                 } else {
                     false
                 };
@@ -118,8 +117,7 @@ impl Token {
     /// Returns `true` if this is a hidden token, otherwise `false`.
     pub fn is_hidden_token(&self) -> bool {
         match *self {
-            Token::Whitespace(_) |
-            Token::Comment(_) => true,
+            Token::Whitespace(_) | Token::Comment(_) => true,
             _ => false,
         }
     }

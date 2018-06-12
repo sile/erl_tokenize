@@ -3,11 +3,11 @@ extern crate erl_tokenize;
 #[macro_use]
 extern crate trackable;
 
+use clap::{App, Arg};
+use erl_tokenize::{PositionRange, Tokenizer};
 use std::fs::File;
 use std::io::Read;
 use std::time::{Duration, Instant};
-use clap::{App, Arg};
-use erl_tokenize::{Tokenizer, PositionRange};
 
 fn main() {
     let matches = App::new("tokenize")
