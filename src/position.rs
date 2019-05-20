@@ -79,3 +79,12 @@ pub trait PositionRange {
     /// Returns the (exclusive) end position of this.
     fn end_position(&self) -> Position;
 }
+impl<T: PositionRange> PositionRange for Box<T> {
+    fn start_position(&self) -> Position {
+        (**self).start_position()
+    }
+
+    fn end_position(&self) -> Position {
+        (**self).end_position()
+    }
+}
