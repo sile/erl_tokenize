@@ -71,7 +71,7 @@ impl AtomToken {
         let (value, text) = if head == "'" {
             let (value, end) = track!(util::parse_string(tail, '\''))?;
             let value = Some(value.to_string());
-            (value, unsafe { text.get_unchecked(0..1 + end + 1) })
+            (value, unsafe { text.get_unchecked(0..=1 + end) })
         } else {
             let head = head.chars().nth(0).expect("Never fails");
             track_assert!(util::is_atom_head_char(head), ErrorKind::InvalidInput);
@@ -817,7 +817,7 @@ impl StringToken {
             Cow::Borrowed(_) => None,
             Cow::Owned(v) => Some(v),
         };
-        let text = unsafe { text.get_unchecked(0..1 + end + 1) }.to_owned();
+        let text = unsafe { text.get_unchecked(0..=1 + end) }.to_owned();
         Ok(StringToken { value, text, pos })
     }
 
@@ -955,7 +955,7 @@ impl SymbolToken {
                 _ => None,
             };
         }
-        if symbol.is_none() && bytes.len() >= 1 {
+        if symbol.is_none() && !bytes.is_empty() {
             symbol = match bytes[0] {
                 b'[' => Some(Symbol::OpenSquare),
                 b']' => Some(Symbol::CloseSquare),

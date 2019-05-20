@@ -22,7 +22,7 @@ impl Position {
 
     /// Returns the file path where this token is located.
     pub fn filepath(&self) -> Option<&PathBuf> {
-        self.filepath.as_ref().map(|p| p.as_ref())
+        self.filepath.as_ref().map(AsRef::as_ref)
     }
 
     /// Returns an offset from the beginning of the buffer.
