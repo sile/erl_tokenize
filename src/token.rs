@@ -1,8 +1,8 @@
 use std::fmt;
 
-use tokens::{AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken,
+use crate::tokens::{AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken,
              StringToken, SymbolToken, VariableToken, WhitespaceToken};
-use {ErrorKind, HiddenToken, LexicalToken, Position, PositionRange};
+use crate::{ErrorKind, HiddenToken, LexicalToken, Position, PositionRange};
 
 /// Token.
 #[allow(missing_docs)]
@@ -38,7 +38,7 @@ impl Token {
     /// let token = Token::from_text("[foo]", pos.clone()).unwrap();
     /// assert_eq!(token.as_symbol_token().map(|t| t.value()), Some(Symbol::OpenSquare));
     /// ```
-    pub fn from_text(text: &str, pos: Position) -> ::Result<Self> {
+    pub fn from_text(text: &str, pos: Position) -> crate::Result<Self> {
         let head = track_assert_some!(text.chars().nth(0), ErrorKind::UnexpectedEos);
         match head {
             ' ' | '\t' | '\r' | '\n' | '\u{A0}' => {

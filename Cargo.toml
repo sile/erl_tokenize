@@ -9,13 +9,14 @@ readme = "README.md"
 keywords = ["erlang", "tokenizer", "lexer"]
 categories = ["parser-implementations"]
 license = "MIT"
+edition = "2018"
 
 [badges]
 travis-ci = {repository = "sile/erl_tokenize"}
 codecov = {repository = "sile/erl_tokenize"}
 
 [dependencies]
-num = "0.1"
+num = "0.2"
 trackable = "0.2"
 
 [dev-dependencies]

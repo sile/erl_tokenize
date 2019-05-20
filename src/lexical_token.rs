@@ -1,8 +1,8 @@
 use std::fmt;
 
-use tokens::{AtomToken, CharToken, FloatToken, IntegerToken, KeywordToken, StringToken,
+use crate::tokens::{AtomToken, CharToken, FloatToken, IntegerToken, KeywordToken, StringToken,
              SymbolToken, VariableToken};
-use {Position, PositionRange};
+use crate::{Position, PositionRange};
 
 /// Lexical token.
 ///

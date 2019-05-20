@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use {Position, PositionRange, Result, Token};
+use crate::{Position, PositionRange, Result, Token};
 
 /// Tokenizer.
 ///

@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use std::char;
 use std::iter::Peekable;
 
-use {Error, ErrorKind, Result};
+use crate::{Error, ErrorKind, Result};
 
 pub fn is_atom_head_char(c: char) -> bool {
     if let 'a'...'z' = c {

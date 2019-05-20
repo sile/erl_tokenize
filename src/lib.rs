@@ -27,13 +27,13 @@ extern crate num;
 #[macro_use]
 extern crate trackable;
 
-pub use error::{Error, ErrorKind};
-pub use hidden_token::HiddenToken;
-pub use lexer::Lexer;
-pub use lexical_token::LexicalToken;
-pub use position::{Position, PositionRange};
-pub use token::Token;
-pub use tokenizer::Tokenizer;
+pub use crate::error::{Error, ErrorKind};
+pub use crate::hidden_token::HiddenToken;
+pub use crate::lexer::Lexer;
+pub use crate::lexical_token::LexicalToken;
+pub use crate::position::{Position, PositionRange};
+pub use crate::token::Token;
+pub use crate::tokenizer::Tokenizer;
 
 pub mod tokens;
 pub mod values;

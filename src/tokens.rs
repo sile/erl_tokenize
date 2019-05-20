@@ -4,9 +4,9 @@ use std::borrow::Cow;
 use std::fmt;
 use std::str;
 
-use util;
-use values::{Keyword, Symbol, Whitespace};
-use {Error, ErrorKind, Position, PositionRange, Result};
+use crate::util;
+use crate::values::{Keyword, Symbol, Whitespace};
+use crate::{Error, ErrorKind, Position, PositionRange, Result};
 
 /// Atom token.
 ///
