@@ -1,7 +1,9 @@
 use std::fmt;
 
-use crate::tokens::{AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken,
-             StringToken, SymbolToken, VariableToken, WhitespaceToken};
+use crate::tokens::{
+    AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken, StringToken,
+    SymbolToken, VariableToken, WhitespaceToken,
+};
 use crate::{ErrorKind, HiddenToken, LexicalToken, Position, PositionRange};
 
 /// Token.
@@ -44,11 +46,12 @@ impl Token {
             ' ' | '\t' | '\r' | '\n' | '\u{A0}' => {
                 track!(WhitespaceToken::from_text(text, pos)).map(Token::from)
             }
-            'A'...'Z' | '_' => track!(VariableToken::from_text(text, pos)).map(Token::from),
-            '0'...'9' => {
+            'A'..='Z' | '_' => track!(VariableToken::from_text(text, pos)).map(Token::from),
+            '0'..='9' => {
                 let maybe_float = if let Some(i) = text.find(|c: char| !c.is_digit(10)) {
                     text.as_bytes()[i] == b'.'
-                        && text.as_bytes()
+                        && text
+                            .as_bytes()
                             .get(i + 1)
                             .map_or(false, |c| (*c as char).is_digit(10))
                 } else {
@@ -429,7 +432,7 @@ impl PositionRange for Token {
     }
 }
 impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }

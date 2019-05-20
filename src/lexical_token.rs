@@ -1,7 +1,9 @@
 use std::fmt;
 
-use crate::tokens::{AtomToken, CharToken, FloatToken, IntegerToken, KeywordToken, StringToken,
-             SymbolToken, VariableToken};
+use crate::tokens::{
+    AtomToken, CharToken, FloatToken, IntegerToken, KeywordToken, StringToken, SymbolToken,
+    VariableToken,
+};
 use crate::{Position, PositionRange};
 
 /// Lexical token.
@@ -245,7 +247,7 @@ impl PositionRange for LexicalToken {
     }
 }
 impl fmt::Display for LexicalToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }

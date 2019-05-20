@@ -6,7 +6,7 @@ use std::iter::Peekable;
 use crate::{Error, ErrorKind, Result};
 
 pub fn is_atom_head_char(c: char) -> bool {
-    if let 'a'...'z' = c {
+    if let 'a'..='z' = c {
         true
     } else {
         c.is_lowercase() && c.is_alphabetic()
@@ -15,33 +15,33 @@ pub fn is_atom_head_char(c: char) -> bool {
 
 pub fn is_atom_non_head_char(c: char) -> bool {
     match c {
-        '@' | '_' | '0'...'9' => true,
+        '@' | '_' | '0'..='9' => true,
         _ => c.is_alphabetic(),
     }
 }
 
 pub fn is_variable_head_char(c: char) -> bool {
     match c {
-        'A'...'Z' | '_' => true,
+        'A'..='Z' | '_' => true,
         _ => false,
     }
 }
 
 pub fn is_variable_non_head_char(c: char) -> bool {
     match c {
-        'a'...'z' | 'A'...'Z' | '@' | '_' | '0'...'9' => true,
+        'a'..='z' | 'A'..='Z' | '@' | '_' | '0'..='9' => true,
         _ => false,
     }
 }
 
-pub fn parse_string(input: &str, terminator: char) -> Result<(Cow<str>, usize)> {
+pub fn parse_string(input: &str, terminator: char) -> Result<(Cow<'_, str>, usize)> {
     let maybe_end = track_assert_some!(input.find(terminator), ErrorKind::InvalidInput);
-    let maybe_escaped = unsafe { input.slice_unchecked(0, maybe_end).contains('\\') };
+    let maybe_escaped = unsafe { input.get_unchecked(0..maybe_end).contains('\\') };
     if maybe_escaped {
         let (s, end) = track!(parse_string_owned(input, terminator))?;
         Ok((Cow::Owned(s), end))
     } else {
-        let slice = unsafe { input.slice_unchecked(0, maybe_end) };
+        let slice = unsafe { input.get_unchecked(0..maybe_end) };
         Ok((Cow::Borrowed(slice), maybe_end))
     }
 }
@@ -101,10 +101,10 @@ where
                 ErrorKind::InvalidInput
             ))
         }
-        c @ '0'...'7' => {
+        c @ '0'..='7' => {
             let mut limit = 2;
             let mut n = c.to_digit(8).expect("Never fails");
-            while let Some((_, '0'...'7')) = chars.peek().cloned() {
+            while let Some((_, '0'..='7')) = chars.peek().cloned() {
                 n = (n * 8) + c.to_digit(8).expect("Never fails");
                 let _ = chars.next();
                 limit -= 1;

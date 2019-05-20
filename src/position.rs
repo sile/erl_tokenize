@@ -58,7 +58,7 @@ impl Position {
             self.offset += i + 1;
             self.line += 1;
             let len = text.len();
-            text = unsafe { text.slice_unchecked(i + 1, len) };
+            text = unsafe { text.get_unchecked(i + 1..len) };
         }
         self.offset += text.len();
         self.column = text.len() + 1;
