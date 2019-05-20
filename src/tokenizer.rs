@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use {Position, PositionRange, Result, Token};
+use crate::{Position, PositionRange, Result, Token};
 
 /// Tokenizer.
 ///
@@ -93,7 +93,7 @@ where
             let text = unsafe {
                 self.text
                     .as_ref()
-                    .slice_unchecked(self.next_pos.offset(), self.text.as_ref().len())
+                    .get_unchecked(self.next_pos.offset()..self.text.as_ref().len())
             };
             let cur_pos = self.next_pos.clone();
             match track!(Token::from_text(text, cur_pos)) {

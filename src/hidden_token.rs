@@ -1,7 +1,7 @@
 use std::fmt;
 
-use tokens::{CommentToken, WhitespaceToken};
-use {Position, PositionRange};
+use crate::tokens::{CommentToken, WhitespaceToken};
+use crate::{Position, PositionRange};
 
 /// Hidden token.
 ///
@@ -82,7 +82,7 @@ impl PositionRange for HiddenToken {
     }
 }
 impl fmt::Display for HiddenToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }

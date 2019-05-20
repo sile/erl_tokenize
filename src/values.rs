@@ -90,8 +90,8 @@ pub enum Keyword {
 }
 impl Keyword {
     /// Returns the string representation of this keyword.
-    pub fn as_str(&self) -> &'static str {
-        match *self {
+    pub fn as_str(self) -> &'static str {
+        match self {
             Keyword::After => "after",
             Keyword::And => "and",
             Keyword::Andalso => "andalso",
@@ -251,8 +251,8 @@ pub enum Symbol {
 }
 impl Symbol {
     /// Returns the textual representation of this symbol.
-    pub fn as_str(&self) -> &'static str {
-        match *self {
+    pub fn as_str(self) -> &'static str {
+        match self {
             Symbol::OpenSquare => "[",
             Symbol::CloseSquare => "]",
             Symbol::OpenParen => "(",
@@ -318,8 +318,8 @@ pub enum Whitespace {
 }
 impl Whitespace {
     /// Coverts to the corresponding character.
-    pub fn as_char(&self) -> char {
-        match *self {
+    pub fn as_char(self) -> char {
+        match self {
             Whitespace::Space => ' ',
             Whitespace::Tab => '\t',
             Whitespace::Return => '\r',
@@ -329,8 +329,8 @@ impl Whitespace {
     }
 
     /// Coverts to the corresponding string.
-    pub fn as_str(&self) -> &'static str {
-        match *self {
+    pub fn as_str(self) -> &'static str {
+        match self {
             Whitespace::Space => " ",
             Whitespace::Tab => "\t",
             Whitespace::Return => "\r",

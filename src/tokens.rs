@@ -4,9 +4,9 @@ use std::borrow::Cow;
 use std::fmt;
 use std::str;
 
-use util;
-use values::{Keyword, Symbol, Whitespace};
-use {Error, ErrorKind, Position, PositionRange, Result};
+use crate::util;
+use crate::values::{Keyword, Symbol, Whitespace};
+use crate::{Error, ErrorKind, Position, PositionRange, Result};
 
 /// Atom token.
 ///
@@ -59,7 +59,7 @@ impl AtomToken {
         text.push('\'');
         AtomToken {
             value: Some(value.to_string()),
-            text: text,
+            text,
             pos,
         }
     }
@@ -71,14 +71,15 @@ impl AtomToken {
         let (value, text) = if head == "'" {
             let (value, end) = track!(util::parse_string(tail, '\''))?;
             let value = Some(value.to_string());
-            (value, unsafe { text.slice_unchecked(0, 1 + end + 1) })
+            (value, unsafe { text.get_unchecked(0..1 + end + 1) })
         } else {
             let head = head.chars().nth(0).expect("Never fails");
             track_assert!(util::is_atom_head_char(head), ErrorKind::InvalidInput);
             let end = head.len_utf8()
-                + tail.find(|c| !util::is_atom_non_head_char(c))
+                + tail
+                    .find(|c| !util::is_atom_non_head_char(c))
                     .unwrap_or_else(|| tail.len());
-            let text_slice = unsafe { text.slice_unchecked(0, end) };
+            let text_slice = unsafe { text.get_unchecked(0..end) };
             (None, text_slice)
         };
         let text = text.to_owned();
@@ -134,7 +135,7 @@ impl PositionRange for AtomToken {
     }
 }
 impl fmt::Display for AtomToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }
@@ -210,7 +211,7 @@ impl CharToken {
             let end = chars.next().map(|(i, _)| i).unwrap_or_else(|| text.len());
             (value, end)
         };
-        let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
+        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(CharToken { value, text, pos })
     }
 
@@ -257,7 +258,7 @@ impl PositionRange for CharToken {
     }
 }
 impl fmt::Display for CharToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }
@@ -306,7 +307,7 @@ impl CommentToken {
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         track_assert_eq!(text.chars().nth(0), Some('%'), ErrorKind::InvalidInput);
         let end = text.find('\n').unwrap_or_else(|| text.len());
-        let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
+        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(CommentToken { text, pos })
     }
 
@@ -324,7 +325,7 @@ impl CommentToken {
     /// assert_eq!(CommentToken::from_text("%% foo ", pos.clone()).unwrap().value(), "% foo ");
     /// ```
     pub fn value(&self) -> &str {
-        unsafe { self.text().slice_unchecked(1, self.text.len()) }
+        unsafe { self.text().get_unchecked(1..self.text.len()) }
     }
 
     /// Returns the original textual representation of this token.
@@ -353,7 +354,7 @@ impl PositionRange for CommentToken {
     }
 }
 impl fmt::Display for CommentToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }
@@ -404,7 +405,7 @@ impl FloatToken {
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let mut chars = text.char_indices().peekable();
 
-        while let Some((_, '0'...'9')) = chars.peek().cloned() {
+        while let Some((_, '0'..='9')) = chars.peek().cloned() {
             let _ = chars.next();
         }
         track_assert_ne!(
@@ -423,7 +424,7 @@ impl FloatToken {
             ErrorKind::InvalidInput
         );
 
-        while let Some((_, '0'...'9')) = chars.peek().cloned() {
+        while let Some((_, '0'..='9')) = chars.peek().cloned() {
             let _ = chars.next();
         }
         if let Some((_, 'e')) = chars.peek().cloned() {
@@ -438,12 +439,12 @@ impl FloatToken {
         if let Some((_, '-')) = chars.peek().cloned() {
             let _ = chars.next();
         }
-        while let Some((_, '0'...'9')) = chars.peek().cloned() {
+        while let Some((_, '0'..='9')) = chars.peek().cloned() {
             let _ = chars.next();
         }
 
         let end = chars.next().map(|(i, _)| i).unwrap_or_else(|| text.len());
-        let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
+        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         let value = track!(text.parse().map_err(Error::from))?;
         Ok(FloatToken { value, text, pos })
     }
@@ -491,7 +492,7 @@ impl PositionRange for FloatToken {
     }
 }
 impl fmt::Display for FloatToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }
@@ -551,11 +552,9 @@ impl IntegerToken {
         while let Some((i, c)) = chars.peek().cloned() {
             if c == '#' && start == 0 {
                 start = i + 1;
-                radix = track!(
-                    unsafe { text.slice_unchecked(0, i) }
-                        .parse()
-                        .map_err(Error::from,)
-                )?;
+                radix = track!(unsafe { text.get_unchecked(0..i) }
+                    .parse()
+                    .map_err(Error::from,))?;
                 track_assert!(
                     1 < radix && radix < 37,
                     ErrorKind::InvalidInput,
@@ -568,14 +567,14 @@ impl IntegerToken {
             chars.next();
         }
         let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
-        let input = unsafe { text.slice_unchecked(start, end) };
+        let input = unsafe { text.get_unchecked(start..end) };
         let value = track!(
             Num::from_str_radix(input, radix).map_err(Error::from),
             "input={:?}, radix={}",
             input,
             radix
         )?;
-        let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
+        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(IntegerToken { value, text, pos })
     }
 
@@ -629,7 +628,7 @@ impl PositionRange for IntegerToken {
     }
 }
 impl fmt::Display for IntegerToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }
@@ -758,7 +757,7 @@ impl PositionRange for KeywordToken {
     }
 }
 impl fmt::Display for KeywordToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }
@@ -818,7 +817,7 @@ impl StringToken {
             Cow::Borrowed(_) => None,
             Cow::Owned(v) => Some(v),
         };
-        let text = unsafe { text.slice_unchecked(0, 1 + end + 1) }.to_owned();
+        let text = unsafe { text.get_unchecked(0..1 + end + 1) }.to_owned();
         Ok(StringToken { value, text, pos })
     }
 
@@ -841,7 +840,7 @@ impl StringToken {
             v
         } else {
             let len = self.text.len();
-            unsafe { self.text.slice_unchecked(1, len - 1) }
+            unsafe { self.text.get_unchecked(1..len - 1) }
         }
     }
 
@@ -875,7 +874,7 @@ impl PositionRange for StringToken {
     }
 }
 impl fmt::Display for StringToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }
@@ -1033,7 +1032,7 @@ impl PositionRange for SymbolToken {
     }
 }
 impl fmt::Display for SymbolToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }
@@ -1089,7 +1088,7 @@ impl VariableToken {
             .find(|&(_, c)| !util::is_variable_non_head_char(c))
             .map(|(i, _)| i)
             .unwrap_or_else(|| text.len());
-        let text = unsafe { text.slice_unchecked(0, end) }.to_owned();
+        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(VariableToken { text, pos })
     }
 
@@ -1136,7 +1135,7 @@ impl PositionRange for VariableToken {
     }
 }
 impl fmt::Display for VariableToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }
@@ -1242,7 +1241,7 @@ impl PositionRange for WhitespaceToken {
     }
 }
 impl fmt::Display for WhitespaceToken {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
 }
