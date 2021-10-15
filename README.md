@@ -1,7 +1,7 @@
 erl_tokenize
 ============
 
-[![erl_tokenize](http://meritbadge.herokuapp.com/erl_tokenize)](https://crates.io/crates/erl_tokenize)
+[![erl_tokenize](https://img.shields.io/crates/v/erl_tokenize.svg)](https://crates.io/crates/erl_tokenize)
 [![Documentation](https://docs.rs/erl_tokenize/badge.svg)](https://docs.rs/erl_tokenize)
 [![Build Status](https://travis-ci.org/sile/erl_tokenize.svg?branch=master)](https://travis-ci.org/sile/erl_tokenize)
 [![Code Coverage](https://codecov.io/gh/sile/erl_tokenize/branch/master/graph/badge.svg)](https://codecov.io/gh/sile/erl_tokenize/branch/master)
