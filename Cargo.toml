@@ -15,7 +15,7 @@ edition = "2018"
 coveralls = {repository = "sile/erl_tokenize"}
 
 [dependencies]
-num = "0.2"
+num = "0.4"
 trackable = "0.2"
 
 [dev-dependencies]
