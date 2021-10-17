@@ -1,9 +1,8 @@
+use crate::{Error, Position, Result};
 use num::Num;
 use std::borrow::Cow;
 use std::char;
 use std::iter::Peekable;
-
-use crate::{Error, ErrorKind, Result};
 
 pub fn is_atom_head_char(c: char) -> bool {
     if let 'a'..='z' = c {
@@ -21,24 +20,24 @@ pub fn is_atom_non_head_char(c: char) -> bool {
 }
 
 pub fn is_variable_head_char(c: char) -> bool {
-    match c {
-        'A'..='Z' | '_' => true,
-        _ => false,
-    }
+    matches!(c, 'A'..='Z' | '_')
 }
 
 pub fn is_variable_non_head_char(c: char) -> bool {
-    match c {
-        'a'..='z' | 'A'..='Z' | '@' | '_' | '0'..='9' => true,
-        _ => false,
-    }
+    matches!(c, 'a'..='z' | 'A'..='Z' | '@' | '_' | '0'..='9')
 }
 
-pub fn parse_string(input: &str, terminator: char) -> Result<(Cow<'_, str>, usize)> {
-    let maybe_end = track_assert_some!(input.find(terminator), ErrorKind::InvalidInput);
+pub fn parse_quotation(
+    pos: Position,
+    input: &str,
+    terminator: char,
+) -> Result<(Cow<'_, str>, usize)> {
+    let maybe_end = input
+        .find(terminator)
+        .ok_or_else(|| Error::no_closing_quotation(pos.clone()))?;
     let maybe_escaped = unsafe { input.get_unchecked(0..maybe_end).contains('\\') };
     if maybe_escaped {
-        let (s, end) = track!(parse_string_owned(input, terminator))?;
+        let (s, end) = parse_quotation_owned(pos, input, terminator)?;
         Ok((Cow::Owned(s), end))
     } else {
         let slice = unsafe { input.get_unchecked(0..maybe_end) };
@@ -46,12 +45,12 @@ pub fn parse_string(input: &str, terminator: char) -> Result<(Cow<'_, str>, usiz
     }
 }
 
-fn parse_string_owned(input: &str, terminator: char) -> Result<(String, usize)> {
+fn parse_quotation_owned(pos: Position, input: &str, terminator: char) -> Result<(String, usize)> {
     let mut buf = String::new();
     let mut chars = input.char_indices().peekable();
     while let Some((i, c)) = chars.next() {
         if c == '\\' {
-            let c = track!(parse_escaped_char(&mut chars))?;
+            let c = parse_escaped_char(pos.clone() + 1 + i, &mut chars)?;
             buf.push(c);
         } else if c == terminator {
             return Ok((buf, i));
@@ -59,19 +58,20 @@ fn parse_string_owned(input: &str, terminator: char) -> Result<(String, usize)> 
             buf.push(c);
         }
     }
-    track_panic!(ErrorKind::UnexpectedEos);
+    Err(Error::no_closing_quotation(pos))
 }
 
 // http://erlang.org/doc/reference_manual/data_types.html#id76758
-pub fn parse_escaped_char<I>(chars: &mut Peekable<I>) -> Result<char>
+pub fn parse_escaped_char<I>(pos: Position, chars: &mut Peekable<I>) -> Result<char>
 where
     I: Iterator<Item = (usize, char)>,
 {
-    let (_, c) = track_assert_some!(chars.next(), ErrorKind::UnexpectedEos);
+    let error = || Error::invalid_escaped_char(pos.clone());
+    let (_, c) = chars.next().ok_or_else(error)?;
     match c {
         'b' => Ok(8 as char),   // Back Space
         'd' => Ok(127 as char), // Delete
-        'e' => Ok(27 as char),  // Escape,
+        'e' => Ok(27 as char),  // Escape
         'f' => Ok(12 as char),  // Form Feed
         'n' => Ok('\n'),
         'r' => Ok('\r'),
@@ -79,43 +79,34 @@ where
         't' => Ok('\t'),
         'v' => Ok(11 as char), // Vertical Tabulation
         '^' => {
-            let (_, c) = track_assert_some!(chars.next(), ErrorKind::UnexpectedEos);
+            let (_, c) = chars.next().ok_or_else(error)?;
             Ok((c as u32 % 32) as u8 as char)
         }
         'x' => {
-            let (_, c) = track_assert_some!(chars.next(), ErrorKind::UnexpectedEos);
+            let (_, c) = chars.next().ok_or_else(error)?;
             let buf = if c == '{' {
                 chars.map(|(_, c)| c).take_while(|c| *c != '}').collect()
             } else {
                 let mut buf = String::with_capacity(2);
                 buf.push(c);
-                buf.push(track_assert_some!(
-                    chars.next().map(|(_, c)| c),
-                    ErrorKind::UnexpectedEos
-                ));
+                buf.push(chars.next().map(|(_, c)| c).ok_or_else(error)?);
                 buf
             };
-            let code: u32 = track!(Num::from_str_radix(&buf, 16).map_err(Error::from))?;
-            Ok(track_assert_some!(
-                char::from_u32(code),
-                ErrorKind::InvalidInput
-            ))
+            let code: u32 = Num::from_str_radix(&buf, 16).ok().ok_or_else(error)?;
+            char::from_u32(code).ok_or_else(error)
         }
         c @ '0'..='7' => {
             let mut limit = 2;
-            let mut n = c.to_digit(8).expect("Never fails");
+            let mut n = c.to_digit(8).expect("unreachable");
             while let Some((_, '0'..='7')) = chars.peek().cloned() {
-                n = (n * 8) + c.to_digit(8).expect("Never fails");
+                n = (n * 8) + c.to_digit(8).expect("unreachable");
                 let _ = chars.next();
                 limit -= 1;
                 if limit == 0 {
                     break;
                 }
             }
-            Ok(track_assert_some!(
-                char::from_u32(n),
-                ErrorKind::InvalidInput
-            ))
+            char::from_u32(n).ok_or_else(error)
         }
         _ => Ok(c),
     }

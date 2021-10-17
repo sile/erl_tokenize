@@ -65,7 +65,7 @@ where
 {
     type Item = Result<LexicalToken>;
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(token) = self.0.next() {
+        for token in &mut self.0 {
             match token {
                 Err(e) => return Some(Err(e)),
                 Ok(token) => {

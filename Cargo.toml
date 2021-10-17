@@ -16,7 +16,8 @@ coveralls = {repository = "sile/erl_tokenize"}
 
 [dependencies]
 num = "0.4"
-trackable = "0.2"
+thiserror = "1"
 
 [dev-dependencies]
+anyhow = "1"
 structopt = "0.3"

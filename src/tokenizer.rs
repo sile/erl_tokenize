@@ -31,7 +31,7 @@ where
         let init_pos = Position::new();
         Tokenizer {
             text,
-            next_pos: init_pos.clone(),
+            next_pos: init_pos,
         }
     }
 
@@ -96,7 +96,7 @@ where
                     .get_unchecked(self.next_pos.offset()..self.text.as_ref().len())
             };
             let cur_pos = self.next_pos.clone();
-            match track!(Token::from_text(text, cur_pos)) {
+            match Token::from_text(text, cur_pos) {
                 Err(e) => Some(Err(e)),
                 Ok(t) => {
                     self.next_pos = t.end_position();

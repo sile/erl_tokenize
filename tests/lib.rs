@@ -1,12 +1,9 @@
-#[macro_use]
-extern crate trackable;
-
 use erl_tokenize::Tokenizer;
 
 macro_rules! tokenize {
     ($text:expr) => {
         Tokenizer::new($text)
-            .map(|t| track_try_unwrap!(t).text().to_string())
+            .map(|t| t.unwrap().text().to_string())
             .collect::<Vec<_>>();
     };
 }

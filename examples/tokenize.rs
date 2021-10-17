@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate trackable;
-
 use erl_tokenize::{PositionRange, Tokenizer};
 use std::fs::File;
 use std::io::Read;
@@ -15,7 +12,7 @@ struct Opt {
     silent: bool,
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
 
     let mut src = String::new();
@@ -26,7 +23,7 @@ fn main() {
     let mut count = 0;
     let tokenizer = Tokenizer::new(&src);
     for result in tokenizer {
-        let token = track_try_unwrap!(result);
+        let token = result?;
         if !opt.silent {
             println!("[{:?}] {:?}", token.start_position(), token.text());
         }
@@ -37,6 +34,7 @@ fn main() {
         "ELAPSED: {:?} seconds",
         to_seconds(Instant::now() - start_time)
     );
+    Ok(())
 }
 
 fn to_seconds(duration: Duration) -> f64 {

@@ -45,14 +45,14 @@ impl Position {
         self.filepath = Some(Arc::new(path.as_ref().to_path_buf()));
     }
 
-    /// Step a position by the given width.
+    /// Steps a position by the given width.
     pub(crate) fn step_by_width(mut self, witdh: usize) -> Position {
         self.offset += witdh;
         self.column += witdh;
         self
     }
 
-    /// Step a position by the given text.
+    /// Steps a position by the given text.
     pub(crate) fn step_by_text(mut self, mut text: &str) -> Position {
         while let Some(i) = text.find('\n') {
             self.offset += i + 1;
@@ -65,9 +65,33 @@ impl Position {
         self
     }
 }
+
 impl Default for Position {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl std::fmt::Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:{}:{}",
+            self.filepath
+                .as_ref()
+                .and_then(|f| f.to_str())
+                .unwrap_or("<unknown>"),
+            self.line,
+            self.column
+        )
+    }
+}
+
+impl std::ops::Add<usize> for Position {
+    type Output = Self;
+
+    fn add(self, rhs: usize) -> Self {
+        self.step_by_width(rhs)
     }
 }
 

@@ -4,7 +4,7 @@ use crate::tokens::{
     AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken, StringToken,
     SymbolToken, VariableToken, WhitespaceToken,
 };
-use crate::{ErrorKind, HiddenToken, LexicalToken, Position, PositionRange};
+use crate::{Error, HiddenToken, LexicalToken, Position, PositionRange};
 
 /// Token.
 #[allow(missing_docs)]
@@ -41,12 +41,15 @@ impl Token {
     /// assert_eq!(token.as_symbol_token().map(|t| t.value()), Some(Symbol::OpenSquare));
     /// ```
     pub fn from_text(text: &str, pos: Position) -> crate::Result<Self> {
-        let head = track_assert_some!(text.chars().nth(0), ErrorKind::UnexpectedEos);
+        let head = text
+            .chars()
+            .next()
+            .ok_or_else(|| Error::missing_token(pos.clone()))?;
         match head {
             ' ' | '\t' | '\r' | '\n' | '\u{A0}' => {
-                track!(WhitespaceToken::from_text(text, pos)).map(Token::from)
+                WhitespaceToken::from_text(text, pos).map(Token::from)
             }
-            'A'..='Z' | '_' => track!(VariableToken::from_text(text, pos)).map(Token::from),
+            'A'..='Z' | '_' => VariableToken::from_text(text, pos).map(Token::from),
             '0'..='9' => {
                 let maybe_float = if let Some(i) = text.find(|c: char| !c.is_digit(10)) {
                     text.as_bytes()[i] == b'.'
@@ -58,25 +61,25 @@ impl Token {
                     false
                 };
                 if maybe_float {
-                    track!(FloatToken::from_text(text, pos)).map(Token::from)
+                    FloatToken::from_text(text, pos).map(Token::from)
                 } else {
-                    track!(IntegerToken::from_text(text, pos)).map(Token::from)
+                    IntegerToken::from_text(text, pos).map(Token::from)
                 }
             }
-            '$' => track!(CharToken::from_text(text, pos)).map(Token::from),
-            '"' => track!(StringToken::from_text(text, pos)).map(Token::from),
-            '\'' => track!(AtomToken::from_text(text, pos)).map(Token::from),
-            '%' => track!(CommentToken::from_text(text, pos)).map(Token::from),
+            '$' => CharToken::from_text(text, pos).map(Token::from),
+            '"' => StringToken::from_text(text, pos).map(Token::from),
+            '\'' => AtomToken::from_text(text, pos).map(Token::from),
+            '%' => CommentToken::from_text(text, pos).map(Token::from),
             _ => {
                 if head.is_alphabetic() {
-                    let atom = track!(AtomToken::from_text(text, pos.clone()))?;
+                    let atom = AtomToken::from_text(text, pos.clone())?;
                     if let Ok(keyword) = KeywordToken::from_text(atom.text(), pos) {
                         Ok(Token::from(keyword))
                     } else {
                         Ok(Token::from(atom))
                     }
                 } else {
-                    track!(SymbolToken::from_text(text, pos)).map(Token::from)
+                    SymbolToken::from_text(text, pos).map(Token::from)
                 }
             }
         }
@@ -119,10 +122,7 @@ impl Token {
 
     /// Returns `true` if this is a hidden token, otherwise `false`.
     pub fn is_hidden_token(&self) -> bool {
-        match *self {
-            Token::Whitespace(_) | Token::Comment(_) => true,
-            _ => false,
-        }
+        return matches!(self, Token::Whitespace(_) | Token::Comment(_));
     }
 
     /// Tries to convert into `LexicalToken`.

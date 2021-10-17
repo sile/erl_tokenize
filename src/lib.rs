@@ -23,11 +23,7 @@
 //! [erl_scan]: http://erlang.org/doc/man/erl_scan.html
 //! [Data Types]: http://erlang.org/doc/reference_manual/data_types.html
 #![warn(missing_docs)]
-
-#[macro_use]
-extern crate trackable;
-
-pub use crate::error::{Error, ErrorKind};
+pub use crate::error::Error;
 pub use crate::hidden_token::HiddenToken;
 pub use crate::lexer::Lexer;
 pub use crate::lexical_token::LexicalToken;
