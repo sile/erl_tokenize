@@ -80,6 +80,37 @@ where
     pub fn next_position(&self) -> Position {
         self.next_pos.clone()
     }
+
+    /// Sets the current position.
+    ///
+    /// Note that it's the responsibility of the user to specify a valid position.
+    /// Otherwise, the following tokenization process will raise an error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Tokenizer;
+    ///
+    /// let src = r#"io:format(
+    ///   "Hello")."#;
+    ///
+    /// let mut tokenizer = Tokenizer::new(src);
+    /// assert_eq!(tokenizer.next_position().offset(), 0);
+    ///
+    /// assert_eq!(tokenizer.next().unwrap().map(|t| t.text().to_owned()).unwrap(), "io");
+    ///
+    /// let position = tokenizer.next_position();
+    /// assert_eq!(tokenizer.next().unwrap().map(|t| t.text().to_owned()).unwrap(), ":");
+    /// tokenizer.next(); // 'format'
+    /// tokenizer.next(); // '('
+    /// tokenizer.next(); // '\n'
+    ///
+    /// tokenizer.set_position(position);
+    /// assert_eq!(tokenizer.next().unwrap().map(|t| t.text().to_owned()).unwrap(), ":");
+    /// ```
+    pub fn set_position(&mut self, position: Position) {
+        self.next_pos = position;
+    }
 }
 impl<T> Iterator for Tokenizer<T>
 where
