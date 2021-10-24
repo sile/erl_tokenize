@@ -9,7 +9,7 @@ readme = "README.md"
 keywords = ["erlang", "tokenizer", "lexer"]
 categories = ["parser-implementations"]
 license = "MIT"
-edition = "2018"
+edition = "2021"
 
 [badges]
 coveralls = {repository = "sile/erl_tokenize"}
