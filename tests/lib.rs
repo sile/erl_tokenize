@@ -4,7 +4,7 @@ macro_rules! tokenize {
     ($text:expr) => {
         Tokenizer::new($text)
             .map(|t| t.unwrap().text().to_string())
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
     };
 }
 
