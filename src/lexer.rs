@@ -53,7 +53,7 @@ where
     /// assert_eq!(lexer.next().unwrap().map(|t| t.text().to_owned()).unwrap(), r#""Hello""#);
     /// assert_eq!(lexer.next_position().offset(), 20);
     /// assert_eq!(lexer.next_position().line(), 2);
-    /// assert_eq!(lexer.next_position().column(), 8);
+    /// assert_eq!(lexer.next_position().column(), 10);
     /// ```
     pub fn next_position(&self) -> Position {
         self.0.next_position()
