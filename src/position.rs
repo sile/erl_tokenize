@@ -57,11 +57,12 @@ impl Position {
         while let Some(i) = text.find('\n') {
             self.offset += i + 1;
             self.line += 1;
+            self.column = 1;
             let len = text.len();
             text = unsafe { text.get_unchecked(i + 1..len) };
         }
         self.offset += text.len();
-        self.column = text.len() + 1;
+        self.column += text.len();
         self
     }
 }
