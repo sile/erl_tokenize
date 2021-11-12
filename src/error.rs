@@ -59,6 +59,25 @@ pub enum Error {
 }
 
 impl Error {
+    /// Return a `Position` at where this error occurred.
+    pub fn position(&self) -> &Position {
+        match self {
+            Self::NoClosingQuotation { position } => position,
+            Self::InvalidEscapedChar { position } => position,
+            Self::MissingToken { position } => position,
+            Self::UnknownKeyword { position, .. } => position,
+            Self::InvalidAtomToken { position } => position,
+            Self::InvalidCharToken { position } => position,
+            Self::InvalidCommentToken { position } => position,
+            Self::InvalidFloatToken { position } => position,
+            Self::InvalidIntegerToken { position } => position,
+            Self::InvalidStringToken { position } => position,
+            Self::InvalidSymbolToken { position } => position,
+            Self::InvalidVariableToken { position } => position,
+            Self::InvalidWhitespaceToken { position } => position,
+        }
+    }
+
     pub(crate) fn no_closing_quotation(position: Position) -> Self {
         Self::NoClosingQuotation { position }
     }
