@@ -8,7 +8,7 @@ repository = "https://github.com/sile/erl_tokenize"
 readme = "README.md"
 keywords = ["erlang", "tokenizer", "lexer"]
 categories = ["parser-implementations"]
-license = "MIT"
+license = "MIT OR Apache-2.0"
 edition = "2021"
 
 [badges]
