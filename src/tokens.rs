@@ -384,11 +384,18 @@ impl fmt::Display for CommentToken {
 /// // Ok
 /// assert_eq!(FloatToken::from_text("0.1", pos.clone()).unwrap().value(), 0.1);
 /// assert_eq!(FloatToken::from_text("12.3e-1  ", pos.clone()).unwrap().value(), 1.23);
+/// assert_eq!(FloatToken::from_text("1_2.3_4e-1_0", pos.clone()).unwrap().value(), 0.000000001234);
 ///
 /// // Err
 /// assert!(FloatToken::from_text("123", pos.clone()).is_err());
 /// assert!(FloatToken::from_text(".123", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("1.", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("12_.3", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("12._3", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("12.3_", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("1__2.3", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("12.3__4", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("12.34e-1__0", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct FloatToken {
@@ -415,43 +422,54 @@ impl FloatToken {
 
     /// Tries to convert from any prefixes of the text to a `FloatToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let mut chars = text.char_indices().peekable();
+        fn read_digits(
+            buf: &mut String,
+            chars: &mut std::iter::Peekable<impl Iterator<Item = (usize, char)>>,
+            pos: &Position,
+        ) -> Result<()> {
+            let mut needs_digit = true;
+            while let Some((_, c @ ('0'..='9' | '_'))) = chars.peek().cloned() {
+                if c == '_' {
+                    if needs_digit {
+                        break;
+                    }
+                    needs_digit = true;
+                } else {
+                    buf.push(c);
+                    needs_digit = false;
+                }
+                let _ = chars.next();
+            }
+            if needs_digit {
+                Err(Error::invalid_float_token(pos.clone()))
+            } else {
+                Ok(())
+            }
+        }
 
-        while let Some((_, '0'..='9')) = chars.peek().cloned() {
-            let _ = chars.next();
-        }
-        if chars.peek().map(|&(i, _)| i) == Some(0) {
-            return Err(Error::invalid_float_token(pos));
-        }
+        let mut chars = text.char_indices().peekable();
+        let mut buf = String::new();
+        read_digits(&mut buf, &mut chars, &pos)?;
         if chars.next().map(|(_, c)| c) != Some('.') {
             return Err(Error::invalid_float_token(pos));
         }
-        if !chars.next().map_or(false, |(_, c)| c.is_digit(10)) {
-            return Err(Error::invalid_float_token(pos));
-        }
+        buf.push('.');
 
-        while let Some((_, '0'..='9')) = chars.peek().cloned() {
+        read_digits(&mut buf, &mut chars, &pos)?;
+
+        if let Some((_, c @ ('e' | 'E'))) = chars.peek().cloned() {
             let _ = chars.next();
-        }
-        if let Some((_, 'e')) = chars.peek().cloned() {
-            let _ = chars.next();
-        }
-        if let Some((_, 'E')) = chars.peek().cloned() {
-            let _ = chars.next();
-        }
-        if let Some((_, '+')) = chars.peek().cloned() {
-            let _ = chars.next();
-        }
-        if let Some((_, '-')) = chars.peek().cloned() {
-            let _ = chars.next();
-        }
-        while let Some((_, '0'..='9')) = chars.peek().cloned() {
-            let _ = chars.next();
+            buf.push(c);
+            if let Some((_, c @ ('+' | '-'))) = chars.peek().cloned() {
+                let _ = chars.next();
+                buf.push(c);
+            }
+            read_digits(&mut buf, &mut chars, &pos)?;
         }
 
         let end = chars.next().map(|(i, _)| i).unwrap_or_else(|| text.len());
         let text = unsafe { text.get_unchecked(0..end) }.to_owned();
-        let value = text
+        let value = buf
             .parse()
             .map_err(|_| Error::invalid_float_token(pos.clone()))?;
         Ok(FloatToken { value, text, pos })
@@ -522,11 +540,17 @@ impl fmt::Display for FloatToken {
 /// // Ok
 /// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().to_u32(),
 ///            Some(10u32));
+/// assert_eq!(IntegerToken::from_text("123_456", pos.clone()).unwrap().value().to_u32(),
+///            Some(123456));
 /// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().to_u32(),
+///            Some(0xab0e));
+/// assert_eq!(IntegerToken::from_text("1_6#a_b_0e", pos.clone()).unwrap().value().to_u32(),
 ///            Some(0xab0e));
 ///
 /// // Err
 /// assert!(IntegerToken::from_text("-10", pos.clone()).is_err());
+/// assert!(IntegerToken::from_text("123_456_", pos.clone()).is_err());
+/// assert!(IntegerToken::from_text("123__456", pos.clone()).is_err());
 /// # }
 /// ```
 #[derive(Debug, Clone)]
@@ -554,26 +578,38 @@ impl IntegerToken {
 
     /// Tries to convert from any prefixes of the text to an `IntegerToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let mut start = 0;
+        let mut has_radix = false;
         let mut radix = 10;
         let mut chars = text.char_indices().peekable();
-        while let Some((i, c)) = chars.peek().cloned() {
-            if c == '#' && start == 0 {
-                start = i + 1;
-                radix = unsafe { text.get_unchecked(0..i) }
+        let mut digits = String::new();
+        let mut needs_digit = true;
+        while let Some((_, c)) = chars.peek().cloned() {
+            if c == '#' && !has_radix && !needs_digit {
+                radix = digits
                     .parse()
                     .map_err(|_| Error::invalid_integer_token(pos.clone()))?;
                 if !(1 < radix && radix < 37) {
                     return Err(Error::invalid_integer_token(pos));
                 }
-            } else if !c.is_digit(radix) {
+                digits.clear();
+                needs_digit = true;
+                has_radix = true;
+            } else if c.is_digit(radix) {
+                digits.push(c);
+                needs_digit = false;
+            } else if c == '_' && !needs_digit {
+                needs_digit = true;
+            } else {
                 break;
             }
             chars.next();
         }
+        if needs_digit {
+            return Err(Error::invalid_integer_token(pos));
+        }
+
         let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
-        let input = unsafe { text.get_unchecked(start..end) };
-        let value = Num::from_str_radix(input, radix)
+        let value = Num::from_str_radix(&digits, radix)
             .map_err(|_| Error::invalid_integer_token(pos.clone()))?;
         let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(IntegerToken { value, text, pos })

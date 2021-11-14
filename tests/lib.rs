@@ -21,8 +21,23 @@ fn tokenize_comments() {
 
 #[test]
 fn tokenize_numbers() {
-    let src = "10 1.02";
-    assert_eq!(tokenize!(src), ["10", " ", "1.02"]);
+    let src = "10 1_2_3 1_6#10 1.02 1.2_3e+1_0 1_0.0";
+    assert_eq!(
+        tokenize!(src),
+        [
+            "10",
+            " ",
+            "1_2_3",
+            " ",
+            "1_6#10",
+            " ",
+            "1.02",
+            " ",
+            "1.2_3e+1_0",
+            " ",
+            "1_0.0"
+        ]
+    );
 }
 
 #[test]
