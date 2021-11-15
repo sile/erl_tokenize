@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Position of token.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct Position {
     filepath: Option<Arc<PathBuf>>,
     offset: usize,

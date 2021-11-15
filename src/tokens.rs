@@ -28,7 +28,7 @@ use crate::{Error, Position, PositionRange, Result};
 /// assert!(AtomToken::from_text("  foo", pos.clone()).is_err());
 /// assert!(AtomToken::from_text("123", pos.clone()).is_err());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AtomToken {
     value: Option<String>,
     text: String,
@@ -170,7 +170,7 @@ impl fmt::Display for AtomToken {
 /// assert!(CharToken::from_text(r"$\", pos.clone()).is_err());
 /// assert!(CharToken::from_text("a", pos.clone()).is_err());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CharToken {
     value: char,
     text: String,
@@ -286,7 +286,7 @@ impl fmt::Display for CharToken {
 /// // Err
 /// assert!(CommentToken::from_text("  % foo", pos.clone()).is_err());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CommentToken {
     text: String,
     pos: Position,
@@ -397,7 +397,7 @@ impl fmt::Display for CommentToken {
 /// assert!(FloatToken::from_text("12.3__4", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("12.34e-1__0", pos.clone()).is_err());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FloatToken {
     value: f64,
     text: String,
@@ -553,7 +553,7 @@ impl fmt::Display for FloatToken {
 /// assert!(IntegerToken::from_text("123__456", pos.clone()).is_err());
 /// # }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct IntegerToken {
     value: BigUint,
     text: String,
@@ -690,7 +690,7 @@ impl fmt::Display for IntegerToken {
 /// assert!(KeywordToken::from_text("  and", pos.clone()).is_err());
 /// assert!(KeywordToken::from_text("andfoo", pos.clone()).is_err());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct KeywordToken {
     value: Keyword,
     pos: Position,
@@ -817,7 +817,7 @@ impl fmt::Display for KeywordToken {
 /// // Err
 /// assert!(StringToken::from_text(r#"  "foo""#, pos.clone()).is_err());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StringToken {
     value: Option<String>,
     text: String,
@@ -941,7 +941,7 @@ impl fmt::Display for StringToken {
 /// assert!(SymbolToken::from_text("  .", pos.clone()).is_err());
 /// assert!(SymbolToken::from_text("foo", pos.clone()).is_err());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SymbolToken {
     value: Symbol,
     pos: Position,
@@ -1099,7 +1099,7 @@ impl fmt::Display for SymbolToken {
 /// assert!(VariableToken::from_text("foo", pos.clone()).is_err());
 /// assert!(VariableToken::from_text("  Foo", pos.clone()).is_err());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VariableToken {
     text: String,
     pos: Position,
@@ -1208,7 +1208,7 @@ impl fmt::Display for VariableToken {
 /// // Err
 /// assert!(WhitespaceToken::from_text("foo", pos.clone()).is_err());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WhitespaceToken {
     value: Whitespace,
     pos: Position,
