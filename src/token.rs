@@ -8,7 +8,7 @@ use crate::{Error, HiddenToken, LexicalToken, Position, PositionRange};
 
 /// Token.
 #[allow(missing_docs)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Token {
     Atom(AtomToken),
     Char(CharToken),
