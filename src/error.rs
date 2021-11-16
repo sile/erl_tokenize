@@ -10,7 +10,7 @@ pub enum Error {
     NoClosingQuotation { position: Position },
 
     /// Invalid escaped character.
-    #[error("cannnot parse a escaped character ({position})")]
+    #[error("cannot parse a escaped character ({position})")]
     InvalidEscapedChar { position: Position },
 
     /// A token was expected, but not found.
@@ -26,35 +26,35 @@ pub enum Error {
     InvalidAtomToken { position: Position },
 
     /// Invalid character token.
-    #[error("cannnot parse a character token ({position})")]
+    #[error("cannot parse a character token ({position})")]
     InvalidCharToken { position: Position },
 
     /// Invalid comment token.
-    #[error("cannnot parse a comment token ({position})")]
+    #[error("cannot parse a comment token ({position})")]
     InvalidCommentToken { position: Position },
 
     /// Invalid float token.
-    #[error("cannnot parse a float token ({position})")]
+    #[error("cannot parse a float token ({position})")]
     InvalidFloatToken { position: Position },
 
     /// Invalid integer token.
-    #[error("cannnot parse a integer token ({position})")]
+    #[error("cannot parse a integer token ({position})")]
     InvalidIntegerToken { position: Position },
 
     /// Invalid string token.
-    #[error("cannnot parse a string token ({position})")]
+    #[error("cannot parse a string token ({position})")]
     InvalidStringToken { position: Position },
 
     /// Invalid symbol token.
-    #[error("cannnot parse a symbol token ({position})")]
+    #[error("cannot parse a symbol token ({position})")]
     InvalidSymbolToken { position: Position },
 
     /// Invalid variable token.
-    #[error("cannnot parse a variable token ({position})")]
+    #[error("cannot parse a variable token ({position})")]
     InvalidVariableToken { position: Position },
 
     /// Invalid whitespace token.
-    #[error("cannnot parse a whitespace token ({position})")]
+    #[error("cannot parse a whitespace token ({position})")]
     InvalidWhitespaceToken { position: Position },
 }
 
