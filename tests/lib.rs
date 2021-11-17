@@ -75,3 +75,9 @@ fn tokenize_module_declaration() {
     let src = "-module(foo).";
     assert_eq!(tokenize!(src), ["-", "module", "(", "foo", ")", "."]);
 }
+
+#[test]
+fn tokenize_multibyte_whitespaces() {
+    let src = "a\u{a0}b";
+    assert_eq!(tokenize!(src), ["a", "\u{a0}", "b"]);
+}
