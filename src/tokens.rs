@@ -1232,18 +1232,17 @@ impl WhitespaceToken {
 
     /// Tries to convert from any prefixes of the text to a `WhitespaceToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        if text.is_empty() {
+        let value = if let Some(c) = text.chars().next() {
+            match c {
+                ' ' => Whitespace::Space,
+                '\t' => Whitespace::Tab,
+                '\r' => Whitespace::Return,
+                '\n' => Whitespace::Newline,
+                '\u{a0}' => Whitespace::NoBreakSpace,
+                _ => return Err(Error::invalid_whitespace_token(pos)),
+            }
+        } else {
             return Err(Error::invalid_whitespace_token(pos));
-        }
-
-        let (text, _) = text.split_at(1);
-        let value = match text.as_bytes()[0] {
-            b' ' => Whitespace::Space,
-            b'\t' => Whitespace::Tab,
-            b'\r' => Whitespace::Return,
-            b'\n' => Whitespace::Newline,
-            0xA0 => Whitespace::NoBreakSpace,
-            _ => return Err(Error::invalid_whitespace_token(pos)),
         };
         Ok(WhitespaceToken { value, pos })
     }
