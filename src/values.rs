@@ -87,6 +87,12 @@ pub enum Keyword {
 
     /// `xor`
     Xor,
+
+    /// `maybe`
+    Maybe,
+
+    /// `else`
+    Else,
 }
 impl Keyword {
     /// Returns the string representation of this keyword.
@@ -119,6 +125,8 @@ impl Keyword {
             Keyword::Try => "try",
             Keyword::When => "when",
             Keyword::Xor => "xor",
+            Keyword::Maybe => "maybe",
+            Keyword::Else => "else",
         }
     }
 }
