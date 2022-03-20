@@ -1,19 +1,18 @@
+use clap::Parser;
 use erl_tokenize::{PositionRange, Tokenizer};
 use std::fs::File;
 use std::io::Read;
 use std::time::{Duration, Instant};
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
-#[structopt(rename_all = "kebab-case")]
+#[derive(Parser)]
 struct Opt {
     src_file: String,
-    #[structopt(long)]
+    #[clap(long)]
     silent: bool,
 }
 
 fn main() -> anyhow::Result<()> {
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
 
     let mut src = String::new();
     let mut file = File::open(opt.src_file).expect("Cannot open file");

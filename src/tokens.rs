@@ -84,7 +84,7 @@ impl AtomToken {
             let end = head.len_utf8()
                 + tail
                     .find(|c| !util::is_atom_non_head_char(c))
-                    .unwrap_or_else(|| tail.len());
+                    .unwrap_or(tail.len());
             let text_slice = unsafe { text.get_unchecked(0..end) };
             (None, text_slice)
         };
@@ -318,7 +318,7 @@ impl CommentToken {
             return Err(Error::invalid_comment_token(pos));
         }
 
-        let end = text.find('\n').unwrap_or_else(|| text.len());
+        let end = text.find('\n').unwrap_or(text.len());
         let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(CommentToken { text, pos })
     }
