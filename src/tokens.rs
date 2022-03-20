@@ -743,6 +743,8 @@ impl KeywordToken {
             "try" => Keyword::Try,
             "when" => Keyword::When,
             "xor" => Keyword::Xor,
+            "maybe" => Keyword::Maybe,
+            "else" => Keyword::Else,
             s => return Err(Error::unknown_keyword(pos, s.to_owned())),
         };
         Ok(KeywordToken { value, pos })
@@ -994,6 +996,7 @@ impl SymbolToken {
                 b">=" => Some(Symbol::GreaterEq),
                 b"=<" => Some(Symbol::LessEq),
                 b"??" => Some(Symbol::DoubleQuestion),
+                b"?=" => Some(Symbol::MaybeMatch),
                 b".." => Some(Symbol::DoubleDot),
                 _ => None,
             };
