@@ -996,6 +996,7 @@ impl SymbolToken {
                 b">=" => Some(Symbol::GreaterEq),
                 b"=<" => Some(Symbol::LessEq),
                 b"??" => Some(Symbol::DoubleQuestion),
+                b"?=" => Some(Symbol::MaybeMatch),
                 b".." => Some(Symbol::DoubleDot),
                 _ => None,
             };

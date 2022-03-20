@@ -197,6 +197,9 @@ pub enum Symbol {
     /// `??`
     DoubleQuestion,
 
+    /// `?=`
+    MaybeMatch,
+
     /// `!`
     Not,
 
@@ -302,6 +305,7 @@ impl Symbol {
             Symbol::GreaterEq => ">=",
             Symbol::Less => "<",
             Symbol::LessEq => "=<",
+            Symbol::MaybeMatch => "?=",
         }
     }
 }
