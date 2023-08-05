@@ -21,4 +21,4 @@ serde = { version = "1", features = ["derive", "rc"] }
 
 [dev-dependencies]
 anyhow = "1"
-clap = { version = "3", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
