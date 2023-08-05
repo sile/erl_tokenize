@@ -67,6 +67,18 @@ impl Position {
         self.column += text.len();
         self
     }
+
+    pub(crate) fn step_by_char(mut self, c: char) -> Position {
+        if c == '\n' {
+            self.offset += 1;
+            self.line += 1;
+            self.column = 1;
+        } else {
+            self.offset += 1;
+            self.column += 1;
+        }
+        self
+    }
 }
 
 impl Default for Position {

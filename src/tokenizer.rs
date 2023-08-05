@@ -111,6 +111,32 @@ where
     pub fn set_position(&mut self, position: Position) {
         self.next_pos = position;
     }
+
+    /// Consumes the next char.
+    ///
+    /// This method can be used to recover from a tokenization error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Tokenizer;
+    ///
+    /// let src = r#"io:format("Hello")."#;
+    ///
+    /// let mut tokenizer = Tokenizer::new(src);
+    /// assert_eq!(tokenizer.next_position().offset(), 0);
+    ///
+    /// tokenizer.consume_char();
+    /// assert_eq!(tokenizer.next_position().offset(), 1);
+    /// ```
+    pub fn consume_char(&mut self) -> Option<char> {
+        if let Some(c) = self.text.as_ref()[self.next_pos.offset()..].chars().next() {
+            self.next_pos = self.next_pos.clone().step_by_char(c);
+            Some(c)
+        } else {
+            None
+        }
+    }
 }
 impl<T> Iterator for Tokenizer<T>
 where
