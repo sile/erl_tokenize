@@ -52,12 +52,12 @@ impl Token {
             'A'..='Z' | '_' => VariableToken::from_text(text, pos).map(Token::from),
             '0'..='9' => {
                 let maybe_float =
-                    if let Some(i) = text.find(|c: char| !(c.is_digit(10) || c == '_')) {
+                    if let Some(i) = text.find(|c: char| !(c.is_ascii_digit() || c == '_')) {
                         text.as_bytes()[i] == b'.'
                             && text
                                 .as_bytes()
                                 .get(i + 1)
-                                .map_or(false, |c| (*c as char).is_digit(10))
+                                .map_or(false, |c| (*c as char).is_ascii_digit())
                     } else {
                         false
                     };
@@ -123,7 +123,7 @@ impl Token {
 
     /// Returns `true` if this is a hidden token, otherwise `false`.
     pub fn is_hidden_token(&self) -> bool {
-        return matches!(self, Token::Whitespace(_) | Token::Comment(_));
+        matches!(self, Token::Whitespace(_) | Token::Comment(_))
     }
 
     /// Tries to convert into `LexicalToken`.
