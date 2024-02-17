@@ -889,7 +889,7 @@ impl StringToken {
         }
 
         let mut start_line_end_found = false;
-        while let Some(c) = chars.next() {
+        for c in chars {
             start_line_end += c.len_utf8();
             if c == '\n' {
                 start_line_end_found = true;
