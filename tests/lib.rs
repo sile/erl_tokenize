@@ -1,4 +1,4 @@
-use erl_tokenize::Tokenizer;
+use erl_tokenize::{Token, Tokenizer};
 
 macro_rules! tokenize {
     ($text:expr) => {
@@ -59,6 +59,61 @@ fn tokenize_variables() {
 fn tokenize_strings() {
     let src = r#""foo" "b\tar""#;
     assert_eq!(tokenize!(src), [r#""foo""#, " ", r#""b\tar""#]);
+}
+
+#[test]
+fn tokenize_triple_quoted_strings() {
+    fn tokenize(text: &str) -> Option<String> {
+        if let Some(Ok(Token::String(t))) = Tokenizer::new(text).next() {
+            Some(t.value().to_owned())
+        } else {
+            None
+        }
+    }
+
+    // OK
+    let src = r#""""
+foo
+""""#;
+    assert_eq!(tokenize(src), Some(r#""foo""#.to_owned()));
+
+    let src = r#""""
+ foo
+ """"#;
+    assert_eq!(tokenize(src), Some(r#""foo""#.to_owned()));
+
+    let src = r#"""""
+foo
+"""""#;
+    assert_eq!(tokenize(src), Some(r#""foo""#.to_owned()));
+
+    let src = r#""""
+""""#;
+    assert_eq!(tokenize(src), Some(r#""""#.to_owned()));
+
+    let src = r#""""
+
+""""#;
+    assert_eq!(tokenize(src), Some(r#""""#.to_owned()));
+
+    let src = r#""""
+
+
+""""#;
+    assert_eq!(tokenize(src), Some("\"\n\"".to_owned()));
+
+    // NG
+    let src = r#""""foo""""#;
+    assert_eq!(tokenize(src), None);
+
+    let src = r#""""\nfoo\n """"#;
+    assert_eq!(tokenize(src), None);
+
+    let src = r#""""erl\nfoo\n""""#;
+    assert_eq!(tokenize(src), None);
+
+    let src = r#""a""b""#; // Strings concatenation without intervening whitespace
+    assert_eq!(tokenize(src), None);
 }
 
 #[test]

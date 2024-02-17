@@ -13,6 +13,10 @@ pub enum Error {
     #[error("cannot parse a escaped character ({position})")]
     InvalidEscapedChar { position: Position },
 
+    /// Adjacent string literals without intervening white space.
+    #[error("adjacent string literals without intervening white space ({position})")]
+    AdjacentStringLiterals { position: Position },
+
     /// A token was expected, but not found.
     #[error("a token was expected, but not found ({position})")]
     MissingToken { position: Position },
@@ -64,6 +68,7 @@ impl Error {
         match self {
             Self::NoClosingQuotation { position } => position,
             Self::InvalidEscapedChar { position } => position,
+            Self::AdjacentStringLiterals { position } => position,
             Self::MissingToken { position } => position,
             Self::UnknownKeyword { position, .. } => position,
             Self::InvalidAtomToken { position } => position,
@@ -84,6 +89,10 @@ impl Error {
 
     pub(crate) fn invalid_escaped_char(position: Position) -> Self {
         Self::InvalidEscapedChar { position }
+    }
+
+    pub(crate) fn adjacent_string_literals(position: Position) -> Self {
+        Self::AdjacentStringLiterals { position }
     }
 
     pub(crate) fn missing_token(position: Position) -> Self {

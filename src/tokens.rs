@@ -852,18 +852,117 @@ impl StringToken {
             return Err(Error::invalid_string_token(pos));
         }
 
-        let (head, tail) = text.split_at(1);
-        if head != "\"" {
-            return Err(Error::invalid_string_token(pos));
+        let (value, end) = if text.starts_with(r#"""""#) {
+            // Triple-quoted strings: https://www.erlang.org/eeps/eep-0064
+            Self::parse_triple_quoted(text, pos.clone())?
+        } else {
+            let (head, tail) = text.split_at(1);
+            if head != "\"" {
+                return Err(Error::invalid_string_token(pos));
+            }
+            util::parse_quotation(pos.clone(), tail, '"').map(|(v, end)| (v, end + 2))?
+        };
+        if text.get(end..end + 1) == Some("\"") {
+            return Err(Error::adjacent_string_literals(pos));
         }
 
-        let (value, end) = util::parse_quotation(pos.clone(), tail, '"')?;
         let value = match value {
             Cow::Borrowed(_) => None,
             Cow::Owned(v) => Some(v),
         };
-        let text = unsafe { text.get_unchecked(0..=1 + end) }.to_owned();
+        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(StringToken { value, text, pos })
+    }
+
+    fn parse_triple_quoted(text: &str, pos: Position) -> Result<(Cow<'_, str>, usize)> {
+        let mut quote_count = 0;
+        let mut chars = text.chars().peekable();
+        let mut start_line_end = 0;
+
+        while let Some(c) = chars.peek().copied() {
+            if c == '"' {
+                quote_count += 1;
+                start_line_end += chars.next().expect("unreachable").len_utf8();
+            } else {
+                break;
+            }
+        }
+
+        let mut start_line_end_found = false;
+        for c in chars {
+            start_line_end += c.len_utf8();
+            if c == '\n' {
+                start_line_end_found = true;
+                break;
+            } else if !c.is_ascii_whitespace() {
+                return Err(Error::invalid_string_token(pos));
+            }
+        }
+        if !start_line_end_found {
+            return Err(Error::no_closing_quotation(pos));
+        }
+
+        let text = &text[start_line_end..];
+        let mut indent = 0;
+        let mut maybe_end_line = true;
+        let mut remaining_quote_count = quote_count;
+        let mut end_line_start = 0;
+        let mut end_line_end = 0;
+        for c in text.chars() {
+            end_line_end += c.len_utf8();
+            if c == '\n' {
+                indent = 0;
+                maybe_end_line = true;
+                remaining_quote_count = quote_count;
+                end_line_start = end_line_end;
+            } else if c.is_ascii_whitespace() {
+                indent += 1;
+            } else if maybe_end_line && c == '"' {
+                remaining_quote_count -= 1;
+                if remaining_quote_count == 0 {
+                    break;
+                }
+            } else {
+                maybe_end_line = false;
+            }
+        }
+        if remaining_quote_count != 0 {
+            return Err(Error::no_closing_quotation(pos));
+        }
+
+        if indent == 0 {
+            return Ok((
+                Cow::Owned(format!("\"{}\"", &text[..end_line_start.saturating_sub(1)])),
+                end_line_end,
+            ));
+        }
+
+        let mut value = "\"".to_owned();
+        for line in text[..end_line_start - 1].lines() {
+            if line == "\n" {
+                value.push('\n');
+                continue;
+            }
+
+            let mut valid_line = false;
+            for (i, c) in line.chars().enumerate() {
+                if i < indent {
+                    if c.is_ascii_whitespace() {
+                        continue;
+                    } else {
+                        return Err(Error::invalid_string_token(pos));
+                    }
+                }
+                value.push(c);
+                valid_line = true;
+            }
+            if !valid_line {
+                return Err(Error::invalid_string_token(pos));
+            }
+        }
+        value.push('"');
+
+        Ok((Cow::Owned(value), end_line_end))
     }
 
     /// Returns the value of this token.
