@@ -1,19 +1,10 @@
-use erl_tokenize::Tokenizer;
+use erl_tokenize::{Token, Tokenizer};
 
 macro_rules! tokenize {
     ($text:expr) => {
         Tokenizer::new($text)
             .map(|t| t.unwrap().text().to_string())
             .collect::<Vec<_>>()
-    };
-}
-
-macro_rules! is_tokenize_ok {
-    ($text:expr) => {
-        Tokenizer::new($text)
-            .map(|t| t.map(|t| t.text().to_string()))
-            .collect::<Result<Vec<_>, _>>()
-            .is_ok()
     };
 }
 
@@ -72,28 +63,57 @@ fn tokenize_strings() {
 
 #[test]
 fn tokenize_triple_quoted_strings() {
+    fn tokenize(text: &str) -> Option<String> {
+        if let Some(Ok(Token::String(t))) = Tokenizer::new(text).next() {
+            Some(t.value().to_owned())
+        } else {
+            None
+        }
+    }
+
     // OK
-    let src = r#""""\nfoo\n""""#;
-    assert_eq!(tokenize!(src), [r#""foo""#]);
+    let src = r#""""
+foo
+""""#;
+    assert_eq!(tokenize(src), Some(r#""foo""#.to_owned()));
 
-    let src = r#""""\n foo\n """"#;
-    assert_eq!(tokenize!(src), [r#""foo""#]);
+    let src = r#""""
+ foo
+ """"#;
+    assert_eq!(tokenize(src), Some(r#""foo""#.to_owned()));
 
-    let src = r#"""""\nfoo\n"""""#;
-    assert_eq!(tokenize!(src), [r#""foo""#]);
+    let src = r#"""""
+foo
+"""""#;
+    assert_eq!(tokenize(src), Some(r#""foo""#.to_owned()));
+
+    let src = r#""""
+""""#;
+    assert_eq!(tokenize(src), Some(r#""""#.to_owned()));
+
+    let src = r#""""
+
+""""#;
+    assert_eq!(tokenize(src), Some(r#""""#.to_owned()));
+
+    let src = r#""""
+
+
+""""#;
+    assert_eq!(tokenize(src), Some("\"\n\"".to_owned()));
 
     // NG
     let src = r#""""foo""""#;
-    assert_eq!(is_tokenize_ok!(src), false);
+    assert_eq!(tokenize(src), None);
 
     let src = r#""""\nfoo\n """"#;
-    assert_eq!(is_tokenize_ok!(src), false);
+    assert_eq!(tokenize(src), None);
 
     let src = r#""""erl\nfoo\n""""#;
-    assert_eq!(is_tokenize_ok!(src), false);
+    assert_eq!(tokenize(src), None);
 
-    let src = r#""""""#; // Strings concatenation without intervening whitespace
-    assert_eq!(is_tokenize_ok!(src), false);
+    let src = r#""a""b""#; // Strings concatenation without intervening whitespace
+    assert_eq!(tokenize(src), None);
 }
 
 #[test]
