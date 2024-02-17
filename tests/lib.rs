@@ -8,6 +8,15 @@ macro_rules! tokenize {
     };
 }
 
+macro_rules! is_tokenize_ok {
+    ($text:expr) => {
+        Tokenizer::new($text)
+            .map(|t| t.map(|t| t.text().to_string()))
+            .collect::<Result<Vec<_>, _>>()
+            .is_ok()
+    };
+}
+
 #[test]
 fn tokenize_comments() {
     let src = "% foo";
@@ -59,6 +68,32 @@ fn tokenize_variables() {
 fn tokenize_strings() {
     let src = r#""foo" "b\tar""#;
     assert_eq!(tokenize!(src), [r#""foo""#, " ", r#""b\tar""#]);
+}
+
+#[test]
+fn tokenize_triple_quoted_strings() {
+    // OK
+    let src = r#""""\nfoo\n""""#;
+    assert_eq!(tokenize!(src), [r#""foo""#]);
+
+    let src = r#""""\n foo\n """"#;
+    assert_eq!(tokenize!(src), [r#""foo""#]);
+
+    let src = r#"""""\nfoo\n"""""#;
+    assert_eq!(tokenize!(src), [r#""foo""#]);
+
+    // NG
+    let src = r#""""foo""""#;
+    assert_eq!(is_tokenize_ok!(src), false);
+
+    let src = r#""""\nfoo\n """"#;
+    assert_eq!(is_tokenize_ok!(src), false);
+
+    let src = r#""""erl\nfoo\n""""#;
+    assert_eq!(is_tokenize_ok!(src), false);
+
+    let src = r#""""""#; // Strings concatenation without intervening whitespace
+    assert_eq!(is_tokenize_ok!(src), false);
 }
 
 #[test]
