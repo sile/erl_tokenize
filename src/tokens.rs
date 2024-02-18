@@ -911,6 +911,7 @@ impl SigilStringToken {
             .chars()
             .take_while(|c| util::is_atom_non_head_char(*c))
             .collect();
+        let offset = offset + suffix.len();
 
         Ok(Self {
             prefix,

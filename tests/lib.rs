@@ -168,6 +168,9 @@ fn tokenize_sigils() {
     b
     """c"#;
     assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = "~a`b`c 10";
+    assert_eq!(tokenize!(src), ["~a`b`c", " ", "10"]);
 }
 
 #[test]
