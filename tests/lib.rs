@@ -117,6 +117,48 @@ foo
 }
 
 #[test]
+fn tokenize_sigils() {
+    let src = "~\"\"";
+    assert_eq!(tokenize!(src), ["~", "\"\""]);
+
+    let src = "~a(b)c";
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+
+    let src = "~a[b]c";
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+
+    let src = "~a{b}c";
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+
+    let src = "~a<b>c";
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+
+    let src = "~a/b/c";
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+
+    let src = "~a|b|c";
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+
+    let src = "~a'b'c";
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+
+    let src = "~a\"b\"c";
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+
+    let src = "~a`b`c";
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+
+    let src = "~a#b#c";
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+
+    let src = r#"~a
+"""
+b
+"""c"#;
+    assert_eq!(tokenize!(src), ["~a", "\"b\"", "c"]);
+}
+
+#[test]
 fn tokenize_chars() {
     let src = r#"$a $\t $\^a $\^]"#;
     assert_eq!(
