@@ -130,6 +130,7 @@ impl Token {
     }
 
     /// Tries to convert into `LexicalToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_lexical_token(self) -> Result<LexicalToken, Self> {
         match self {
             Token::Atom(t) => Ok(t.into()),
@@ -145,6 +146,7 @@ impl Token {
     }
 
     /// Tries to convert into `HiddenToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_hidden_token(self) -> Result<HiddenToken, Self> {
         match self {
             Token::Comment(t) => Ok(t.into()),
@@ -244,6 +246,7 @@ impl Token {
     }
 
     /// Tries to return the inner `AtomToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_atom_token(self) -> Result<AtomToken, Self> {
         if let Token::Atom(t) = self {
             Ok(t)
@@ -253,6 +256,7 @@ impl Token {
     }
 
     /// Tries to return the inner `CharToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_char_token(self) -> Result<CharToken, Self> {
         if let Token::Char(t) = self {
             Ok(t)
@@ -262,6 +266,7 @@ impl Token {
     }
 
     /// Tries to return the inner `FloatToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_float_token(self) -> Result<FloatToken, Self> {
         if let Token::Float(t) = self {
             Ok(t)
@@ -271,6 +276,7 @@ impl Token {
     }
 
     /// Tries to return the inner `IntegerToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_integer_token(self) -> Result<IntegerToken, Self> {
         if let Token::Integer(t) = self {
             Ok(t)
@@ -280,6 +286,7 @@ impl Token {
     }
 
     /// Tries to return the inner `KeywordToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_keyword_token(self) -> Result<KeywordToken, Self> {
         if let Token::Keyword(t) = self {
             Ok(t)
@@ -289,6 +296,7 @@ impl Token {
     }
 
     /// Tries to return the inner `StringToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_string_token(self) -> Result<StringToken, Self> {
         if let Token::String(t) = self {
             Ok(t)
@@ -298,6 +306,7 @@ impl Token {
     }
 
     /// Tries to return the inner `SymbolToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_symbol_token(self) -> Result<SymbolToken, Self> {
         if let Token::Symbol(t) = self {
             Ok(t)
@@ -307,6 +316,7 @@ impl Token {
     }
 
     /// Tries to return the inner `VariableToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_variable_token(self) -> Result<VariableToken, Self> {
         if let Token::Variable(t) = self {
             Ok(t)
@@ -316,6 +326,7 @@ impl Token {
     }
 
     /// Tries to return the inner `CommentToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_comment_token(self) -> Result<CommentToken, Self> {
         if let Token::Comment(t) = self {
             Ok(t)
@@ -325,6 +336,7 @@ impl Token {
     }
 
     /// Tries to return the inner `WhitespaceToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_whitespace_token(self) -> Result<WhitespaceToken, Self> {
         if let Token::Whitespace(t) = self {
             Ok(t)
