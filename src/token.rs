@@ -1,8 +1,8 @@
 use std::fmt;
 
 use crate::tokens::{
-    AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken, SigilPrefixToken,
-    SigilSuffixToken, StringToken, SymbolToken, VariableToken, WhitespaceToken,
+    AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken, SigilStringToken,
+    StringToken, SymbolToken, VariableToken, WhitespaceToken,
 };
 use crate::{Error, HiddenToken, LexicalToken, Position, PositionRange};
 
@@ -16,8 +16,7 @@ pub enum Token {
     Float(FloatToken),
     Integer(IntegerToken),
     Keyword(KeywordToken),
-    SigilPrefix(SigilPrefixToken),
-    SigilSuffix(SigilSuffixToken),
+    SigilString(SigilStringToken),
     String(StringToken),
     Symbol(SymbolToken),
     Variable(VariableToken),
@@ -111,8 +110,7 @@ impl Token {
             Token::Float(ref t) => t.text(),
             Token::Integer(ref t) => t.text(),
             Token::Keyword(ref t) => t.text(),
-            Token::SigilPrefix(ref t) => t.text(),
-            Token::SigilSuffix(ref t) => t.text(),
+            Token::SigilString(ref t) => t.text(),
             Token::String(ref t) => t.text(),
             Token::Symbol(ref t) => t.text(),
             Token::Variable(ref t) => t.text(),
@@ -415,8 +413,7 @@ impl PositionRange for Token {
             Token::Float(ref t) => t.start_position(),
             Token::Integer(ref t) => t.start_position(),
             Token::Keyword(ref t) => t.start_position(),
-            Token::SigilPrefix(ref t) => t.start_position(),
-            Token::SigilSuffix(ref t) => t.start_position(),
+            Token::SigilString(ref t) => t.start_position(),
             Token::String(ref t) => t.start_position(),
             Token::Symbol(ref t) => t.start_position(),
             Token::Variable(ref t) => t.start_position(),
@@ -431,8 +428,7 @@ impl PositionRange for Token {
             Token::Float(ref t) => t.end_position(),
             Token::Integer(ref t) => t.end_position(),
             Token::Keyword(ref t) => t.end_position(),
-            Token::SigilPrefix(ref t) => t.end_position(),
-            Token::SigilSuffix(ref t) => t.end_position(),
+            Token::SigilString(ref t) => t.end_position(),
             Token::String(ref t) => t.end_position(),
             Token::Symbol(ref t) => t.end_position(),
             Token::Variable(ref t) => t.end_position(),

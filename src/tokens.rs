@@ -803,17 +803,20 @@ impl fmt::Display for KeywordToken {
 
 /// TODO
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SigilPrefixToken {
+pub struct SigilStringToken {
+    prefix: String,
+    value: String,
+    suffix: String,
     text: String,
     pos: Position,
 }
 
-impl SigilPrefixToken {
-    /// Returns the value of this token.
+impl SigilStringToken {
+    /// Returns the value (i.e., prefix, content, suffix) of this token.
     ///
     /// TODO: example
-    pub fn value(&self) -> &str {
-        &self.text[1..]
+    pub fn value(&self) -> (&str, &str, &str) {
+        (&self.prefix, &self.value, &self.suffix)
     }
 
     /// Returns the original textual representation of this token.
@@ -822,7 +825,7 @@ impl SigilPrefixToken {
     }
 }
 
-impl PositionRange for SigilPrefixToken {
+impl PositionRange for SigilStringToken {
     fn start_position(&self) -> Position {
         self.pos.clone()
     }
@@ -832,44 +835,7 @@ impl PositionRange for SigilPrefixToken {
     }
 }
 
-impl fmt::Display for SigilPrefixToken {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.text().fmt(f)
-    }
-}
-
-/// TODO
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SigilSuffixToken {
-    text: String,
-    pos: Position,
-}
-
-impl SigilSuffixToken {
-    /// Returns the value of this token.
-    ///
-    /// TODO: example
-    pub fn value(&self) -> &str {
-        &self.text
-    }
-
-    /// Returns the original textual representation of this token.
-    pub fn text(&self) -> &str {
-        &self.text
-    }
-}
-
-impl PositionRange for SigilSuffixToken {
-    fn start_position(&self) -> Position {
-        self.pos.clone()
-    }
-
-    fn end_position(&self) -> Position {
-        self.pos.clone().step_by_text(&self.text)
-    }
-}
-
-impl fmt::Display for SigilSuffixToken {
+impl fmt::Display for SigilStringToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.text().fmt(f)
     }
