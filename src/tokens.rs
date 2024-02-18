@@ -801,7 +801,27 @@ impl fmt::Display for KeywordToken {
     }
 }
 
-/// TODO
+/// Sigil string token.
+///
+/// # Examples
+///
+/// ```
+/// use erl_tokenize::Position;
+/// use erl_tokenize::tokens::SigilStringToken;
+///
+/// # fn main() -> erl_tokenize::Result<()> {
+/// let pos = Position::new();
+///
+/// // Ok
+/// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos.clone())?.value(), ("", "foo", ""));
+/// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos.clone())?.value(), ("", "foo", ""));
+/// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos.clone())?.value(), ("b", "foo", ""));
+///
+/// // Err
+/// assert!(SigilStringToken::from_text(r#""foo""#, pos.clone()).is_err());
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SigilStringToken {
     prefix: String,
@@ -814,17 +834,47 @@ pub struct SigilStringToken {
 impl SigilStringToken {
     /// Returns the value (i.e., prefix, content, suffix) of this token.
     ///
-    /// TODO: example
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::SigilStringToken;
+    ///
+    /// # fn main() -> erl_tokenize::Result<()> {
+    /// let pos = Position::new();
+    ///
+    /// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos.clone())?.value(), ("", "foo", ""));
+    /// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos.clone())?.value(), ("", "foo", ""));
+    /// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos.clone())?.value(), ("b", "foo", ""));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn value(&self) -> (&str, &str, &str) {
         (&self.prefix, &self.content, &self.suffix)
     }
 
     /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::SigilStringToken;
+    ///
+    /// # fn main() -> erl_tokenize::Result<()> {
+    /// let pos = Position::new();
+    ///
+    /// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos.clone())?.text(), r#"~"foo""#);
+    /// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos.clone())?.text(), r#"~(foo)"#);
+    /// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos.clone())?.text(), r#"~b"foo""#);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn text(&self) -> &str {
         &self.text
     }
 
-    /// TODO
+    /// Tries to convert from any prefixes of the text to a [`SigilStringToken`].
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         if !text.starts_with('~') {
             return Err(Error::invalid_sigil_string_token(pos));
