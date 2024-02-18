@@ -72,6 +72,7 @@ impl Token {
             '"' => StringToken::from_text(text, pos).map(Token::from),
             '\'' => AtomToken::from_text(text, pos).map(Token::from),
             '%' => CommentToken::from_text(text, pos).map(Token::from),
+            '~' => SigilStringToken::from_text(text, pos).map(Token::from),
             _ => {
                 if head.is_alphabetic() {
                     let atom = AtomToken::from_text(text, pos.clone())?;
@@ -360,6 +361,11 @@ impl From<IntegerToken> for Token {
 impl From<KeywordToken> for Token {
     fn from(f: KeywordToken) -> Self {
         Token::Keyword(f)
+    }
+}
+impl From<SigilStringToken> for Token {
+    fn from(f: SigilStringToken) -> Self {
+        Token::SigilString(f)
     }
 }
 impl From<StringToken> for Token {
