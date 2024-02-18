@@ -20,5 +20,5 @@ thiserror = "1"
 serde = { version = "1", features = ["derive", "rc"] }
 
 [dev-dependencies]
-anyhow = "1"
+orfail = "1"
 clap = { version = "4", features = ["derive"] }

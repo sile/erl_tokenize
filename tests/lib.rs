@@ -75,32 +75,32 @@ fn tokenize_triple_quoted_strings() {
     let src = r#""""
 foo
 """"#;
-    assert_eq!(tokenize(src), Some(r#""foo""#.to_owned()));
+    assert_eq!(tokenize(src), Some("foo".to_owned()));
 
     let src = r#""""
  foo
  """"#;
-    assert_eq!(tokenize(src), Some(r#""foo""#.to_owned()));
+    assert_eq!(tokenize(src), Some("foo".to_owned()));
 
     let src = r#"""""
 foo
 """""#;
-    assert_eq!(tokenize(src), Some(r#""foo""#.to_owned()));
+    assert_eq!(tokenize(src), Some("foo".to_owned()));
 
     let src = r#""""
 """"#;
-    assert_eq!(tokenize(src), Some(r#""""#.to_owned()));
+    assert_eq!(tokenize(src), Some("".to_owned()));
 
     let src = r#""""
 
 """"#;
-    assert_eq!(tokenize(src), Some(r#""""#.to_owned()));
+    assert_eq!(tokenize(src), Some("".to_owned()));
 
     let src = r#""""
 
 
 """"#;
-    assert_eq!(tokenize(src), Some("\"\n\"".to_owned()));
+    assert_eq!(tokenize(src), Some("\n".to_owned()));
 
     // NG
     let src = r#""""foo""""#;
@@ -114,6 +114,60 @@ foo
 
     let src = r#""a""b""#; // Strings concatenation without intervening whitespace
     assert_eq!(tokenize(src), None);
+}
+
+#[test]
+fn tokenize_sigils() {
+    fn tokenize(text: &str) -> Option<(String, String, String)> {
+        if let Some(Ok(Token::SigilString(t))) = Tokenizer::new(text).next() {
+            let (prefix, content, suffix) = t.value();
+            Some(value(prefix, content, suffix))
+        } else {
+            None
+        }
+    }
+
+    fn value(prefix: &str, content: &str, suffix: &str) -> (String, String, String) {
+        (prefix.to_owned(), content.to_owned(), suffix.to_owned())
+    }
+
+    let src = "~\"\"";
+    assert_eq!(tokenize(src), Some(value("", "", "")));
+
+    let src = "~a(b)c";
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = "~a[b]c";
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = "~a{b}c";
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = "~a<b>c";
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = "~a/b/c";
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = "~a|b|c";
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = "~a'b'c";
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = "~a\"b\"c";
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = "~a`b`c";
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = "~a#b#c";
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
+
+    let src = r#"~a"""
+    b
+    """c"#;
+    assert_eq!(tokenize(src), Some(value("a", "b", "c")));
 }
 
 #[test]

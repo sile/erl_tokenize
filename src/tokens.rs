@@ -801,6 +801,143 @@ impl fmt::Display for KeywordToken {
     }
 }
 
+/// Sigil string token.
+///
+/// # Examples
+///
+/// ```
+/// use erl_tokenize::Position;
+/// use erl_tokenize::tokens::SigilStringToken;
+///
+/// # fn main() -> erl_tokenize::Result<()> {
+/// let pos = Position::new();
+///
+/// // Ok
+/// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos.clone())?.value(), ("", "foo", ""));
+/// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos.clone())?.value(), ("", "foo", ""));
+/// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos.clone())?.value(), ("b", "foo", ""));
+///
+/// // Err
+/// assert!(SigilStringToken::from_text(r#""foo""#, pos.clone()).is_err());
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SigilStringToken {
+    prefix: String,
+    content: String,
+    suffix: String,
+    text: String,
+    pos: Position,
+}
+
+impl SigilStringToken {
+    /// Returns the value (i.e., prefix, content, suffix) of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::SigilStringToken;
+    ///
+    /// # fn main() -> erl_tokenize::Result<()> {
+    /// let pos = Position::new();
+    ///
+    /// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos.clone())?.value(), ("", "foo", ""));
+    /// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos.clone())?.value(), ("", "foo", ""));
+    /// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos.clone())?.value(), ("b", "foo", ""));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn value(&self) -> (&str, &str, &str) {
+        (&self.prefix, &self.content, &self.suffix)
+    }
+
+    /// Returns the original textual representation of this token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use erl_tokenize::Position;
+    /// use erl_tokenize::tokens::SigilStringToken;
+    ///
+    /// # fn main() -> erl_tokenize::Result<()> {
+    /// let pos = Position::new();
+    ///
+    /// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos.clone())?.text(), r#"~"foo""#);
+    /// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos.clone())?.text(), r#"~(foo)"#);
+    /// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos.clone())?.text(), r#"~b"foo""#);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// Tries to convert from any prefixes of the text to a [`SigilStringToken`].
+    pub fn from_text(text: &str, pos: Position) -> Result<Self> {
+        if !text.starts_with('~') {
+            return Err(Error::invalid_sigil_string_token(pos));
+        }
+
+        let offset = 1;
+        let prefix: String = text[offset..]
+            .chars()
+            .take_while(|c| util::is_atom_non_head_char(*c))
+            .collect();
+
+        let offset = offset + prefix.len();
+        let Some(open_delimiter) = text[offset..].chars().next() else {
+            return Err(Error::invalid_sigil_string_token(pos));
+        };
+        let (content, offset) = if open_delimiter == '"' {
+            let t = StringToken::from_text(&text[offset..], pos.clone().step_by_width(offset))?;
+            let content = t.value().to_owned();
+            (content, offset + t.text().len())
+        } else {
+            let close_delimiter = match open_delimiter {
+                '(' => ')',
+                '[' => ']',
+                '{' => '}',
+                '<' => '>',
+                '/' | '|' | '\'' | '`' | '#' => open_delimiter,
+                _ => return Err(Error::invalid_sigil_string_token(pos)),
+            };
+            util::parse_quotation(pos.clone(), &text[offset + 1..], close_delimiter)
+                .map(|(v, end)| (v.into_owned(), offset + 1 + end + 1))?
+        };
+
+        let suffix: String = text[offset..]
+            .chars()
+            .take_while(|c| util::is_atom_non_head_char(*c))
+            .collect();
+
+        Ok(Self {
+            prefix,
+            content,
+            suffix,
+            text: text[..offset].to_owned(),
+            pos,
+        })
+    }
+}
+
+impl PositionRange for SigilStringToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_text(&self.text)
+    }
+}
+
+impl fmt::Display for SigilStringToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.text().fmt(f)
+    }
+}
+
 /// String token.
 ///
 /// # Examples
@@ -902,13 +1039,12 @@ impl StringToken {
             return Err(Error::no_closing_quotation(pos));
         }
 
-        let text = &text[start_line_end..];
         let mut indent = 0;
         let mut maybe_end_line = true;
         let mut remaining_quote_count = quote_count;
-        let mut end_line_start = 0;
-        let mut end_line_end = 0;
-        for c in text.chars() {
+        let mut end_line_start = start_line_end;
+        let mut end_line_end = start_line_end;
+        for c in text[start_line_end..].chars() {
             end_line_end += c.len_utf8();
             if c == '\n' {
                 indent = 0;
@@ -932,13 +1068,15 @@ impl StringToken {
 
         if indent == 0 {
             return Ok((
-                Cow::Owned(format!("\"{}\"", &text[..end_line_start.saturating_sub(1)])),
+                Cow::Owned(
+                    text[start_line_end..(end_line_start - 1).max(start_line_end)].to_owned(),
+                ),
                 end_line_end,
             ));
         }
 
-        let mut value = "\"".to_owned();
-        for line in text[..end_line_start - 1].lines() {
+        let mut value = String::new();
+        for line in text[start_line_end..end_line_start - 1].lines() {
             if line == "\n" {
                 value.push('\n');
                 continue;
@@ -960,7 +1098,6 @@ impl StringToken {
                 return Err(Error::invalid_string_token(pos));
             }
         }
-        value.push('"');
 
         Ok((Cow::Owned(value), end_line_end))
     }

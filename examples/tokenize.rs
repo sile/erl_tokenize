@@ -1,5 +1,6 @@
 use clap::Parser;
 use erl_tokenize::{PositionRange, Tokenizer};
+use orfail::OrFail;
 use std::fs::File;
 use std::io::Read;
 use std::time::{Duration, Instant};
@@ -11,7 +12,7 @@ struct Opt {
     silent: bool,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> orfail::Result<()> {
     let opt = Opt::parse();
 
     let mut src = String::new();
@@ -22,7 +23,7 @@ fn main() -> anyhow::Result<()> {
     let mut count = 0;
     let tokenizer = Tokenizer::new(&src);
     for result in tokenizer {
-        let token = result?;
+        let token = result.or_fail()?;
         if !opt.silent {
             println!("[{:?}] {:?}", token.start_position(), token.text());
         }

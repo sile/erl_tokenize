@@ -49,6 +49,10 @@ pub enum Error {
     #[error("cannot parse a string token ({position})")]
     InvalidStringToken { position: Position },
 
+    /// Invalid sigil string token.
+    #[error("cannot parse a sigil string token ({position})")]
+    InvalidSigilStringToken { position: Position },
+
     /// Invalid symbol token.
     #[error("cannot parse a symbol token ({position})")]
     InvalidSymbolToken { position: Position },
@@ -76,6 +80,7 @@ impl Error {
             Self::InvalidCommentToken { position } => position,
             Self::InvalidFloatToken { position } => position,
             Self::InvalidIntegerToken { position } => position,
+            Self::InvalidSigilStringToken { position } => position,
             Self::InvalidStringToken { position } => position,
             Self::InvalidSymbolToken { position } => position,
             Self::InvalidVariableToken { position } => position,
@@ -121,6 +126,10 @@ impl Error {
 
     pub(crate) fn invalid_integer_token(position: Position) -> Self {
         Self::InvalidIntegerToken { position }
+    }
+
+    pub(crate) fn invalid_sigil_string_token(position: Position) -> Self {
+        Self::InvalidSigilStringToken { position }
     }
 
     pub(crate) fn invalid_string_token(position: Position) -> Self {

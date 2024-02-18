@@ -1,8 +1,8 @@
 use std::fmt;
 
 use crate::tokens::{
-    AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken, StringToken,
-    SymbolToken, VariableToken, WhitespaceToken,
+    AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken, SigilStringToken,
+    StringToken, SymbolToken, VariableToken, WhitespaceToken,
 };
 use crate::{Error, HiddenToken, LexicalToken, Position, PositionRange};
 
@@ -16,6 +16,7 @@ pub enum Token {
     Float(FloatToken),
     Integer(IntegerToken),
     Keyword(KeywordToken),
+    SigilString(SigilStringToken),
     String(StringToken),
     Symbol(SymbolToken),
     Variable(VariableToken),
@@ -71,6 +72,7 @@ impl Token {
             '"' => StringToken::from_text(text, pos).map(Token::from),
             '\'' => AtomToken::from_text(text, pos).map(Token::from),
             '%' => CommentToken::from_text(text, pos).map(Token::from),
+            '~' => SigilStringToken::from_text(text, pos).map(Token::from),
             _ => {
                 if head.is_alphabetic() {
                     let atom = AtomToken::from_text(text, pos.clone())?;
@@ -109,6 +111,7 @@ impl Token {
             Token::Float(ref t) => t.text(),
             Token::Integer(ref t) => t.text(),
             Token::Keyword(ref t) => t.text(),
+            Token::SigilString(ref t) => t.text(),
             Token::String(ref t) => t.text(),
             Token::Symbol(ref t) => t.text(),
             Token::Variable(ref t) => t.text(),
@@ -127,6 +130,7 @@ impl Token {
     }
 
     /// Tries to convert into `LexicalToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_lexical_token(self) -> Result<LexicalToken, Self> {
         match self {
             Token::Atom(t) => Ok(t.into()),
@@ -142,6 +146,7 @@ impl Token {
     }
 
     /// Tries to convert into `HiddenToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_hidden_token(self) -> Result<HiddenToken, Self> {
         match self {
             Token::Comment(t) => Ok(t.into()),
@@ -241,6 +246,7 @@ impl Token {
     }
 
     /// Tries to return the inner `AtomToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_atom_token(self) -> Result<AtomToken, Self> {
         if let Token::Atom(t) = self {
             Ok(t)
@@ -250,6 +256,7 @@ impl Token {
     }
 
     /// Tries to return the inner `CharToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_char_token(self) -> Result<CharToken, Self> {
         if let Token::Char(t) = self {
             Ok(t)
@@ -259,6 +266,7 @@ impl Token {
     }
 
     /// Tries to return the inner `FloatToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_float_token(self) -> Result<FloatToken, Self> {
         if let Token::Float(t) = self {
             Ok(t)
@@ -268,6 +276,7 @@ impl Token {
     }
 
     /// Tries to return the inner `IntegerToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_integer_token(self) -> Result<IntegerToken, Self> {
         if let Token::Integer(t) = self {
             Ok(t)
@@ -277,6 +286,7 @@ impl Token {
     }
 
     /// Tries to return the inner `KeywordToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_keyword_token(self) -> Result<KeywordToken, Self> {
         if let Token::Keyword(t) = self {
             Ok(t)
@@ -286,6 +296,7 @@ impl Token {
     }
 
     /// Tries to return the inner `StringToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_string_token(self) -> Result<StringToken, Self> {
         if let Token::String(t) = self {
             Ok(t)
@@ -295,6 +306,7 @@ impl Token {
     }
 
     /// Tries to return the inner `SymbolToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_symbol_token(self) -> Result<SymbolToken, Self> {
         if let Token::Symbol(t) = self {
             Ok(t)
@@ -304,6 +316,7 @@ impl Token {
     }
 
     /// Tries to return the inner `VariableToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_variable_token(self) -> Result<VariableToken, Self> {
         if let Token::Variable(t) = self {
             Ok(t)
@@ -313,6 +326,7 @@ impl Token {
     }
 
     /// Tries to return the inner `CommentToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_comment_token(self) -> Result<CommentToken, Self> {
         if let Token::Comment(t) = self {
             Ok(t)
@@ -322,6 +336,7 @@ impl Token {
     }
 
     /// Tries to return the inner `WhitespaceToken`.
+    #[allow(clippy::result_large_err)]
     pub fn into_whitespace_token(self) -> Result<WhitespaceToken, Self> {
         if let Token::Whitespace(t) = self {
             Ok(t)
@@ -358,6 +373,11 @@ impl From<IntegerToken> for Token {
 impl From<KeywordToken> for Token {
     fn from(f: KeywordToken) -> Self {
         Token::Keyword(f)
+    }
+}
+impl From<SigilStringToken> for Token {
+    fn from(f: SigilStringToken) -> Self {
+        Token::SigilString(f)
     }
 }
 impl From<StringToken> for Token {
@@ -411,6 +431,7 @@ impl PositionRange for Token {
             Token::Float(ref t) => t.start_position(),
             Token::Integer(ref t) => t.start_position(),
             Token::Keyword(ref t) => t.start_position(),
+            Token::SigilString(ref t) => t.start_position(),
             Token::String(ref t) => t.start_position(),
             Token::Symbol(ref t) => t.start_position(),
             Token::Variable(ref t) => t.start_position(),
@@ -425,6 +446,7 @@ impl PositionRange for Token {
             Token::Float(ref t) => t.end_position(),
             Token::Integer(ref t) => t.end_position(),
             Token::Keyword(ref t) => t.end_position(),
+            Token::SigilString(ref t) => t.end_position(),
             Token::String(ref t) => t.end_position(),
             Token::Symbol(ref t) => t.end_position(),
             Token::Variable(ref t) => t.end_position(),
