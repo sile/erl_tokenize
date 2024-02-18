@@ -801,6 +801,80 @@ impl fmt::Display for KeywordToken {
     }
 }
 
+/// TODO
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SigilPrefixToken {
+    text: String,
+    pos: Position,
+}
+
+impl SigilPrefixToken {
+    /// Returns the value of this token.
+    ///
+    /// TODO: example
+    pub fn value(&self) -> &str {
+        &self.text[1..]
+    }
+
+    /// Returns the original textual representation of this token.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+}
+
+impl PositionRange for SigilPrefixToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_text(&self.text)
+    }
+}
+
+impl fmt::Display for SigilPrefixToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.text().fmt(f)
+    }
+}
+
+/// TODO
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SigilSuffixToken {
+    text: String,
+    pos: Position,
+}
+
+impl SigilSuffixToken {
+    /// Returns the value of this token.
+    ///
+    /// TODO: example
+    pub fn value(&self) -> &str {
+        &self.text
+    }
+
+    /// Returns the original textual representation of this token.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+}
+
+impl PositionRange for SigilSuffixToken {
+    fn start_position(&self) -> Position {
+        self.pos.clone()
+    }
+
+    fn end_position(&self) -> Position {
+        self.pos.clone().step_by_text(&self.text)
+    }
+}
+
+impl fmt::Display for SigilSuffixToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.text().fmt(f)
+    }
+}
+
 /// String token.
 ///
 /// # Examples
