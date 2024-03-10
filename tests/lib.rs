@@ -63,11 +63,11 @@ fn tokenize_strings() {
 
 #[test]
 fn tokenize_triple_quoted_strings() {
-    fn tokenize(text: &str) -> Option<String> {
-        if let Some(Ok(Token::String(t))) = Tokenizer::new(text).next() {
-            Some(t.value().to_owned())
-        } else {
-            None
+    fn tokenize(text: &str) -> Result<String, usize> {
+        match Tokenizer::new(text).next() {
+            Some(Ok(Token::String(t))) => Ok(t.value().to_owned()),
+            Some(Err(e)) => Err(e.position().offset()),
+            t => panic!("{t:?}"),
         }
     }
 
@@ -75,45 +75,45 @@ fn tokenize_triple_quoted_strings() {
     let src = r#""""
 foo
 """"#;
-    assert_eq!(tokenize(src), Some("foo".to_owned()));
+    assert_eq!(tokenize(src), Ok("foo".to_owned()));
 
     let src = r#""""
  foo
  """"#;
-    assert_eq!(tokenize(src), Some("foo".to_owned()));
+    assert_eq!(tokenize(src), Ok("foo".to_owned()));
 
     let src = r#"""""
 foo
 """""#;
-    assert_eq!(tokenize(src), Some("foo".to_owned()));
+    assert_eq!(tokenize(src), Ok("foo".to_owned()));
 
     let src = r#""""
 """"#;
-    assert_eq!(tokenize(src), Some("".to_owned()));
+    assert_eq!(tokenize(src), Ok("".to_owned()));
 
     let src = r#""""
 
 """"#;
-    assert_eq!(tokenize(src), Some("".to_owned()));
+    assert_eq!(tokenize(src), Ok("".to_owned()));
 
     let src = r#""""
 
 
 """"#;
-    assert_eq!(tokenize(src), Some("\n".to_owned()));
+    assert_eq!(tokenize(src), Ok("\n".to_owned()));
 
     // NG
     let src = r#""""foo""""#;
-    assert_eq!(tokenize(src), None);
+    assert_eq!(tokenize(src), Err(0));
 
     let src = r#""""\nfoo\n """"#;
-    assert_eq!(tokenize(src), None);
+    assert_eq!(tokenize(src), Err(0));
 
     let src = r#""""erl\nfoo\n""""#;
-    assert_eq!(tokenize(src), None);
+    assert_eq!(tokenize(src), Err(0));
 
     let src = r#""a""b""#; // Strings concatenation without intervening whitespace
-    assert_eq!(tokenize(src), None);
+    assert_eq!(tokenize(src), Err(3));
 }
 
 #[test]

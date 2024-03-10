@@ -1001,6 +1001,7 @@ impl StringToken {
             util::parse_quotation(pos.clone(), tail, '"').map(|(v, end)| (v, end + 2))?
         };
         if text.get(end..end + 1) == Some("\"") {
+            let pos = pos.step_by_text(&text[0..end]);
             return Err(Error::adjacent_string_literals(pos));
         }
 
