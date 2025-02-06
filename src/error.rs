@@ -1,68 +1,53 @@
 use crate::Position;
 
 /// Possible errors.
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 #[allow(missing_docs)]
 pub enum Error {
     /// No closing quotation.
-    #[error("no closing quotation ({position})")]
     NoClosingQuotation { position: Position },
 
     /// Invalid escaped character.
-    #[error("cannot parse a escaped character ({position})")]
     InvalidEscapedChar { position: Position },
 
     /// Adjacent string literals without intervening white space.
-    #[error("adjacent string literals without intervening white space ({position})")]
     AdjacentStringLiterals { position: Position },
 
     /// A token was expected, but not found.
-    #[error("a token was expected, but not found ({position})")]
     MissingToken { position: Position },
 
     /// Unknown keyword.
-    #[error("unknown keyword {keyword:?} ({position})")]
     UnknownKeyword { position: Position, keyword: String },
 
     /// Invalid atom token.
-    #[error("Canot parse an atom token ({position})")]
     InvalidAtomToken { position: Position },
 
     /// Invalid character token.
-    #[error("cannot parse a character token ({position})")]
     InvalidCharToken { position: Position },
 
     /// Invalid comment token.
-    #[error("cannot parse a comment token ({position})")]
     InvalidCommentToken { position: Position },
 
     /// Invalid float token.
-    #[error("cannot parse a float token ({position})")]
     InvalidFloatToken { position: Position },
 
     /// Invalid integer token.
-    #[error("cannot parse a integer token ({position})")]
     InvalidIntegerToken { position: Position },
 
     /// Invalid string token.
-    #[error("cannot parse a string token ({position})")]
     InvalidStringToken { position: Position },
 
     /// Invalid sigil string token.
-    #[error("cannot parse a sigil string token ({position})")]
     InvalidSigilStringToken { position: Position },
 
     /// Invalid symbol token.
-    #[error("cannot parse a symbol token ({position})")]
     InvalidSymbolToken { position: Position },
 
     /// Invalid variable token.
-    #[error("cannot parse a variable token ({position})")]
     InvalidVariableToken { position: Position },
 
     /// Invalid whitespace token.
-    #[error("cannot parse a whitespace token ({position})")]
     InvalidWhitespaceToken { position: Position },
 }
 
@@ -148,3 +133,60 @@ impl Error {
         Self::InvalidWhitespaceToken { position }
     }
 }
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::NoClosingQuotation { position } => {
+                write!(f, "no closing quotation ({position})")
+            }
+            Error::InvalidEscapedChar { position } => {
+                write!(f, "cannot parse a escaped character ({position})")
+            }
+            Error::AdjacentStringLiterals { position } => {
+                write!(
+                    f,
+                    "adjacent string literals without intervening white space ({position})"
+                )
+            }
+            Error::MissingToken { position } => {
+                write!(f, "a token was expected, but not found ({position})")
+            }
+            Error::UnknownKeyword { position, keyword } => {
+                write!(f, "unknown keyword {keyword:?} ({position})")
+            }
+            Error::InvalidAtomToken { position } => {
+                write!(f, "cannot parse an atom token ({position})")
+            }
+            Error::InvalidCharToken { position } => {
+                write!(f, "cannot parse a character token ({position})")
+            }
+            Error::InvalidCommentToken { position } => {
+                write!(f, "cannot parse a comment token ({position})")
+            }
+            Error::InvalidFloatToken { position } => {
+                write!(f, "cannot parse a float token ({position})")
+            }
+            Error::InvalidIntegerToken { position } => {
+                write!(f, "cannot parse a integer token ({position})")
+            }
+            Error::InvalidStringToken { position } => {
+                write!(f, "cannot parse a string token ({position})")
+            }
+            Error::InvalidSigilStringToken { position } => {
+                write!(f, "cannot parse a sigil string token ({position})")
+            }
+            Error::InvalidSymbolToken { position } => {
+                write!(f, "cannot parse a symbol token ({position})")
+            }
+            Error::InvalidVariableToken { position } => {
+                write!(f, "cannot parse a variable token ({position})")
+            }
+            Error::InvalidWhitespaceToken { position } => {
+                write!(f, "cannot parse a whitespace token ({position})")
+            }
+        }
+    }
+}
+
+impl std::error::Error for Error {}
