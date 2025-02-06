@@ -12,7 +12,7 @@ license = "MIT OR Apache-2.0"
 edition = "2021"
 
 [dependencies]
-num = { version = "0.4", features = ["serde"] }
+num-bigint = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive", "rc"] }
 
 [dev-dependencies]

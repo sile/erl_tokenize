@@ -1,5 +1,5 @@
 //! Tokens.
-use num::{BigUint, Num};
+use num_bigint::BigUint;
 use std::borrow::Cow;
 use std::fmt;
 use std::str;
@@ -528,24 +528,22 @@ impl fmt::Display for FloatToken {
 /// # Examples
 ///
 /// ```
-/// # extern crate num;
 /// # extern crate erl_tokenize;
 /// use erl_tokenize::Position;
 /// use erl_tokenize::tokens::IntegerToken;
-/// use num::traits::ToPrimitive;
 ///
 /// # fn main() {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().to_u32(),
-///            Some(10u32));
-/// assert_eq!(IntegerToken::from_text("123_456", pos.clone()).unwrap().value().to_u32(),
-///            Some(123456));
-/// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().to_u32(),
-///            Some(0xab0e));
-/// assert_eq!(IntegerToken::from_text("1_6#a_b_0e", pos.clone()).unwrap().value().to_u32(),
-///            Some(0xab0e));
+/// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().try_into(),
+///            Ok(10u32));
+/// assert_eq!(IntegerToken::from_text("123_456", pos.clone()).unwrap().value().try_into(),
+///            Ok(123456));
+/// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().try_into(),
+///            Ok(0xab0e));
+/// assert_eq!(IntegerToken::from_text("1_6#a_b_0e", pos.clone()).unwrap().value().try_into(),
+///            Ok(0xab0e));
 ///
 /// // Err
 /// assert!(IntegerToken::from_text("-10", pos.clone()).is_err());
@@ -609,8 +607,8 @@ impl IntegerToken {
         }
 
         let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
-        let value = Num::from_str_radix(&digits, radix)
-            .map_err(|_| Error::invalid_integer_token(pos.clone()))?;
+        let value = BigUint::parse_bytes(digits.as_bytes(), radix)
+            .ok_or_else(|| Error::invalid_integer_token(pos.clone()))?;
         let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(IntegerToken { value, text, pos })
     }
@@ -620,19 +618,17 @@ impl IntegerToken {
     /// # Examples
     ///
     /// ```
-    /// # extern crate num;
     /// # extern crate erl_tokenize;
     /// use erl_tokenize::Position;
     /// use erl_tokenize::tokens::IntegerToken;
-    /// use num::traits::ToPrimitive;
     ///
     /// # fn main() {
     /// let pos = Position::new();
     ///
-    /// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().to_u32(),
-    ///            Some(10u32));
-    /// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().to_u32(),
-    ///            Some(0xab0e));
+    /// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().try_into(),
+    ///            Ok(10u32));
+    /// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().try_into(),
+    ///            Ok(0xab0e));
     /// # }
     /// ```
     pub fn value(&self) -> &BigUint {
