@@ -1,5 +1,4 @@
 use crate::{Error, Position, Result};
-use num::Num;
 use std::borrow::Cow;
 use std::char;
 use std::iter::Peekable;
@@ -92,7 +91,7 @@ where
                 buf.push(chars.next().map(|(_, c)| c).ok_or_else(error)?);
                 buf
             };
-            let code: u32 = Num::from_str_radix(&buf, 16).ok().ok_or_else(error)?;
+            let code: u32 = u32::from_str_radix(&buf, 16).ok().ok_or_else(error)?;
             char::from_u32(code).ok_or_else(error)
         }
         c @ '0'..='7' => {

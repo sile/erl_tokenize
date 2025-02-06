@@ -1,5 +1,5 @@
 //! Tokens.
-use num::{BigUint, Num};
+use num_bigint::BigUint;
 use std::borrow::Cow;
 use std::fmt;
 use std::str;
@@ -609,8 +609,8 @@ impl IntegerToken {
         }
 
         let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
-        let value = Num::from_str_radix(&digits, radix)
-            .map_err(|_| Error::invalid_integer_token(pos.clone()))?;
+        let value = BigUint::parse_bytes(digits.as_bytes(), radix)
+            .ok_or_else(|| Error::invalid_integer_token(pos.clone()))?;
         let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(IntegerToken { value, text, pos })
     }
