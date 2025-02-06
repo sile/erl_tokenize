@@ -4,7 +4,6 @@ erl_tokenize
 [![erl_tokenize](https://img.shields.io/crates/v/erl_tokenize.svg)](https://crates.io/crates/erl_tokenize)
 [![Documentation](https://docs.rs/erl_tokenize/badge.svg)](https://docs.rs/erl_tokenize)
 [![Actions Status](https://github.com/sile/erl_tokenize/workflows/CI/badge.svg)](https://github.com/sile/erl_tokenize/actions)
-[![Coverage Status](https://coveralls.io/repos/github/sile/erl_tokenize/badge.svg?branch=master)](https://coveralls.io/github/sile/erl_tokenize?branch=master)
 ![License](https://img.shields.io/crates/l/erl_tokenize)
 
 Erlang source code tokenizer written in Rust.
