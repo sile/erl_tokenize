@@ -1,6 +1,6 @@
 [package]
 name = "erl_tokenize"
-version = "0.6.1"
+version = "0.7.0"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 description = "Erlang source code tokenizer"
 homepage = "https://github.com/sile/erl_tokenize"
