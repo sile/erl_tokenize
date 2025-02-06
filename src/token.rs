@@ -58,7 +58,7 @@ impl Token {
                             && text
                                 .as_bytes()
                                 .get(i + 1)
-                                .map_or(false, |c| (*c as char).is_ascii_digit())
+                                .is_some_and(|c| (*c as char).is_ascii_digit())
                     } else {
                         false
                     };
