@@ -385,16 +385,28 @@ impl fmt::Display for CommentToken {
 /// assert_eq!(FloatToken::from_text("0.1", pos.clone()).unwrap().value(), 0.1);
 /// assert_eq!(FloatToken::from_text("12.3e-1  ", pos.clone()).unwrap().value(), 1.23);
 /// assert_eq!(FloatToken::from_text("1_2.3_4e-1_0", pos.clone()).unwrap().value(), 0.000000001234);
+/// assert_eq!(FloatToken::from_text("2#0.111", pos.clone()).unwrap().value(), 0.875);
+/// assert_eq!(FloatToken::from_text("2#0.10101#e8", pos.clone()).unwrap().value(), 168.0);
+/// assert_eq!(FloatToken::from_text("16#f_f.F_F", pos.clone()).unwrap().value(), 255.99609375);
+/// assert_eq!(FloatToken::from_text("16#fefe.fefe#e16", pos.clone()).unwrap().value(), 1.2041849337671418e24);
+/// assert_eq!(FloatToken::from_text("32#vrv.vrv#e15", pos.clone()).unwrap().value(), 1.2331041872800477e27);
 ///
 /// // Err
 /// assert!(FloatToken::from_text("123", pos.clone()).is_err());
 /// assert!(FloatToken::from_text(".123", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("10#.123", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("1.", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("10#1.", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("12_.3", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("10#12_.3", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("12._3", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("10#12._3", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("12.3_", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("10#12.3_", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("1__2.3", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("10#1__2.3", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("12.3__4", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("10#12.3__4", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("12.34e-1__0", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -422,6 +434,10 @@ impl FloatToken {
 
     /// Tries to convert from any prefixes of the text to a `FloatToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
+        if text.contains('#') {
+            return Self::from_text_radix(text, pos);
+        }
+
         fn read_digits(
             buf: &mut String,
             chars: &mut std::iter::Peekable<impl Iterator<Item = (usize, char)>>,
@@ -472,6 +488,95 @@ impl FloatToken {
         let value = buf
             .parse()
             .map_err(|_| Error::invalid_float_token(pos.clone()))?;
+        Ok(FloatToken { value, text, pos })
+    }
+
+    fn from_text_radix(text: &str, pos: Position) -> Result<Self> {
+        let s = text;
+        let i = s.find('#').expect("infallible");
+        let radix: u32 = s[..i]
+            .parse()
+            .map_err(|_| Error::invalid_float_token(pos.clone()))?;
+        if !(1 < radix && radix < 37) {
+            return Err(Error::invalid_float_token(pos));
+        }
+
+        let mut s = &s[i + 1..];
+        if s.is_empty() {
+            return Err(Error::invalid_float_token(pos));
+        }
+
+        let mut value = 0.0;
+        let mut is_prev_digit = false;
+        while let Some(c) = s.chars().next() {
+            s = &s[c.len_utf8()..];
+
+            if is_prev_digit && c == '_' {
+                is_prev_digit = false;
+                continue;
+            }
+            if is_prev_digit && c == '.' {
+                is_prev_digit = true;
+                break;
+            }
+            is_prev_digit = true;
+
+            let n = c
+                .to_digit(radix)
+                .ok_or_else(|| Error::invalid_float_token(pos.clone()))?;
+            value = value * radix as f64 + n as f64;
+        }
+        if !is_prev_digit || s.is_empty() {
+            return Err(Error::invalid_float_token(pos));
+        }
+
+        let mut is_prev_digit = false;
+        let mut j = 1;
+        let mut has_exp = false;
+        while let Some(c) = s.chars().next() {
+            if is_prev_digit && c == '_' {
+                s = &s[c.len_utf8()..];
+                is_prev_digit = false;
+                continue;
+            }
+            if is_prev_digit && c == '#' {
+                s = &s[c.len_utf8()..];
+                is_prev_digit = true;
+                has_exp = true;
+                break;
+            }
+
+            if let Some(n) = c.to_digit(radix) {
+                s = &s[c.len_utf8()..];
+                is_prev_digit = true;
+                value += n as f64 / (radix as f64).powi(j);
+                j += 1;
+            } else {
+                break;
+            }
+        }
+        if !is_prev_digit {
+            return Err(Error::invalid_float_token(pos));
+        }
+
+        if has_exp {
+            if !s.starts_with('e') {
+                return Err(Error::invalid_float_token(pos));
+            }
+            s = &s[1..];
+            let i = s
+                .char_indices()
+                .position(|(i, c)| !((i == 0 && c == '-') || c.is_ascii_digit()))
+                .unwrap_or(s.len());
+            let exp: i32 = s[..i]
+                .parse()
+                .map_err(|_| Error::invalid_float_token(pos.clone()))?;
+            value *= (radix as f64).powi(exp);
+            s = &s[i..];
+        }
+
+        let end = text.len() - s.len();
+        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(FloatToken { value, text, pos })
     }
 
