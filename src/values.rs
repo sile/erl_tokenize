@@ -259,6 +259,15 @@ pub enum Symbol {
 
     /// `=<`
     LessEq,
+
+    /// `&&`
+    DoubleAmpersand,
+
+    /// `<:-`
+    StrictLeftArrow,
+
+    /// `<:=`
+    StrictDoubleLeftArrow,
 }
 impl Symbol {
     /// Returns the textual representation of this symbol.
@@ -306,6 +315,9 @@ impl Symbol {
             Symbol::Less => "<",
             Symbol::LessEq => "=<",
             Symbol::MaybeMatch => "?=",
+            Symbol::DoubleAmpersand => "&&",
+            Symbol::StrictLeftArrow => "<:-",
+            Symbol::StrictDoubleLeftArrow => "<:=",
         }
     }
 }
