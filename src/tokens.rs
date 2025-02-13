@@ -531,7 +531,7 @@ impl FloatToken {
         }
 
         let mut is_prev_digit = false;
-        let mut j = 1 as i32;
+        let mut j = 1;
         let mut has_exp = false;
         while let Some(c) = s.chars().next() {
             if is_prev_digit && c == '_' {
@@ -566,7 +566,7 @@ impl FloatToken {
             s = &s[1..];
             let i = s
                 .char_indices()
-                .position(|(i, c)| !((i == 0 && c == '-') || c.is_digit(10)))
+                .position(|(i, c)| !((i == 0 && c == '-') || c.is_ascii_digit()))
                 .unwrap_or(s.len());
             let exp: i32 = s[..i]
                 .parse()
