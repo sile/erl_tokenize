@@ -1207,6 +1207,8 @@ impl SymbolToken {
                 b"=:=" => Some(Symbol::ExactEq),
                 b"=/=" => Some(Symbol::ExactNotEq),
                 b"..." => Some(Symbol::TripleDot),
+                b"<:-" => Some(Symbol::StrictLeftArrow),
+                b"<:=" => Some(Symbol::StrictDoubleLeftArrow),
                 _ => None,
             }
         } else {
@@ -1232,6 +1234,7 @@ impl SymbolToken {
                 b"??" => Some(Symbol::DoubleQuestion),
                 b"?=" => Some(Symbol::MaybeMatch),
                 b".." => Some(Symbol::DoubleDot),
+                b"&&" => Some(Symbol::DoubleAmpersand),
                 _ => None,
             };
         }

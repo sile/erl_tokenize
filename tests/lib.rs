@@ -193,3 +193,15 @@ fn tokenize_multibyte_whitespaces() {
     let src = "a\u{a0}b";
     assert_eq!(tokenize!(src), ["a", "\u{a0}", "b"]);
 }
+
+#[test]
+fn tokenize_symbols() {
+    let src = r#"[ 0 || x <:- [] && y <:= <<>> ]"#;
+    assert_eq!(
+        tokenize!(src),
+        [
+            "[", " ", "0", " ", "||", " ", "x", " ", "<:-", " ", "[", "]", " ", "&&", " ", "y",
+            " ", "<:=", " ", "<<", ">>", " ", "]"
+        ]
+    );
+}
