@@ -434,7 +434,7 @@ impl FloatToken {
 
     /// Tries to convert from any prefixes of the text to a `FloatToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        if text.contains('#') {
+        if Self::is_based(text) {
             return Self::from_text_radix(text, pos);
         }
 
@@ -489,6 +489,19 @@ impl FloatToken {
             .parse()
             .map_err(|_| Error::invalid_float_token(pos.clone()))?;
         Ok(FloatToken { value, text, pos })
+    }
+
+    fn is_based(text: &str) -> bool {
+        for (i, c) in text.char_indices() {
+            if matches!(c, '0'..='9' | '_') {
+                continue;
+            }
+            if i > 0 && c == '#' {
+                return true;
+            }
+            break;
+        }
+        false
     }
 
     fn from_text_radix(text: &str, pos: Position) -> Result<Self> {
