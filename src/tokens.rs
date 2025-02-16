@@ -407,6 +407,7 @@ impl fmt::Display for CommentToken {
 /// assert!(FloatToken::from_text("10#1__2.3", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("12.3__4", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("10#12.3__4", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("10_#12.34", pos.clone()).is_err());
 /// assert!(FloatToken::from_text("12.34e-1__0", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -504,12 +505,33 @@ impl FloatToken {
         false
     }
 
+    fn parse_digits<T: std::str::FromStr>(text: &str, pos: &Position) -> Result<T> {
+        let mut s = String::new();
+        let mut is_prev_digit = false;
+        for (i, c) in text.char_indices() {
+            if i == 0 && c == '-' {
+                s.push(c);
+                is_prev_digit = false;
+            } else if matches!(c, '0'..='9') {
+                s.push(c);
+                is_prev_digit = true;
+            } else if is_prev_digit && c == '_' {
+                is_prev_digit = false;
+            } else {
+                return Err(Error::invalid_float_token(pos.clone()));
+            }
+        }
+        if !is_prev_digit {
+            return Err(Error::invalid_float_token(pos.clone()));
+        }
+        s.parse::<T>()
+            .map_err(|_| Error::invalid_float_token(pos.clone()))
+    }
+
     fn from_text_radix(text: &str, pos: Position) -> Result<Self> {
         let s = text;
         let i = s.find('#').expect("infallible");
-        let radix: u32 = s[..i]
-            .parse()
-            .map_err(|_| Error::invalid_float_token(pos.clone()))?;
+        let radix = Self::parse_digits(&s[..i], &pos)?;
         if !(1 < radix && radix < 37) {
             return Err(Error::invalid_float_token(pos));
         }
@@ -579,11 +601,9 @@ impl FloatToken {
             s = &s[1..];
             let i = s
                 .char_indices()
-                .position(|(i, c)| !((i == 0 && c == '-') || c.is_ascii_digit()))
+                .position(|(i, c)| !((i == 0 && c == '-') || matches!(c, '0'..='9' | '_')))
                 .unwrap_or(s.len());
-            let exp: i32 = s[..i]
-                .parse()
-                .map_err(|_| Error::invalid_float_token(pos.clone()))?;
+            let exp: i32 = Self::parse_digits(&s[..i], &pos)?;
             value *= (radix as f64).powi(exp);
             s = &s[i..];
         }
