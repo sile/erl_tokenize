@@ -388,7 +388,7 @@ impl fmt::Display for CommentToken {
 /// assert_eq!(FloatToken::from_text("2#0.111", pos.clone()).unwrap().value(), 0.875);
 /// assert_eq!(FloatToken::from_text("2#0.10101#e8", pos.clone()).unwrap().value(), 168.0);
 /// assert_eq!(FloatToken::from_text("16#f_f.F_F", pos.clone()).unwrap().value(), 255.99609375);
-/// assert_eq!(FloatToken::from_text("16#fefe.fefe#e16", pos.clone()).unwrap().value(), 1.2041849337671418e24);
+/// assert_eq!(FloatToken::from_text("1_6#fefe.fefe#e1_6", pos.clone()).unwrap().value(), 1.2041849337671418e24);
 /// assert_eq!(FloatToken::from_text("32#vrv.vrv#e15", pos.clone()).unwrap().value(), 1.2331041872800477e27);
 ///
 /// // Err
