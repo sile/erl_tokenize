@@ -512,7 +512,7 @@ impl FloatToken {
             if i == 0 && c == '-' {
                 s.push(c);
                 is_prev_digit = false;
-            } else if matches!(c, '0'..='9') {
+            } else if c.is_ascii_digit() {
                 s.push(c);
                 is_prev_digit = true;
             } else if is_prev_digit && c == '_' {
