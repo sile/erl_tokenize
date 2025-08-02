@@ -192,7 +192,7 @@ impl CharToken {
         let text = if value == '\\' {
             r"$\\".to_string()
         } else {
-            format!("${}", value)
+            format!("${value}")
         };
         CharToken { value, text, pos }
     }
@@ -308,7 +308,7 @@ impl CommentToken {
             return Err(Error::invalid_comment_token(pos));
         }
 
-        let text = format!("%{}", value);
+        let text = format!("%{value}");
         Ok(CommentToken { text, pos })
     }
 
@@ -429,7 +429,7 @@ impl FloatToken {
     /// assert_eq!(FloatToken::from_value(1.23, pos.clone()).text(), "1.23");
     /// ```
     pub fn from_value(value: f64, pos: Position) -> Self {
-        let text = format!("{}", value);
+        let text = format!("{value}");
         FloatToken { value, text, pos }
     }
 
@@ -708,7 +708,7 @@ impl IntegerToken {
     /// assert_eq!(IntegerToken::from_value(123u32.into(), pos.clone()).text(), "123");
     /// ```
     pub fn from_value(value: BigUint, pos: Position) -> Self {
-        let text = format!("{}", value);
+        let text = format!("{value}");
         IntegerToken { value, text, pos }
     }
 
@@ -1110,7 +1110,7 @@ impl StringToken {
     /// assert_eq!(StringToken::from_value("foo", pos.clone()).text(), r#""foo""#);
     /// ```
     pub fn from_value(value: &str, pos: Position) -> Self {
-        let text = format!("{:?}", value);
+        let text = format!("{value:?}");
         StringToken {
             value: Some(value.to_string()),
             text,

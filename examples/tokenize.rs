@@ -29,7 +29,7 @@ fn main() -> orfail::Result<()> {
         }
         count += 1;
     }
-    println!("TOKEN COUNT: {}", count);
+    println!("TOKEN COUNT: {count}");
     println!(
         "ELAPSED: {:?} seconds",
         to_seconds(Instant::now() - start_time)
