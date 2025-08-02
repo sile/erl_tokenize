@@ -163,3 +163,33 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // https://github.com/sile/erlls/issues/5
+    //
+    // v0.8.1 caused the following error:
+    // ```
+    // thread 'tokenizer::tests::erlls_issue_5' panicked at src/tokenizer.rs:133:44:
+    // byte index 32 is not a char boundary; it is inside '应' (bytes 31..34) of `-module(repro).
+    // -moduledoc """
+    // 应该报错
+    // "".`
+    // ```
+    #[test]
+    fn erlls_issue_5() {
+        let text = r#"-module(repro).
+-moduledoc """
+应该报错
+""."#;
+        let mut tokenizer = Tokenizer::new(text);
+        while let Some(token) = tokenizer.next() {
+            let Ok(_token) = token else {
+                tokenizer.consume_char();
+                continue;
+            };
+        }
+    }
+}

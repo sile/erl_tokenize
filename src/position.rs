@@ -74,7 +74,7 @@ impl Position {
             self.line += 1;
             self.column = 1;
         } else {
-            self.offset += 1;
+            self.offset += c.len_utf8();
             self.column += 1;
         }
         self
