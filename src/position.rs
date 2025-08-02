@@ -69,12 +69,13 @@ impl Position {
     }
 
     pub(crate) fn step_by_char(mut self, c: char) -> Position {
-        self.offset += c.len_utf8();
+        let n = c.len_utf8();
+        self.offset += n;
         if c == '\n' {
             self.line += 1;
             self.column = 1;
         } else {
-            self.column += 1;
+            self.column += n;
         }
         self
     }
