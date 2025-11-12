@@ -9,7 +9,7 @@ readme = "README.md"
 keywords = ["erlang", "tokenizer", "lexer"]
 categories = ["parser-implementations"]
 license = "MIT OR Apache-2.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 num-bigint = { version = "0.4", features = ["serde"] }
