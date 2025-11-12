@@ -11,9 +11,13 @@ categories = ["parser-implementations"]
 license = "MIT OR Apache-2.0"
 edition = "2024"
 
+[features]
+default = []
+serde = ["num-bigint/serde", "dep:serde"]
+
 [dependencies]
-num-bigint = { version = "0.4", features = ["serde"] }
-serde = { version = "1", features = ["derive", "rc"] }
+num-bigint = { version = "0.4" }
+serde = { version = "1", features = ["derive", "rc"], optional = true }
 
 [dev-dependencies]
 noargs = "0.4.1"
