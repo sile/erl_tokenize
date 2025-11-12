@@ -5,7 +5,8 @@
 /// Reference: [Erlang's Reserved Words][Reserved Words]
 ///
 /// [Reserved Words]: http://erlang.org/doc/reference_manual/introduction.html#id61721
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Keyword {
     /// `after`
     After,
@@ -132,7 +133,8 @@ impl Keyword {
 }
 
 /// Symbol.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Symbol {
     /// `[`
     OpenSquare,
@@ -323,7 +325,8 @@ impl Symbol {
 }
 
 /// White space.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Whitespace {
     /// `' '`
     Space,
