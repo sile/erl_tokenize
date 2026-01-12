@@ -1,5 +1,4 @@
 //! Tokens.
-use num_bigint::BigUint;
 use std::borrow::Cow;
 use std::fmt;
 use std::str;
@@ -674,14 +673,18 @@ impl fmt::Display for FloatToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().try_into(),
-///            Ok(10u32));
-/// assert_eq!(IntegerToken::from_text("123_456", pos.clone()).unwrap().value().try_into(),
-///            Ok(123456));
-/// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().try_into(),
-///            Ok(0xab0e));
-/// assert_eq!(IntegerToken::from_text("1_6#a_b_0e", pos.clone()).unwrap().value().try_into(),
-///            Ok(0xab0e));
+/// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value(),
+///            Some(10i64));
+/// assert_eq!(IntegerToken::from_text("123_456", pos.clone()).unwrap().value(),
+///            Some(123456i64));
+/// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value(),
+///            Some(0xab0e));
+/// assert_eq!(IntegerToken::from_text("1_6#a_b_0e", pos.clone()).unwrap().value(),
+///            Some(0xab0e));
+///
+/// // Out of range returns None
+/// assert_eq!(IntegerToken::from_text("9223372036854775808", pos.clone()).unwrap().value(),
+///            None);
 ///
 /// // Err
 /// assert!(IntegerToken::from_text("-10", pos.clone()).is_err());
@@ -691,7 +694,7 @@ impl fmt::Display for FloatToken {
 /// ```
 #[derive(Debug, Clone)]
 pub struct IntegerToken {
-    value: BigUint,
+    value: Option<i64>, // None if the value is out of range
     text: String,
     pos: Position,
 }
@@ -705,14 +708,21 @@ impl IntegerToken {
     /// use erl_tokenize::tokens::IntegerToken;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(IntegerToken::from_value(123u32.into(), pos.clone()).text(), "123");
+    /// assert_eq!(IntegerToken::from_value(123, pos.clone()).text(), "123");
     /// ```
-    pub fn from_value(value: BigUint, pos: Position) -> Self {
+    pub fn from_value(value: i64, pos: Position) -> Self {
         let text = format!("{value}");
-        IntegerToken { value, text, pos }
+        IntegerToken {
+            value: Some(value),
+            text,
+            pos,
+        }
     }
 
     /// Tries to convert from any prefixes of the text to an `IntegerToken`.
+    ///
+    /// Returns `Ok` even if the parsed value is out of range for `i64`;
+    /// in such cases, `value()` will return `None`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let mut has_radix = false;
         let mut radix = 10;
@@ -745,13 +755,21 @@ impl IntegerToken {
         }
 
         let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
-        let value = BigUint::parse_bytes(digits.as_bytes(), radix)
-            .ok_or_else(|| Error::invalid_integer_token(pos.clone()))?;
+
+        // Try to parse as i64, but don't fail if out of range
+        let value = if radix == 10 {
+            digits.parse::<i64>().ok()
+        } else {
+            i64::from_str_radix(&digits, radix).ok()
+        };
+
         let text = unsafe { text.get_unchecked(0..end) }.to_owned();
         Ok(IntegerToken { value, text, pos })
     }
 
     /// Returns the value of this token.
+    ///
+    /// Returns `Some(value)` if the integer fits in an `i64`, or `None` if it's out of range.
     ///
     /// # Examples
     ///
@@ -763,14 +781,16 @@ impl IntegerToken {
     /// # fn main() {
     /// let pos = Position::new();
     ///
-    /// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value().try_into(),
-    ///            Ok(10u32));
-    /// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value().try_into(),
-    ///            Ok(0xab0e));
+    /// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value(),
+    ///            Some(10i64));
+    /// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value(),
+    ///            Some(0xab0e));
+    /// assert_eq!(IntegerToken::from_text("9223372036854775808", pos.clone()).unwrap().value(),
+    ///            None);
     /// # }
     /// ```
-    pub fn value(&self) -> &BigUint {
-        &self.value
+    pub fn value(&self) -> Option<i64> {
+        self.value
     }
 
     /// Returns the original textual representation of this token.
