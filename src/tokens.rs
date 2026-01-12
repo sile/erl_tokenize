@@ -29,7 +29,6 @@ use crate::{Error, Position, PositionRange, Result};
 /// assert!(AtomToken::from_text("123", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AtomToken {
     value: Option<String>,
     text: String,
@@ -172,7 +171,6 @@ impl fmt::Display for AtomToken {
 /// assert!(CharToken::from_text("a", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CharToken {
     value: char,
     text: String,
@@ -289,7 +287,6 @@ impl fmt::Display for CharToken {
 /// assert!(CommentToken::from_text("  % foo", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CommentToken {
     text: String,
     pos: Position,
@@ -414,7 +411,6 @@ impl fmt::Display for CommentToken {
 /// assert!(FloatToken::from_text("12.34e-1__0", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FloatToken {
     value: f64,
     text: String,
@@ -694,7 +690,6 @@ impl fmt::Display for FloatToken {
 /// # }
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IntegerToken {
     value: BigUint,
     text: String,
@@ -830,7 +825,6 @@ impl fmt::Display for IntegerToken {
 /// assert!(KeywordToken::from_text("andfoo", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeywordToken {
     value: Keyword,
     pos: Position,
@@ -963,7 +957,6 @@ impl fmt::Display for KeywordToken {
 /// # }
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SigilStringToken {
     prefix: String,
     content: String,
@@ -1099,7 +1092,6 @@ impl fmt::Display for SigilStringToken {
 /// assert!(StringToken::from_text(r#"  "foo""#, pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StringToken {
     value: Option<String>,
     text: String,
@@ -1324,7 +1316,6 @@ impl fmt::Display for StringToken {
 /// assert!(SymbolToken::from_text("foo", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SymbolToken {
     value: Symbol,
     pos: Position,
@@ -1487,7 +1478,6 @@ impl fmt::Display for SymbolToken {
 /// assert!(VariableToken::from_text("  Foo", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VariableToken {
     text: String,
     pos: Position,
@@ -1597,7 +1587,6 @@ impl fmt::Display for VariableToken {
 /// assert!(WhitespaceToken::from_text("foo", pos.clone()).is_err());
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WhitespaceToken {
     value: Whitespace,
     pos: Position,
