@@ -12,7 +12,6 @@ license = "MIT OR Apache-2.0"
 edition = "2024"
 
 [dependencies]
-num-bigint = { version = "0.4" }
 
 [dev-dependencies]
 noargs = "0.4.1"
