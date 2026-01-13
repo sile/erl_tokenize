@@ -201,7 +201,7 @@ pub enum Symbol {
     MaybeMatch,
 
     /// `!`
-    Not,
+    Bang,
 
     /// `-`
     Hyphen,
@@ -294,7 +294,7 @@ impl Symbol {
             Symbol::DoubleVerticalBar => "||",
             Symbol::Question => "?",
             Symbol::DoubleQuestion => "??",
-            Symbol::Not => "!",
+            Symbol::Bang => "!",
             Symbol::Hyphen => "-",
             Symbol::MinusMinus => "--",
             Symbol::Plus => "+",

@@ -1413,7 +1413,7 @@ impl SymbolToken {
                 b'=' => Some(Symbol::Match),
                 b'|' => Some(Symbol::VerticalBar),
                 b'?' => Some(Symbol::Question),
-                b'!' => Some(Symbol::Not),
+                b'!' => Some(Symbol::Bang),
                 b'-' => Some(Symbol::Hyphen),
                 b'+' => Some(Symbol::Plus),
                 b'*' => Some(Symbol::Multiply),
