@@ -416,8 +416,8 @@ impl From<LexicalToken> for Token {
             LexicalToken::Float(t) => t.into(),
             LexicalToken::Integer(t) => t.into(),
             LexicalToken::Keyword(t) => t.into(),
-            LexicalToken::String(t) => t.into(),
             LexicalToken::SigilString(t) => t.into(),
+            LexicalToken::String(t) => t.into(),
             LexicalToken::Symbol(t) => t.into(),
             LexicalToken::Variable(t) => t.into(),
         }
