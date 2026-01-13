@@ -1,8 +1,8 @@
 use std::fmt;
 
 use crate::tokens::{
-    AtomToken, CharToken, FloatToken, IntegerToken, KeywordToken, StringToken, SymbolToken,
-    VariableToken,
+    AtomToken, CharToken, FloatToken, IntegerToken, KeywordToken, SigilStringToken, StringToken,
+    SymbolToken, VariableToken,
 };
 use crate::{Position, PositionRange};
 
@@ -17,6 +17,7 @@ pub enum LexicalToken {
     Float(FloatToken),
     Integer(IntegerToken),
     Keyword(KeywordToken),
+    SigilString(SigilStringToken),
     String(StringToken),
     Symbol(SymbolToken),
     Variable(VariableToken),
@@ -30,6 +31,7 @@ impl LexicalToken {
             LexicalToken::Float(ref t) => t.text(),
             LexicalToken::Integer(ref t) => t.text(),
             LexicalToken::Keyword(ref t) => t.text(),
+            LexicalToken::SigilString(ref t) => t.text(),
             LexicalToken::String(ref t) => t.text(),
             LexicalToken::Symbol(ref t) => t.text(),
             LexicalToken::Variable(ref t) => t.text(),
@@ -75,6 +77,15 @@ impl LexicalToken {
     /// Tries to return the reference to the inner `KeywordToken`.
     pub fn as_keyword_token(&self) -> Option<&KeywordToken> {
         if let LexicalToken::Keyword(ref t) = *self {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Tries to return the reference to the inner `SigilStringToken`.
+    pub fn as_sigil_string_token(&self) -> Option<&SigilStringToken> {
+        if let LexicalToken::SigilString(ref t) = *self {
             Some(t)
         } else {
             None
@@ -153,6 +164,15 @@ impl LexicalToken {
         }
     }
 
+    /// Tries to return the inner `SigilStringToken`.
+    pub fn into_sigil_string_token(self) -> Result<SigilStringToken, Self> {
+        if let LexicalToken::SigilString(t) = self {
+            Ok(t)
+        } else {
+            Err(self)
+        }
+    }
+
     /// Tries to return the inner `StringToken`.
     pub fn into_string_token(self) -> Result<StringToken, Self> {
         if let LexicalToken::String(t) = self {
@@ -205,6 +225,11 @@ impl From<KeywordToken> for LexicalToken {
         LexicalToken::Keyword(f)
     }
 }
+impl From<SigilStringToken> for LexicalToken {
+    fn from(f: SigilStringToken) -> Self {
+        LexicalToken::SigilString(f)
+    }
+}
 impl From<StringToken> for LexicalToken {
     fn from(f: StringToken) -> Self {
         LexicalToken::String(f)
@@ -228,6 +253,7 @@ impl PositionRange for LexicalToken {
             LexicalToken::Float(ref t) => t.start_position(),
             LexicalToken::Integer(ref t) => t.start_position(),
             LexicalToken::Keyword(ref t) => t.start_position(),
+            LexicalToken::SigilString(ref t) => t.start_position(),
             LexicalToken::String(ref t) => t.start_position(),
             LexicalToken::Symbol(ref t) => t.start_position(),
             LexicalToken::Variable(ref t) => t.start_position(),
@@ -240,6 +266,7 @@ impl PositionRange for LexicalToken {
             LexicalToken::Float(ref t) => t.end_position(),
             LexicalToken::Integer(ref t) => t.end_position(),
             LexicalToken::Keyword(ref t) => t.end_position(),
+            LexicalToken::SigilString(ref t) => t.end_position(),
             LexicalToken::String(ref t) => t.end_position(),
             LexicalToken::Symbol(ref t) => t.end_position(),
             LexicalToken::Variable(ref t) => t.end_position(),
