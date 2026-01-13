@@ -1,3 +1,5 @@
+#![expect(clippy::result_large_err)]
+
 use std::fmt;
 
 use crate::tokens::{
