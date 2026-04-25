@@ -10,6 +10,7 @@ keywords = ["erlang", "tokenizer", "lexer"]
 categories = ["parser-implementations"]
 license = "MIT OR Apache-2.0"
 edition = "2024"
+rust-version = "1.88"
 
 [dependencies]
 
