@@ -245,40 +245,41 @@ fn step_char(
 // from_value -> from_text roundtrip properties
 // ============================================================
 
-// NOTE: `string_from_value_roundtrip` fails because `StringToken::from_value`
-// emits Rust-style `\u{...}` escapes, which do not exist in the Erlang escape
-// table (only `\x{...}` and named escapes do), for values containing
-// non-printable chars (reproduction seed: 0x18cac499b08f9840). Kept
-// commented out until the from_value fix lands; it should then pass
-// unconstrained.
-//
-// #[test]
-// fn string_from_value_roundtrip() -> noprop::TestResult {
-//     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-//     let escape_cases = Cell::new(0usize);
-//     let mut runner = noprop::Runner::new(seed);
-//
-//     runner.run(CASES, |ctx| {
-//         let value = sample_text(ctx);
-//         let expected_text = StringToken::from_value(&value, Position::new())
-//             .text()
-//             .to_owned();
-//         if expected_text.contains('\\') {
-//             escape_cases.set(escape_cases.get() + 1);
-//         }
-//         let parsed = StringToken::from_text(&expected_text, Position::new())
-//             .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
-//         assert_eq!(parsed.value(), value, "value mismatch for {expected_text:?}");
-//         assert_eq!(parsed.text(), expected_text, "text mismatch for value {value:?}");
-//         Ok(())
-//     })?;
-//
-//     assert!(
-//         escape_cases.get() > 0,
-//         "no case exercised an escaped string\n{runner}"
-//     );
-//     Ok(())
-// }
+#[test]
+fn string_from_value_roundtrip() -> noprop::TestResult {
+    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
+    let escape_cases = Cell::new(0usize);
+    let mut runner = noprop::Runner::new(seed);
+
+    runner.run(CASES, |ctx| {
+        let value = sample_text(ctx);
+        let expected_text = StringToken::from_value(&value, Position::new())
+            .text()
+            .to_owned();
+        if expected_text.contains('\\') {
+            escape_cases.set(escape_cases.get() + 1);
+        }
+        let parsed = StringToken::from_text(&expected_text, Position::new())
+            .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
+        assert_eq!(
+            parsed.value(),
+            value,
+            "value mismatch for {expected_text:?}"
+        );
+        assert_eq!(
+            parsed.text(),
+            expected_text,
+            "text mismatch for value {value:?}"
+        );
+        Ok(())
+    })?;
+
+    assert!(
+        escape_cases.get() > 0,
+        "no case exercised an escaped string\n{runner}"
+    );
+    Ok(())
+}
 
 #[test]
 fn atom_from_value_roundtrip() -> noprop::TestResult {

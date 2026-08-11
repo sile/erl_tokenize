@@ -156,7 +156,13 @@ fn char_caret_notation() {
 #[test]
 fn char_octal() {
     let t = CharToken::from_text(r"$\123", pos()).unwrap();
-    assert_eq!(t.value(), 'I'); // 0o123 = 83 = 'S'... let me check: 1*64 + 2*8 + 3 = 83 = 'S'
+    assert_eq!(t.value(), 'S'); // 0o123 = 83 = 'S'
+
+    let t = CharToken::from_text(r"$\17", pos()).unwrap();
+    assert_eq!(t.value() as u32, 15); // 0o17 = 15
+
+    let t = CharToken::from_text(r"$\01", pos()).unwrap();
+    assert_eq!(t.value() as u32, 1); // 0o01 = 1
 
     let t = CharToken::from_text(r"$\0", pos()).unwrap();
     assert_eq!(t.value(), '\0');
