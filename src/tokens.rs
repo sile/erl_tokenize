@@ -1134,20 +1134,19 @@ impl StringToken {
     /// assert_eq!(StringToken::from_value("a\u{1}b", pos.clone()).text(), r#""a\x{1}b""#);
     /// ```
     pub fn from_value(value: &str, pos: Position) -> Self {
-        let mut text = String::with_capacity(value.len() + 2);
-        text.push('"');
+        let mut text = String::from("\"");
         for c in value.chars() {
-            let escaped: String = c.escape_debug().collect();
-            if escaped == "\\0" {
-                // `\0` would merge with a following octal digit (`\01`
-                // parses as a single character); `\x{0}` is unambiguous.
+            let start = text.len();
+            text.extend(c.escape_debug());
+            if &text[start..] == "\\0" {
+                // `\0` would merge with a following octal digit (`\01` parses
+                // as a single character); rewrite unconditionally to `\x{0}`
+                // so the output stays unambiguous regardless of what follows.
+                text.truncate(start);
                 text.push_str("\\x{0}");
-            } else if escaped.starts_with("\\u{") {
+            } else if text[start..].starts_with("\\u{") {
                 // Erlang has no `\u{...}` escape; use `\x{...}` instead.
-                text.push_str("\\x");
-                text.push_str(&escaped[2..]);
-            } else {
-                text.push_str(&escaped);
+                text.replace_range(start..start + 2, "\\x");
             }
         }
         text.push('"');
