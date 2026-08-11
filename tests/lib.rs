@@ -343,8 +343,16 @@ fn float_basic() {
     let t = FloatToken::from_text("0.1", pos()).unwrap();
     assert_eq!(t.value(), 0.1);
 
-    let t = FloatToken::from_text("3.14", pos()).unwrap();
-    assert_eq!(t.value(), 3.14);
+    // The literal is intentional: the test verifies that parsing "3.14"
+    // yields exactly the value 3.14 (not PI).
+    #[expect(
+        clippy::approx_constant,
+        reason = "intentional: parse \"3.14\" must yield 3.14"
+    )]
+    {
+        let t = FloatToken::from_text("3.14", pos()).unwrap();
+        assert_eq!(t.value(), 3.14);
+    }
 
     let t = FloatToken::from_text("1.0", pos()).unwrap();
     assert_eq!(t.value(), 1.0);
