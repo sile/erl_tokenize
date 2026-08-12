@@ -60,7 +60,7 @@ fn parse_quotation_owned(pos: Position, input: &str, terminator: char) -> Result
     Err(Error::no_closing_quotation(pos))
 }
 
-// http://erlang.org/doc/reference_manual/data_types.html#id76758
+// https://www.erlang.org/doc/system/data_types.html#escape-sequences
 pub fn parse_escaped_char<I>(pos: Position, chars: &mut Peekable<I>) -> Result<char>
 where
     I: Iterator<Item = (usize, char)>,
@@ -79,12 +79,36 @@ where
         'v' => Ok(11 as char), // Vertical Tabulation
         '^' => {
             let (_, c) = chars.next().ok_or_else(error)?;
-            Ok((c as u32 % 32) as u8 as char)
+            // Erlang's caret notation is defined only for these ASCII
+            // characters (as of OTP 26, anything else is a syntax error;
+            // `\^?` is Delete (127), not the `% 32` mapping of `_`).
+            match c {
+                '@' | '[' | '\\' | ']' | '^' | '_' | 'a'..='z' | 'A'..='Z' => {
+                    Ok((c as u32 % 32) as u8 as char)
+                }
+                '?' => Ok(127 as char),
+                _ => Err(error()),
+            }
         }
         'x' => {
             let (_, c) = chars.next().ok_or_else(error)?;
             let buf = if c == '{' {
-                chars.map(|(_, c)| c).take_while(|c| *c != '}').collect()
+                let mut buf = String::new();
+                let mut closed = false;
+                for (_, c) in chars.by_ref() {
+                    if c == '}' {
+                        closed = true;
+                        break;
+                    }
+                    buf.push(c);
+                }
+                if !closed {
+                    return Err(error());
+                }
+                if buf.is_empty() {
+                    return Err(error());
+                }
+                buf
             } else {
                 let mut buf = String::with_capacity(2);
                 buf.push(c);
@@ -108,5 +132,28 @@ where
             char::from_u32(n).ok_or_else(error)
         }
         _ => Ok(c),
+    }
+}
+
+/// Appends the Erlang-valid escape sequence for `c` to `buf`.
+///
+/// The output can be parsed back by [`parse_escaped_char`]. It is based on
+/// `char::escape_debug` with two rewrites:
+///
+/// - `\0` is rewritten to `\x{0}`. A `\0` followed by an octal digit would
+///   merge into a single escape (`\01` parses as one character); the same
+///   merge can also happen across token boundaries in a token stream
+///   (`$\0` followed by `7` rescans as `$\07`), so the unambiguous form is
+///   emitted unconditionally.
+/// - `\u{...}` is rewritten to `\x{...}`, since Erlang has no `\u{...}`
+///   escape.
+pub fn push_escaped_char(buf: &mut String, c: char) {
+    let start = buf.len();
+    buf.extend(c.escape_debug());
+    if &buf[start..] == "\\0" {
+        buf.truncate(start);
+        buf.push_str("\\x{0}");
+    } else if buf[start..].starts_with("\\u{") {
+        buf.replace_range(start..start + 2, "\\x");
     }
 }

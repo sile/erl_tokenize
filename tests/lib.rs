@@ -70,6 +70,9 @@ fn atom_from_value() {
 
     let t = AtomToken::from_value("a\\b", pos());
     assert_eq!(t.text(), r"'a\\b'");
+
+    let t = AtomToken::from_value("a\x001b", pos());
+    assert_eq!(t.text(), r"'a\x{0}1b'");
 }
 
 #[test]
@@ -137,20 +140,100 @@ fn char_named_escapes() {
 
 #[test]
 fn char_caret_notation() {
-    let t = CharToken::from_text(r"$\^a", pos()).unwrap();
-    assert_eq!(t.value(), '\u{1}');
+    // All 59 characters accepted after `\^` (OTP 26). The expected values
+    // are hardcoded so the test does not duplicate the implementation's
+    // `% 32` arithmetic.
+    let cases: &[(char, u32)] = &[
+        ('@', 0x00),
+        ('[', 0x1b),
+        ('\\', 0x1c),
+        (']', 0x1d),
+        ('^', 0x1e),
+        ('_', 0x1f),
+        ('A', 0x01),
+        ('B', 0x02),
+        ('C', 0x03),
+        ('D', 0x04),
+        ('E', 0x05),
+        ('F', 0x06),
+        ('G', 0x07),
+        ('H', 0x08),
+        ('I', 0x09),
+        ('J', 0x0a),
+        ('K', 0x0b),
+        ('L', 0x0c),
+        ('M', 0x0d),
+        ('N', 0x0e),
+        ('O', 0x0f),
+        ('P', 0x10),
+        ('Q', 0x11),
+        ('R', 0x12),
+        ('S', 0x13),
+        ('T', 0x14),
+        ('U', 0x15),
+        ('V', 0x16),
+        ('W', 0x17),
+        ('X', 0x18),
+        ('Y', 0x19),
+        ('Z', 0x1a),
+        ('a', 0x01),
+        ('b', 0x02),
+        ('c', 0x03),
+        ('d', 0x04),
+        ('e', 0x05),
+        ('f', 0x06),
+        ('g', 0x07),
+        ('h', 0x08),
+        ('i', 0x09),
+        ('j', 0x0a),
+        ('k', 0x0b),
+        ('l', 0x0c),
+        ('m', 0x0d),
+        ('n', 0x0e),
+        ('o', 0x0f),
+        ('p', 0x10),
+        ('q', 0x11),
+        ('r', 0x12),
+        ('s', 0x13),
+        ('t', 0x14),
+        ('u', 0x15),
+        ('v', 0x16),
+        ('w', 0x17),
+        ('x', 0x18),
+        ('y', 0x19),
+        ('z', 0x1a),
+        ('?', 0x7f), // Delete
+    ];
+    for (c, expected) in cases {
+        let src = format!("$\\^{c}");
+        let t = CharToken::from_text(&src, pos()).unwrap();
+        assert_eq!(t.value() as u32, *expected, "failed for {src:?}");
+        assert_eq!(t.text(), src);
+    }
+}
 
-    let t = CharToken::from_text(r"$\^A", pos()).unwrap();
-    assert_eq!(t.value(), '\u{1}');
+#[test]
+fn char_caret_notation_invalid() {
+    // As of OTP 26, only the documented characters are allowed after `\^`.
+    assert!(CharToken::from_text(r"$\^!", pos()).is_err());
+    assert!(CharToken::from_text(r"$\^0", pos()).is_err());
+    assert!(CharToken::from_text(r"$\^あ", pos()).is_err());
+    // Boundary characters around the allowed set.
+    assert!(CharToken::from_text(r"$\^>", pos()).is_err()); // 0x3E: just after `?`
+    assert!(CharToken::from_text(r"$\^`", pos()).is_err()); // 0x60: between `_` and `a`
+    assert!(CharToken::from_text(r"$\^{", pos()).is_err()); // 0x7B: just after `z`
+}
 
-    let t = CharToken::from_text(r"$\^z", pos()).unwrap();
-    assert_eq!(t.value(), '\u{1A}');
-
-    let t = CharToken::from_text(r"$\^]", pos()).unwrap();
-    assert_eq!(t.value(), '\u{1D}');
-
-    let t = CharToken::from_text(r"$\^?", pos()).unwrap();
-    assert_eq!(t.value(), '\u{1F}');
+#[test]
+fn char_hex_invalid() {
+    assert!(CharToken::from_text(r"$\x{ab", pos()).is_err()); // unterminated braces
+    assert!(CharToken::from_text(r"$\x{}", pos()).is_err()); // empty braces
+    assert!(CharToken::from_text(r"$\x{", pos()).is_err()); // EOF right after `{`
+    assert!(CharToken::from_text(r"$\x", pos()).is_err()); // EOF right after `\x`
+    assert!(CharToken::from_text(r"$\x6", pos()).is_err()); // fixed-width form needs two digits
+    assert!(CharToken::from_text(r"$\x{zz}", pos()).is_err()); // non-hex digits
+    assert!(CharToken::from_text(r"$\x{110000}", pos()).is_err()); // out of Unicode range
+    assert!(CharToken::from_text(r"$\x{D800}", pos()).is_err()); // surrogate
 }
 
 #[test]
@@ -204,6 +287,9 @@ fn char_hex_braces() {
 
     let t = CharToken::from_text(r"$\x{aaa}", pos()).unwrap();
     assert_eq!(t.value(), '\u{aaa}');
+
+    let t = CharToken::from_text(r"$\x{10FFFF}", pos()).unwrap();
+    assert_eq!(t.value(), '\u{10FFFF}');
 }
 
 #[test]
@@ -214,6 +300,12 @@ fn char_from_value() {
 
     let t = CharToken::from_value('\\', pos());
     assert_eq!(t.text(), r"$\\");
+
+    let t = CharToken::from_value('\0', pos());
+    assert_eq!(t.text(), r"$\x{0}");
+
+    let t = CharToken::from_value('\u{1}', pos());
+    assert_eq!(t.text(), r"$\x{1}");
 }
 
 #[test]
