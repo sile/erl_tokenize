@@ -76,11 +76,21 @@ fn sample_non_negative_i64(ctx: &mut noprop::TestCaseContext) -> i64 {
     ) as i64
 }
 
-/// Samples a non-negative `f64`.
+/// Samples a non-negative finite `f64`.
+///
+/// Negative values are excluded because Erlang has no negative literal:
+/// `-1.5` is the `-` operator applied to `1.5`, so no token type can
+/// represent a negative value as a single token (same as integers).
+/// Non-finite values are excluded because `FloatToken::from_value` cannot
+/// represent them in a parseable form.
+///
+/// `sample_f64_in` only yields integer-valued samples over the huge
+/// `f64::MAX` range, so fractional boundaries are included explicitly to
+/// cover the fractional text path of `from_value`.
 fn sample_non_negative_f64(ctx: &mut noprop::TestCaseContext) -> f64 {
     noprop::sample_with_boundaries(
         ctx,
-        &[0.0f64, 1.0, 100.0, 1e21, f64::MAX],
+        &[0.0f64, 1.0, 0.5, 1.23, 100.0, 1e21, f64::MAX],
         noprop::Ratio::one_nth(5),
         |ctx| noprop::sample_f64_in(ctx, 0.0, f64::MAX),
     )
@@ -481,6 +491,8 @@ fn integer_from_value_roundtrip() -> noprop::TestResult {
 #[test]
 fn float_from_value_roundtrip() -> noprop::TestResult {
     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
+    let integer_cases = Cell::new(0usize);
+    let fraction_cases = Cell::new(0usize);
     let mut runner = noprop::Runner::new(seed);
 
     runner.run(CASES, |ctx| {
@@ -488,6 +500,11 @@ fn float_from_value_roundtrip() -> noprop::TestResult {
         let expected_text = FloatToken::from_value(value, Position::new())
             .text()
             .to_owned();
+        if value.fract() == 0.0 {
+            integer_cases.set(integer_cases.get() + 1);
+        } else {
+            fraction_cases.set(fraction_cases.get() + 1);
+        }
         let parsed = FloatToken::from_text(&expected_text, Position::new())
             .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
         assert_eq!(
@@ -503,6 +520,14 @@ fn float_from_value_roundtrip() -> noprop::TestResult {
         Ok(())
     })?;
 
+    assert!(
+        integer_cases.get() > 0,
+        "no case exercised the fractional-part append path\n{runner}"
+    );
+    assert!(
+        fraction_cases.get() > 0,
+        "no case exercised a fractional text\n{runner}"
+    );
     Ok(())
 }
 
