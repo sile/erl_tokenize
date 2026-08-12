@@ -149,8 +149,24 @@ fn char_caret_notation() {
     let t = CharToken::from_text(r"$\^]", pos()).unwrap();
     assert_eq!(t.value(), '\u{1D}');
 
+    // As of OTP 26, `\^?` is Delete (127).
     let t = CharToken::from_text(r"$\^?", pos()).unwrap();
-    assert_eq!(t.value(), '\u{1F}');
+    assert_eq!(t.value(), '\u{7F}');
+}
+
+#[test]
+fn char_caret_notation_invalid() {
+    // As of OTP 26, only the documented characters are allowed after `\^`.
+    assert!(CharToken::from_text(r"$\^!", pos()).is_err());
+    assert!(CharToken::from_text(r"$\^0", pos()).is_err());
+    assert!(CharToken::from_text(r"$\^あ", pos()).is_err());
+}
+
+#[test]
+fn char_hex_unterminated() {
+    assert!(CharToken::from_text(r"$\x{ab", pos()).is_err());
+    assert!(CharToken::from_text(r"$\x{}", pos()).is_err());
+    assert!(StringToken::from_text(r#""a\x{ab""#, pos()).is_err());
 }
 
 #[test]

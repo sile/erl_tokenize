@@ -79,12 +79,36 @@ where
         'v' => Ok(11 as char), // Vertical Tabulation
         '^' => {
             let (_, c) = chars.next().ok_or_else(error)?;
-            Ok((c as u32 % 32) as u8 as char)
+            // Erlang's caret notation is defined only for these ASCII
+            // characters (as of OTP 26, anything else is a syntax error;
+            // `\^?` is Delete (127), not the `% 32` mapping of `_`).
+            match c {
+                '@' | '[' | '\\' | ']' | '^' | '_' | 'a'..='z' | 'A'..='Z' => {
+                    Ok((c as u32 % 32) as u8 as char)
+                }
+                '?' => Ok(127 as char),
+                _ => Err(error()),
+            }
         }
         'x' => {
             let (_, c) = chars.next().ok_or_else(error)?;
             let buf = if c == '{' {
-                chars.map(|(_, c)| c).take_while(|c| *c != '}').collect()
+                let mut buf = String::new();
+                let mut closed = false;
+                for (_, c) in chars.by_ref() {
+                    if c == '}' {
+                        closed = true;
+                        break;
+                    }
+                    buf.push(c);
+                }
+                if !closed {
+                    return Err(error());
+                }
+                if buf.is_empty() {
+                    return Err(error());
+                }
+                buf
             } else {
                 let mut buf = String::with_capacity(2);
                 buf.push(c);
