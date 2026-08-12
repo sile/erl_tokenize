@@ -335,16 +335,20 @@ fn string_from_value_roundtrip() -> noprop::TestResult {
 fn atom_from_value_roundtrip() -> noprop::TestResult {
     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
     let escaped_cases = Cell::new(0usize);
+    let control_char_cases = Cell::new(0usize);
     let mut runner = noprop::Runner::new(seed);
 
     runner.run(CASES, |ctx| {
         let value = sample_text(ctx);
-        if value.contains('\'') || value.contains('\\') {
-            escaped_cases.set(escaped_cases.get() + 1);
-        }
         let expected_text = AtomToken::from_value(&value, Position::new())
             .text()
             .to_owned();
+        if value.contains('\'') || value.contains('\\') {
+            escaped_cases.set(escaped_cases.get() + 1);
+        }
+        if expected_text.contains("\\x{") {
+            control_char_cases.set(control_char_cases.get() + 1);
+        }
         let parsed = AtomToken::from_text(&expected_text, Position::new())
             .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
         assert_eq!(
@@ -364,6 +368,10 @@ fn atom_from_value_roundtrip() -> noprop::TestResult {
         escaped_cases.get() > 0,
         "no case exercised an escaped atom\n{runner}"
     );
+    assert!(
+        control_char_cases.get() > 0,
+        "no case exercised the control-char escape path\n{runner}"
+    );
     Ok(())
 }
 
@@ -371,6 +379,7 @@ fn atom_from_value_roundtrip() -> noprop::TestResult {
 fn char_from_value_roundtrip() -> noprop::TestResult {
     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
     let special_cases = Cell::new(0usize);
+    let escaped_cases = Cell::new(0usize);
     let mut runner = noprop::Runner::new(seed);
 
     runner.run(CASES, |ctx| {
@@ -387,12 +396,15 @@ fn char_from_value_roundtrip() -> noprop::TestResult {
             1 => noprop::sample_ascii_printable_char(ctx),
             _ => noprop::sample_char(ctx),
         };
-        if matches!(value, '\\' | '\n' | '\0' | '\u{1}') {
-            special_cases.set(special_cases.get() + 1);
-        }
         let expected_text = CharToken::from_value(value, Position::new())
             .text()
             .to_owned();
+        if matches!(value, '\\' | '\n' | '\0' | '\u{1}') {
+            special_cases.set(special_cases.get() + 1);
+        }
+        if expected_text.contains('\\') {
+            escaped_cases.set(escaped_cases.get() + 1);
+        }
         let parsed = CharToken::from_text(&expected_text, Position::new())
             .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
         assert_eq!(
@@ -411,6 +423,10 @@ fn char_from_value_roundtrip() -> noprop::TestResult {
     assert!(
         special_cases.get() > 0,
         "no case exercised a special char\n{runner}"
+    );
+    assert!(
+        escaped_cases.get() > 0,
+        "no case exercised an escaped char literal\n{runner}"
     );
     Ok(())
 }
