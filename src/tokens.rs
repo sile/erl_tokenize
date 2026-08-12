@@ -36,8 +36,8 @@ pub struct AtomToken {
 impl AtomToken {
     /// Makes a new `AtomToken` instance from the value.
     ///
-    /// The generated text is a valid Erlang quoted atom which can be parsed
-    /// back by [`from_text`](Self::from_text).
+    /// The generated text is a valid Erlang quoted atom which can be
+    /// parsed back by [`from_text`](Self::from_text).
     ///
     /// # Examples
     ///
@@ -53,18 +53,7 @@ impl AtomToken {
     pub fn from_value(value: &str, pos: Position) -> Self {
         let mut text = String::from("'");
         for c in value.chars() {
-            let start = text.len();
-            text.extend(c.escape_debug());
-            if &text[start..] == "\\0" {
-                // `\0` would merge with a following octal digit (`\01` parses
-                // as a single character); rewrite unconditionally to `\x{0}`
-                // so the output stays unambiguous regardless of what follows.
-                text.truncate(start);
-                text.push_str("\\x{0}");
-            } else if text[start..].starts_with("\\u{") {
-                // Erlang has no `\u{...}` escape; use `\x{...}` instead.
-                text.replace_range(start..start + 2, "\\x");
-            }
+            util::push_escaped_char(&mut text, c);
         }
         text.push('\'');
         AtomToken {
@@ -205,18 +194,7 @@ impl CharToken {
     /// ```
     pub fn from_value(value: char, pos: Position) -> Self {
         let mut text = String::from("$");
-        let start = text.len();
-        text.extend(value.escape_debug());
-        if &text[start..] == "\\0" {
-            // `\0` would merge with a following octal digit (`\01` parses as
-            // a single character); rewrite unconditionally to `\x{0}` so the
-            // output stays unambiguous regardless of what follows.
-            text.truncate(start);
-            text.push_str("\\x{0}");
-        } else if text[start..].starts_with("\\u{") {
-            // Erlang has no `\u{...}` escape; use `\x{...}` instead.
-            text.replace_range(start..start + 2, "\\x");
-        }
+        util::push_escaped_char(&mut text, value);
         CharToken { value, text, pos }
     }
 
@@ -1174,18 +1152,7 @@ impl StringToken {
     pub fn from_value(value: &str, pos: Position) -> Self {
         let mut text = String::from("\"");
         for c in value.chars() {
-            let start = text.len();
-            text.extend(c.escape_debug());
-            if &text[start..] == "\\0" {
-                // `\0` would merge with a following octal digit (`\01` parses
-                // as a single character); rewrite unconditionally to `\x{0}`
-                // so the output stays unambiguous regardless of what follows.
-                text.truncate(start);
-                text.push_str("\\x{0}");
-            } else if text[start..].starts_with("\\u{") {
-                // Erlang has no `\u{...}` escape; use `\x{...}` instead.
-                text.replace_range(start..start + 2, "\\x");
-            }
+            util::push_escaped_char(&mut text, c);
         }
         text.push('"');
         StringToken {
