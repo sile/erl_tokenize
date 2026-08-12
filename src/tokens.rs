@@ -39,6 +39,11 @@ impl AtomToken {
     /// The generated text is a valid Erlang quoted atom which can be
     /// parsed back by [`from_text`](Self::from_text).
     ///
+    /// Exception: U+FFFE and U+FFFF are not part of the Erlang character
+    /// set (erl_scan rejects them), so the generated text for such values
+    /// is not a valid Erlang literal, although [`from_text`](Self::from_text)
+    /// can still parse it back.
+    ///
     /// # Examples
     ///
     /// ```
@@ -180,6 +185,11 @@ impl CharToken {
     ///
     /// The generated text is a valid Erlang character literal which can be
     /// parsed back by [`from_text`](Self::from_text).
+    ///
+    /// Exception: U+FFFE and U+FFFF are not part of the Erlang character
+    /// set (erl_scan rejects them), so the generated text for such values
+    /// is not a valid Erlang literal, although [`from_text`](Self::from_text)
+    /// can still parse it back.
     ///
     /// # Examples
     ///
@@ -1138,6 +1148,11 @@ impl StringToken {
     ///
     /// The generated text is a valid Erlang string literal which can be
     /// parsed back by [`from_text`](Self::from_text).
+    ///
+    /// Exception: U+FFFE and U+FFFF are not part of the Erlang character
+    /// set (erl_scan rejects them), so the generated text for such values
+    /// is not a valid Erlang literal, although [`from_text`](Self::from_text)
+    /// can still parse it back.
     ///
     /// # Examples
     ///
