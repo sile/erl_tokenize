@@ -418,6 +418,10 @@ pub struct FloatToken {
 impl FloatToken {
     /// Makes a new `FloatToken` instance from the value.
     ///
+    /// The generated text is a valid Erlang float literal (which must
+    /// contain a fractional part) and can be parsed back by
+    /// [`from_text`](Self::from_text).
+    ///
     /// # Examples
     ///
     /// ```
@@ -426,9 +430,16 @@ impl FloatToken {
     ///
     /// let pos = Position::new();
     /// assert_eq!(FloatToken::from_value(1.23, pos.clone()).text(), "1.23");
+    /// assert_eq!(FloatToken::from_value(1.0, pos.clone()).text(), "1.0");
     /// ```
     pub fn from_value(value: f64, pos: Position) -> Self {
-        let text = format!("{value}");
+        let mut text = format!("{value}");
+        // Erlang float literals must contain a fractional part (e.g. `1.0`,
+        // never `1`); `f64::Display` never uses exponent notation, so a text
+        // without `'.'` is always plain integer notation.
+        if !text.contains('.') {
+            text.push_str(".0");
+        }
         FloatToken { value, text, pos }
     }
 

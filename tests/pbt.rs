@@ -478,37 +478,33 @@ fn integer_from_value_roundtrip() -> noprop::TestResult {
     Ok(())
 }
 
-// NOTE: `float_from_value_roundtrip` fails because `FloatToken::from_value`
-// generates text without a fractional part (`1.0` → `"1"`, `1e21` →
-// `"1e21"`), violating the Erlang float literal grammar (a decimal point is
-// mandatory; reproduction seed: 0x18cac499b08f1f28). Kept commented out
-// until the from_value fix lands; it should then pass unconstrained.
-//
-// #[test]
-// fn float_from_value_roundtrip() -> noprop::TestResult {
-//     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-//     let exponent_cases = Cell::new(0usize);
-//     let mut runner = noprop::Runner::new(seed);
-//
-//     runner.run(CASES, |ctx| {
-//         let value = sample_non_negative_f64(ctx);
-//         let expected_text = FloatToken::from_value(value, Position::new()).text().to_owned();
-//         if expected_text.contains('e') {
-//             exponent_cases.set(exponent_cases.get() + 1);
-//         }
-//         let parsed = FloatToken::from_text(&expected_text, Position::new())
-//             .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
-//         assert_eq!(parsed.value(), value, "value mismatch for {expected_text:?}");
-//         assert_eq!(parsed.text(), expected_text, "text mismatch for value {value:?}");
-//         Ok(())
-//     })?;
-//
-//     assert!(
-//         exponent_cases.get() > 0,
-//         "no case exercised an exponent form\n{runner}"
-//     );
-//     Ok(())
-// }
+#[test]
+fn float_from_value_roundtrip() -> noprop::TestResult {
+    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
+    let mut runner = noprop::Runner::new(seed);
+
+    runner.run(CASES, |ctx| {
+        let value = sample_non_negative_f64(ctx);
+        let expected_text = FloatToken::from_value(value, Position::new())
+            .text()
+            .to_owned();
+        let parsed = FloatToken::from_text(&expected_text, Position::new())
+            .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
+        assert_eq!(
+            parsed.value(),
+            value,
+            "value mismatch for {expected_text:?}"
+        );
+        assert_eq!(
+            parsed.text(),
+            expected_text,
+            "text mismatch for value {value:?}"
+        );
+        Ok(())
+    })?;
+
+    Ok(())
+}
 
 // ============================================================
 // Tokenizer structural invariants
