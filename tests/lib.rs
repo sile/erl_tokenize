@@ -155,11 +155,14 @@ fn char_caret_notation() {
 
 #[test]
 fn char_octal() {
+    // The octal loop must accumulate each peeked digit; a naive impl
+    // that reuses the initial digit yields the wrong code point for
+    // multi-digit escapes (e.g. \123 would return 'I' instead of 'S').
     let t = CharToken::from_text(r"$\123", pos()).unwrap();
     assert_eq!(t.value(), 'S'); // 0o123 = 83 = 'S'
 
     let t = CharToken::from_text(r"$\17", pos()).unwrap();
-    assert_eq!(t.value() as u32, 15); // 0o17 = 15
+    assert_eq!(t.value() as u32, 15);
 
     let t = CharToken::from_text(r"$\01", pos()).unwrap();
     assert_eq!(t.value() as u32, 1);

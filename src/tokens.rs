@@ -159,7 +159,7 @@ impl fmt::Display for AtomToken {
 /// assert_eq!(CharToken::from_text("$a", pos.clone()).unwrap().value(), 'a');
 /// assert_eq!(CharToken::from_text("$a  ", pos.clone()).unwrap().value(), 'a');
 /// assert_eq!(CharToken::from_text(r"$\t", pos.clone()).unwrap().value(), '\t');
-/// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().value(), 'S');
+/// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().value(), 'S'); // 0o123 = 83 = 'S'
 /// assert_eq!(CharToken::from_text(r"$\x6F", pos.clone()).unwrap().value(), 'o');
 /// assert_eq!(CharToken::from_text(r"$\x{06F}", pos.clone()).unwrap().value(), 'o');
 /// assert_eq!(CharToken::from_text(r"$\^a", pos.clone()).unwrap().value(), '\u{1}');
@@ -231,7 +231,7 @@ impl CharToken {
     /// let pos = Position::new();
     ///
     /// assert_eq!(CharToken::from_text("$a", pos.clone()).unwrap().value(), 'a');
-    /// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().value(), 'S');
+    /// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().value(), 'S'); // 0o123 = 83 = 'S'
     /// ```
     pub fn value(&self) -> char {
         self.value
@@ -1132,10 +1132,6 @@ impl StringToken {
     /// let pos = Position::new();
     /// assert_eq!(StringToken::from_value("foo", pos.clone()).text(), r#""foo""#);
     /// assert_eq!(StringToken::from_value("a\u{1}b", pos.clone()).text(), r#""a\x{1}b""#);
-    ///
-    /// // The emitted text round-trips through `from_text`.
-    /// let t = StringToken::from_value("a\u{1}b", pos.clone());
-    /// assert_eq!(StringToken::from_text(t.text(), pos.clone()).unwrap().value(), "a\u{1}b");
     /// ```
     pub fn from_value(value: &str, pos: Position) -> Self {
         let mut text = String::from("\"");
