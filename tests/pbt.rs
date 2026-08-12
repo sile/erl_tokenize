@@ -245,40 +245,81 @@ fn step_char(
 // from_value -> from_text roundtrip properties
 // ============================================================
 
-// NOTE: `string_from_value_roundtrip` fails because `StringToken::from_value`
-// emits Rust-style `\u{...}` escapes, which do not exist in the Erlang escape
-// table (only `\x{...}` and named escapes do), for values containing
-// non-printable chars (reproduction seed: 0x18cac499b08f9840). Kept
-// commented out until the from_value fix lands; it should then pass
-// unconstrained.
-//
-// #[test]
-// fn string_from_value_roundtrip() -> noprop::TestResult {
-//     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-//     let escape_cases = Cell::new(0usize);
-//     let mut runner = noprop::Runner::new(seed);
-//
-//     runner.run(CASES, |ctx| {
-//         let value = sample_text(ctx);
-//         let expected_text = StringToken::from_value(&value, Position::new())
-//             .text()
-//             .to_owned();
-//         if expected_text.contains('\\') {
-//             escape_cases.set(escape_cases.get() + 1);
-//         }
-//         let parsed = StringToken::from_text(&expected_text, Position::new())
-//             .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
-//         assert_eq!(parsed.value(), value, "value mismatch for {expected_text:?}");
-//         assert_eq!(parsed.text(), expected_text, "text mismatch for value {value:?}");
-//         Ok(())
-//     })?;
-//
-//     assert!(
-//         escape_cases.get() > 0,
-//         "no case exercised an escaped string\n{runner}"
-//     );
-//     Ok(())
-// }
+#[test]
+fn string_from_value_roundtrip() -> noprop::TestResult {
+    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
+    let escape_cases = Cell::new(0usize);
+    // The two fix-critical paths of `from_value` are exercised only when
+    // the value contains a NUL (rewritten to `\x{0}`) or a non-printable
+    // Unicode char (rewritten to `\x{...}`). Track each explicitly so a
+    // generator drift that silently drops coverage of either path is
+    // caught by the PBT itself.
+    let had_null = Cell::new(0usize);
+    let had_null_before_octal_digit = Cell::new(0usize);
+    let had_unicode_escape = Cell::new(0usize);
+    let mut runner = noprop::Runner::new(seed);
+
+    runner.run(CASES, |ctx| {
+        let value = sample_text(ctx);
+        let expected_text = StringToken::from_value(&value, Position::new())
+            .text()
+            .to_owned();
+        if expected_text.contains('\\') {
+            escape_cases.set(escape_cases.get() + 1);
+        }
+        if value.contains('\0') {
+            had_null.set(had_null.get() + 1);
+        }
+        let mut prev_was_null = false;
+        for c in value.chars() {
+            if prev_was_null && matches!(c, '0'..='7') {
+                had_null_before_octal_digit.set(had_null_before_octal_digit.get() + 1);
+                break;
+            }
+            prev_was_null = c == '\0';
+        }
+        // A `\x{...}` other than `\x{0}` means an `\u{...}` -> `\x{...}`
+        // rewrite happened (NUL always becomes `\x{0}` and is tracked by
+        // `had_null` above).
+        if expected_text
+            .match_indices("\\x{")
+            .any(|(i, _)| !expected_text[i + 3..].starts_with("0}"))
+        {
+            had_unicode_escape.set(had_unicode_escape.get() + 1);
+        }
+        let parsed = StringToken::from_text(&expected_text, Position::new())
+            .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
+        assert_eq!(
+            parsed.value(),
+            value,
+            "value mismatch for {expected_text:?}"
+        );
+        assert_eq!(
+            parsed.text(),
+            expected_text,
+            "text mismatch for value {value:?}"
+        );
+        Ok(())
+    })?;
+
+    assert!(
+        escape_cases.get() > 0,
+        "no case exercised an escaped string\n{runner}"
+    );
+    assert!(
+        had_null.get() > 0,
+        "no case exercised the NUL rewrite path\n{runner}"
+    );
+    assert!(
+        had_null_before_octal_digit.get() > 0,
+        "no case exercised the NUL-before-octal-digit merge path\n{runner}"
+    );
+    assert!(
+        had_unicode_escape.get() > 0,
+        "no case exercised the `\\u{{...}}` -> `\\x{{...}}` rewrite path\n{runner}"
+    );
+    Ok(())
+}
 
 #[test]
 fn atom_from_value_roundtrip() -> noprop::TestResult {

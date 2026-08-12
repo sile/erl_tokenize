@@ -96,9 +96,9 @@ where
         }
         c @ '0'..='7' => {
             let mut limit = 2;
-            let mut n = c.to_digit(8).expect("unreachable");
-            while let Some((_, '0'..='7')) = chars.peek().cloned() {
-                n = (n * 8) + c.to_digit(8).expect("unreachable");
+            let mut n = c.to_digit(8).expect("matched '0'..='7'");
+            while let Some((_, d @ '0'..='7')) = chars.peek().cloned() {
+                n = (n * 8) + d.to_digit(8).expect("matched '0'..='7'");
                 let _ = chars.next();
                 limit -= 1;
                 if limit == 0 {

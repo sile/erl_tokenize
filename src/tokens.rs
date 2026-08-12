@@ -159,7 +159,7 @@ impl fmt::Display for AtomToken {
 /// assert_eq!(CharToken::from_text("$a", pos.clone()).unwrap().value(), 'a');
 /// assert_eq!(CharToken::from_text("$a  ", pos.clone()).unwrap().value(), 'a');
 /// assert_eq!(CharToken::from_text(r"$\t", pos.clone()).unwrap().value(), '\t');
-/// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().value(), 'I');
+/// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().value(), 'S'); // 0o123 = 83 = 'S'
 /// assert_eq!(CharToken::from_text(r"$\x6F", pos.clone()).unwrap().value(), 'o');
 /// assert_eq!(CharToken::from_text(r"$\x{06F}", pos.clone()).unwrap().value(), 'o');
 /// assert_eq!(CharToken::from_text(r"$\^a", pos.clone()).unwrap().value(), '\u{1}');
@@ -231,7 +231,7 @@ impl CharToken {
     /// let pos = Position::new();
     ///
     /// assert_eq!(CharToken::from_text("$a", pos.clone()).unwrap().value(), 'a');
-    /// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().value(), 'I');
+    /// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().value(), 'S'); // 0o123 = 83 = 'S'
     /// ```
     pub fn value(&self) -> char {
         self.value
@@ -1120,6 +1120,9 @@ pub struct StringToken {
 impl StringToken {
     /// Makes a new `StringToken` instance from the value.
     ///
+    /// The generated text is a valid Erlang string literal which can be
+    /// parsed back by [`from_text`](Self::from_text).
+    ///
     /// # Examples
     ///
     /// ```
@@ -1128,9 +1131,25 @@ impl StringToken {
     ///
     /// let pos = Position::new();
     /// assert_eq!(StringToken::from_value("foo", pos.clone()).text(), r#""foo""#);
+    /// assert_eq!(StringToken::from_value("a\u{1}b", pos.clone()).text(), r#""a\x{1}b""#);
     /// ```
     pub fn from_value(value: &str, pos: Position) -> Self {
-        let text = format!("{value:?}");
+        let mut text = String::from("\"");
+        for c in value.chars() {
+            let start = text.len();
+            text.extend(c.escape_debug());
+            if &text[start..] == "\\0" {
+                // `\0` would merge with a following octal digit (`\01` parses
+                // as a single character); rewrite unconditionally to `\x{0}`
+                // so the output stays unambiguous regardless of what follows.
+                text.truncate(start);
+                text.push_str("\\x{0}");
+            } else if text[start..].starts_with("\\u{") {
+                // Erlang has no `\u{...}` escape; use `\x{...}` instead.
+                text.replace_range(start..start + 2, "\\x");
+            }
+        }
+        text.push('"');
         StringToken {
             value: Some(value.to_string()),
             text,
