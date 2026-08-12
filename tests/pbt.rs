@@ -334,8 +334,14 @@ fn string_from_value_roundtrip() -> noprop::TestResult {
 #[test]
 fn atom_from_value_roundtrip() -> noprop::TestResult {
     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-    let escaped_cases = Cell::new(0usize);
-    let control_char_cases = Cell::new(0usize);
+    let escape_cases = Cell::new(0usize);
+    // The two fix-critical paths of `from_value` are exercised only when
+    // the value contains a NUL (rewritten to `\x{0}`) or a non-printable
+    // Unicode char (rewritten to `\x{...}`). Track each explicitly so a
+    // generator drift that silently drops coverage of either path is
+    // caught by the PBT itself.
+    let had_null = Cell::new(0usize);
+    let had_unicode_escape = Cell::new(0usize);
     let mut runner = noprop::Runner::new(seed);
 
     runner.run(CASES, |ctx| {
@@ -343,11 +349,20 @@ fn atom_from_value_roundtrip() -> noprop::TestResult {
         let expected_text = AtomToken::from_value(&value, Position::new())
             .text()
             .to_owned();
-        if value.contains('\'') || value.contains('\\') {
-            escaped_cases.set(escaped_cases.get() + 1);
+        if expected_text.contains('\\') {
+            escape_cases.set(escape_cases.get() + 1);
         }
-        if expected_text.contains("\\x{") {
-            control_char_cases.set(control_char_cases.get() + 1);
+        if value.contains('\0') {
+            had_null.set(had_null.get() + 1);
+        }
+        // A `\x{...}` other than `\x{0}` means an `\u{...}` -> `\x{...}`
+        // rewrite happened (NUL always becomes `\x{0}` and is tracked by
+        // `had_null` above).
+        if expected_text
+            .match_indices("\\x{")
+            .any(|(i, _)| !expected_text[i + 3..].starts_with("0}"))
+        {
+            had_unicode_escape.set(had_unicode_escape.get() + 1);
         }
         let parsed = AtomToken::from_text(&expected_text, Position::new())
             .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
@@ -365,12 +380,16 @@ fn atom_from_value_roundtrip() -> noprop::TestResult {
     })?;
 
     assert!(
-        escaped_cases.get() > 0,
+        escape_cases.get() > 0,
         "no case exercised an escaped atom\n{runner}"
     );
     assert!(
-        control_char_cases.get() > 0,
-        "no case exercised the control-char escape path\n{runner}"
+        had_null.get() > 0,
+        "no case exercised the NUL rewrite path\n{runner}"
+    );
+    assert!(
+        had_unicode_escape.get() > 0,
+        "no case exercised the `\\u{{...}}` -> `\\x{{...}}` rewrite path\n{runner}"
     );
     Ok(())
 }
@@ -378,8 +397,12 @@ fn atom_from_value_roundtrip() -> noprop::TestResult {
 #[test]
 fn char_from_value_roundtrip() -> noprop::TestResult {
     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-    let special_cases = Cell::new(0usize);
-    let escaped_cases = Cell::new(0usize);
+    let escape_cases = Cell::new(0usize);
+    // Same fix-critical paths as the string and atom tests: a NUL value is
+    // rewritten to `\x{0}`, and a non-printable Unicode char is rewritten
+    // to `\x{...}`.
+    let had_null = Cell::new(0usize);
+    let had_unicode_escape = Cell::new(0usize);
     let mut runner = noprop::Runner::new(seed);
 
     runner.run(CASES, |ctx| {
@@ -399,11 +422,13 @@ fn char_from_value_roundtrip() -> noprop::TestResult {
         let expected_text = CharToken::from_value(value, Position::new())
             .text()
             .to_owned();
-        if matches!(value, '\\' | '\n' | '\0' | '\u{1}') {
-            special_cases.set(special_cases.get() + 1);
-        }
         if expected_text.contains('\\') {
-            escaped_cases.set(escaped_cases.get() + 1);
+            escape_cases.set(escape_cases.get() + 1);
+        }
+        if value == '\0' {
+            had_null.set(had_null.get() + 1);
+        } else if expected_text.contains("\\x{") {
+            had_unicode_escape.set(had_unicode_escape.get() + 1);
         }
         let parsed = CharToken::from_text(&expected_text, Position::new())
             .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
@@ -421,12 +446,16 @@ fn char_from_value_roundtrip() -> noprop::TestResult {
     })?;
 
     assert!(
-        special_cases.get() > 0,
-        "no case exercised a special char\n{runner}"
+        escape_cases.get() > 0,
+        "no case exercised an escaped char literal\n{runner}"
     );
     assert!(
-        escaped_cases.get() > 0,
-        "no case exercised an escaped char literal\n{runner}"
+        had_null.get() > 0,
+        "no case exercised the NUL rewrite path\n{runner}"
+    );
+    assert!(
+        had_unicode_escape.get() > 0,
+        "no case exercised the `\\u{{...}}` -> `\\x{{...}}` rewrite path\n{runner}"
     );
     Ok(())
 }
