@@ -76,11 +76,21 @@ fn sample_non_negative_i64(ctx: &mut noprop::TestCaseContext) -> i64 {
     ) as i64
 }
 
-/// Samples a non-negative `f64`.
+/// Samples a non-negative finite `f64`.
+///
+/// Negative values are excluded because Erlang has no negative literal:
+/// `-1.5` is the `-` operator applied to `1.5`, so no token type can
+/// represent a negative value as a single token (same as integers).
+/// Non-finite values are excluded because `FloatToken::from_value` cannot
+/// represent them in a parseable form.
+///
+/// `sample_f64_in` only yields integer-valued samples over the huge
+/// `f64::MAX` range, so fractional boundaries are included explicitly to
+/// cover the fractional text path of `from_value`.
 fn sample_non_negative_f64(ctx: &mut noprop::TestCaseContext) -> f64 {
     noprop::sample_with_boundaries(
         ctx,
-        &[0.0f64, 1.0, 100.0, 1e21, f64::MAX],
+        &[0.0f64, 1.0, 0.5, 1.23, 100.0, 1e21, f64::MAX],
         noprop::Ratio::one_nth(5),
         |ctx| noprop::sample_f64_in(ctx, 0.0, f64::MAX),
     )
@@ -478,37 +488,48 @@ fn integer_from_value_roundtrip() -> noprop::TestResult {
     Ok(())
 }
 
-// NOTE: `float_from_value_roundtrip` fails because `FloatToken::from_value`
-// generates text without a fractional part (`1.0` → `"1"`, `1e21` →
-// `"1e21"`), violating the Erlang float literal grammar (a decimal point is
-// mandatory; reproduction seed: 0x18cac499b08f1f28). Kept commented out
-// until the from_value fix lands; it should then pass unconstrained.
-//
-// #[test]
-// fn float_from_value_roundtrip() -> noprop::TestResult {
-//     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-//     let exponent_cases = Cell::new(0usize);
-//     let mut runner = noprop::Runner::new(seed);
-//
-//     runner.run(CASES, |ctx| {
-//         let value = sample_non_negative_f64(ctx);
-//         let expected_text = FloatToken::from_value(value, Position::new()).text().to_owned();
-//         if expected_text.contains('e') {
-//             exponent_cases.set(exponent_cases.get() + 1);
-//         }
-//         let parsed = FloatToken::from_text(&expected_text, Position::new())
-//             .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
-//         assert_eq!(parsed.value(), value, "value mismatch for {expected_text:?}");
-//         assert_eq!(parsed.text(), expected_text, "text mismatch for value {value:?}");
-//         Ok(())
-//     })?;
-//
-//     assert!(
-//         exponent_cases.get() > 0,
-//         "no case exercised an exponent form\n{runner}"
-//     );
-//     Ok(())
-// }
+#[test]
+fn float_from_value_roundtrip() -> noprop::TestResult {
+    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
+    let integer_cases = Cell::new(0usize);
+    let fraction_cases = Cell::new(0usize);
+    let mut runner = noprop::Runner::new(seed);
+
+    runner.run(CASES, |ctx| {
+        let value = sample_non_negative_f64(ctx);
+        let expected_text = FloatToken::from_value(value, Position::new())
+            .text()
+            .to_owned();
+        if value.fract() == 0.0 {
+            integer_cases.set(integer_cases.get() + 1);
+        } else {
+            fraction_cases.set(fraction_cases.get() + 1);
+        }
+        let parsed = FloatToken::from_text(&expected_text, Position::new())
+            .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
+        assert_eq!(
+            parsed.value(),
+            value,
+            "value mismatch for {expected_text:?}"
+        );
+        assert_eq!(
+            parsed.text(),
+            expected_text,
+            "text mismatch for value {value:?}"
+        );
+        Ok(())
+    })?;
+
+    assert!(
+        integer_cases.get() > 0,
+        "no case exercised the fractional-part append path\n{runner}"
+    );
+    assert!(
+        fraction_cases.get() > 0,
+        "no case exercised a fractional text\n{runner}"
+    );
+    Ok(())
+}
 
 // ============================================================
 // Tokenizer structural invariants
@@ -635,8 +656,9 @@ fn tokenizer_concat_invariant() -> noprop::TestResult {
         // newline, a token ending with `"` must not be followed by one
         // starting with `"` (adjacent string literals), and a token ending
         // with a digit must not be followed by one starting with `_`
-        // (`123_` is an invalid integer prefix) or `#` (`1#` is parsed as a
-        // bad radix marker).
+        // (`123_` is an invalid integer prefix), `#` (`1#` is parsed as a
+        // bad radix marker), or `e`/`E` (a float ending in `N.0` absorbs
+        // the `e` of a following `end` / `else` as an exponent).
         let mut input = String::new();
         let mut prev: Option<(&str, bool)> = None;
         for (text, is_comment) in &tokens {
@@ -646,7 +668,11 @@ fn tokenizer_concat_invariant() -> noprop::TestResult {
                 if prev_comment {
                     input.push('\n');
                 } else if (prev_text.ends_with('"') && text.starts_with('"'))
-                    || (prev_ends_with_digit && (text.starts_with('_') || text.starts_with('#')))
+                    || (prev_ends_with_digit
+                        && (text.starts_with('_')
+                            || text.starts_with('#')
+                            || text.starts_with('e')
+                            || text.starts_with('E')))
                 {
                     input.push(' ');
                 } else if noprop::sample_bool(ctx) {
