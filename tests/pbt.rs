@@ -656,8 +656,9 @@ fn tokenizer_concat_invariant() -> noprop::TestResult {
         // newline, a token ending with `"` must not be followed by one
         // starting with `"` (adjacent string literals), and a token ending
         // with a digit must not be followed by one starting with `_`
-        // (`123_` is an invalid integer prefix) or `#` (`1#` is parsed as a
-        // bad radix marker).
+        // (`123_` is an invalid integer prefix), `#` (`1#` is parsed as a
+        // bad radix marker), or `e`/`E` (a float ending in `N.0` absorbs
+        // the `e` of a following `end` / `else` as an exponent).
         let mut input = String::new();
         let mut prev: Option<(&str, bool)> = None;
         for (text, is_comment) in &tokens {
@@ -667,7 +668,11 @@ fn tokenizer_concat_invariant() -> noprop::TestResult {
                 if prev_comment {
                     input.push('\n');
                 } else if (prev_text.ends_with('"') && text.starts_with('"'))
-                    || (prev_ends_with_digit && (text.starts_with('_') || text.starts_with('#')))
+                    || (prev_ends_with_digit
+                        && (text.starts_with('_')
+                            || text.starts_with('#')
+                            || text.starts_with('e')
+                            || text.starts_with('E')))
                 {
                     input.push(' ');
                 } else if noprop::sample_bool(ctx) {
