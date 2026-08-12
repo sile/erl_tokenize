@@ -162,13 +162,24 @@ fn char_octal() {
     assert_eq!(t.value() as u32, 15); // 0o17 = 15
 
     let t = CharToken::from_text(r"$\01", pos()).unwrap();
-    assert_eq!(t.value() as u32, 1); // 0o01 = 1
+    assert_eq!(t.value() as u32, 1);
 
     let t = CharToken::from_text(r"$\0", pos()).unwrap();
     assert_eq!(t.value(), '\0');
 
     let t = CharToken::from_text(r"$\7", pos()).unwrap();
     assert_eq!(t.value() as u32, 7);
+
+    // 3-digit maximum (0o377 = 255).
+    let t = CharToken::from_text(r"$\377", pos()).unwrap();
+    assert_eq!(t.value() as u32, 255);
+
+    // The octal escape must stop after 3 digits: `$\1234` tokenizes as
+    // the char `$\123` followed by the integer `4`.
+    let tokens: Vec<String> = Tokenizer::new(r"$\1234")
+        .map(|t| t.unwrap().text().to_string())
+        .collect();
+    assert_eq!(tokens, [r"$\123", "4"]);
 }
 
 #[test]
@@ -559,6 +570,15 @@ fn string_escapes() {
 
     let t = StringToken::from_text(r#""f\x6Fo""#, pos()).unwrap();
     assert_eq!(t.value(), "foo");
+
+    // Octal escapes are shared with the char path but must also be
+    // exercised through `StringToken::from_text` so a regression in the
+    // string path alone can be caught.
+    let t = StringToken::from_text(r#""\123""#, pos()).unwrap();
+    assert_eq!(t.value(), "S"); // 0o123 = 83 = 'S'
+
+    let t = StringToken::from_text(r#""\0a""#, pos()).unwrap();
+    assert_eq!(t.value(), "\0a");
 }
 
 #[test]
@@ -581,12 +601,51 @@ fn string_from_value() {
     let t = StringToken::from_value("foo", pos());
     assert_eq!(t.text(), r#""foo""#);
     assert_eq!(t.value(), "foo");
+
+    // NUL is always rewritten to `\x{0}` so it cannot merge with a
+    // following octal digit into a single character.
+    let t = StringToken::from_value("\0", pos());
+    assert_eq!(t.text(), r#""\x{0}""#);
+    // `"\x001"` is `\x00` + literal `1` (Rust has no octal escapes, so
+    // `\0` before a digit is written this way to avoid clippy warnings).
+    let t = StringToken::from_value("\x001", pos());
+    assert_eq!(t.text(), r#""\x{0}1""#);
+
+    // Non-printable Unicode is emitted as `\x{...}` (Erlang has no `\u{...}`).
+    let t = StringToken::from_value("a\u{1}b", pos());
+    assert_eq!(t.text(), r#""a\x{1}b""#);
+    let t = StringToken::from_value("a\u{10ffff}b", pos());
+    assert_eq!(t.text(), r#""a\x{10ffff}b""#);
+
+    // Named escapes and printable chars pass through as-is.
+    let t = StringToken::from_value("a\nb\tc\\d\"e", pos());
+    assert_eq!(t.text(), r#""a\nb\tc\\d\"e""#);
 }
 
 #[test]
 fn string_errors() {
     assert!(StringToken::from_text(r#"  "foo""#, pos()).is_err());
     assert!(StringToken::from_text("", pos()).is_err());
+}
+
+// `StringToken::from_value` depends on the exact shape of
+// `char::escape_debug` output (NUL as `\0`, non-printable Unicode as
+// `\u{...}`, quotes/backslashes/named-escapes as themselves). If a
+// future std change alters any of these forms, from_value's rewrite
+// logic could silently produce non-Erlang text. This test pins the
+// contract so any drift is caught in CI.
+#[test]
+fn char_escape_debug_output_lock() {
+    assert_eq!('\0'.escape_debug().to_string(), r"\0");
+    assert_eq!('\u{1}'.escape_debug().to_string(), r"\u{1}");
+    assert_eq!('\u{10ffff}'.escape_debug().to_string(), r"\u{10ffff}");
+    assert_eq!('\n'.escape_debug().to_string(), r"\n");
+    assert_eq!('\r'.escape_debug().to_string(), r"\r");
+    assert_eq!('\t'.escape_debug().to_string(), r"\t");
+    assert_eq!('\\'.escape_debug().to_string(), r"\\");
+    assert_eq!('"'.escape_debug().to_string(), "\\\"");
+    assert_eq!('\''.escape_debug().to_string(), r"\'");
+    assert_eq!('a'.escape_debug().to_string(), "a");
 }
 
 #[test]

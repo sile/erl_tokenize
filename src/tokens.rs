@@ -1132,6 +1132,10 @@ impl StringToken {
     /// let pos = Position::new();
     /// assert_eq!(StringToken::from_value("foo", pos.clone()).text(), r#""foo""#);
     /// assert_eq!(StringToken::from_value("a\u{1}b", pos.clone()).text(), r#""a\x{1}b""#);
+    ///
+    /// // The emitted text round-trips through `from_text`.
+    /// let t = StringToken::from_value("a\u{1}b", pos.clone());
+    /// assert_eq!(StringToken::from_text(t.text(), pos.clone()).unwrap().value(), "a\u{1}b");
     /// ```
     pub fn from_value(value: &str, pos: Position) -> Self {
         let mut text = String::from("\"");
