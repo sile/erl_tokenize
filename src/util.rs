@@ -26,38 +26,56 @@ pub fn is_variable_non_head_char(c: char) -> bool {
     matches!(c, 'a'..='z' | 'A'..='Z' | '@' | '_' | '0'..='9')
 }
 
+/// Walk a quoted region and return the byte index of the closing
+/// terminator, validating any escape sequences along the way.
+///
+/// The scanner in [`crate::lex`] uses this to determine token boundaries
+/// without allocating; [`parse_quotation`] uses it to locate the
+/// terminator before decoding.
+pub(crate) fn find_quotation_end(pos: Position, input: &str, terminator: char) -> Result<usize> {
+    let mut chars = input.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        if c == '\\' {
+            parse_escaped_char(pos.clone() + 1 + i, &mut chars)?;
+        } else if c == terminator {
+            return Ok(i);
+        }
+    }
+    Err(Error::no_closing_quotation(pos))
+}
+
 pub fn parse_quotation(
     pos: Position,
     input: &str,
     terminator: char,
 ) -> Result<(Cow<'_, str>, usize)> {
-    let maybe_end = input
-        .find(terminator)
-        .ok_or_else(|| Error::no_closing_quotation(pos.clone()))?;
-    let maybe_escaped = unsafe { input.get_unchecked(0..maybe_end).contains('\\') };
-    if maybe_escaped {
-        let (s, end) = parse_quotation_owned(pos, input, terminator)?;
-        Ok((Cow::Owned(s), end))
+    let end = find_quotation_end(pos.clone(), input, terminator)?;
+    let inner = unsafe { input.get_unchecked(0..end) };
+    if inner.contains('\\') {
+        let decoded = decode_quotation_content(pos, inner);
+        Ok((Cow::Owned(decoded), end))
     } else {
-        let slice = unsafe { input.get_unchecked(0..maybe_end) };
-        Ok((Cow::Borrowed(slice), maybe_end))
+        Ok((Cow::Borrowed(inner), end))
     }
 }
 
-fn parse_quotation_owned(pos: Position, input: &str, terminator: char) -> Result<(String, usize)> {
-    let mut buf = String::new();
+/// Decode a quoted region's escaped content into an owned string. Assumes
+/// the input has already been validated by [`find_quotation_end`] (i.e.,
+/// every `\` introduces a well-formed escape sequence and the input does
+/// not contain the terminator character unescaped).
+fn decode_quotation_content(pos: Position, input: &str) -> String {
+    let mut buf = String::with_capacity(input.len());
     let mut chars = input.char_indices().peekable();
     while let Some((i, c)) = chars.next() {
         if c == '\\' {
-            let c = parse_escaped_char(pos.clone() + 1 + i, &mut chars)?;
+            let c = parse_escaped_char(pos.clone() + 1 + i, &mut chars)
+                .expect("scanner already validated escape");
             buf.push(c);
-        } else if c == terminator {
-            return Ok((buf, i));
         } else {
             buf.push(c);
         }
     }
-    Err(Error::no_closing_quotation(pos))
+    buf
 }
 
 // https://www.erlang.org/doc/system/data_types.html#escape-sequences
@@ -92,31 +110,30 @@ where
         }
         'x' => {
             let (_, c) = chars.next().ok_or_else(error)?;
-            let buf = if c == '{' {
-                let mut buf = String::new();
+            if c == '{' {
+                let mut code: u32 = 0;
+                let mut count = 0usize;
                 let mut closed = false;
                 for (_, c) in chars.by_ref() {
                     if c == '}' {
                         closed = true;
                         break;
                     }
-                    buf.push(c);
+                    let d = c.to_digit(16).ok_or_else(error)?;
+                    code = code.checked_mul(16).ok_or_else(error)?;
+                    code = code.checked_add(d).ok_or_else(error)?;
+                    count += 1;
                 }
-                if !closed {
+                if !closed || count == 0 {
                     return Err(error());
                 }
-                if buf.is_empty() {
-                    return Err(error());
-                }
-                buf
+                char::from_u32(code).ok_or_else(error)
             } else {
-                let mut buf = String::with_capacity(2);
-                buf.push(c);
-                buf.push(chars.next().map(|(_, c)| c).ok_or_else(error)?);
-                buf
-            };
-            let code: u32 = u32::from_str_radix(&buf, 16).ok().ok_or_else(error)?;
-            char::from_u32(code).ok_or_else(error)
+                let (_, c2) = chars.next().ok_or_else(error)?;
+                let hi = c.to_digit(16).ok_or_else(error)?;
+                let lo = c2.to_digit(16).ok_or_else(error)?;
+                char::from_u32(hi * 16 + lo).ok_or_else(error)
+            }
         }
         c @ '0'..='7' => {
             let mut limit = 2;
@@ -156,4 +173,11 @@ pub fn push_escaped_char(buf: &mut String, c: char) {
     } else if buf[start..].starts_with("\\u{") {
         buf.replace_range(start..start + 2, "\\x");
     }
+}
+
+/// Strip underscore separators from a numeric literal chunk that the
+/// scanner has already validated. The result is safe to feed to
+/// [`str::parse`] / [`i64::from_str_radix`] / etc.
+pub(crate) fn strip_underscores(s: &str) -> String {
+    s.chars().filter(|c| *c != '_').collect()
 }

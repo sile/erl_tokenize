@@ -70,30 +70,19 @@ impl AtomToken {
 
     /// Tries to convert from any prefixes of the input text to an `AtomToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let head_len = text
-            .chars()
-            .next()
-            .ok_or_else(|| Error::invalid_atom_token(pos.clone()))?
-            .len_utf8();
-        let (head, tail) = text.split_at(head_len);
-        let (value, text) = if head == "'" {
-            let (value, end) = util::parse_quotation(pos.clone(), tail, '\'')?;
-            let value = Some(value.to_string());
-            (value, unsafe { text.get_unchecked(0..=1 + end) })
+        let scanned = crate::lex::scan_atom(text, pos.clone())?;
+        let slice = &text[..scanned.len];
+        let value = if let Some(inner) = slice.strip_prefix('\'') {
+            let (v, _) = util::parse_quotation(pos.clone(), inner, '\'')?;
+            Some(v.into_owned())
         } else {
-            let head = head.chars().next().expect("unreachable");
-            if !util::is_atom_head_char(head) {
-                return Err(Error::invalid_atom_token(pos));
-            }
-            let end = head.len_utf8()
-                + tail
-                    .find(|c| !util::is_atom_non_head_char(c))
-                    .unwrap_or(tail.len());
-            let text_slice = unsafe { text.get_unchecked(0..end) };
-            (None, text_slice)
+            None
         };
-        let text = text.to_owned();
-        Ok(AtomToken { value, text, pos })
+        Ok(AtomToken {
+            value,
+            text: slice.to_owned(),
+            pos,
+        })
     }
 
     /// Returns the value of this token.
@@ -210,26 +199,22 @@ impl CharToken {
 
     /// Tries to convert from any prefixes of the text to a `CharToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let mut chars = text.char_indices();
-        if chars.next().map(|(_, c)| c) != Some('$') {
-            return Err(Error::invalid_char_token(pos));
-        }
-
-        let (_, c) = chars
-            .next()
-            .ok_or_else(|| Error::invalid_char_token(pos.clone()))?;
-        let (value, end) = if c == '\\' {
+        let scanned = crate::lex::scan_char(text, pos.clone())?;
+        let slice = &text[..scanned.len];
+        let mut chars = slice.char_indices();
+        let _ = chars.next();
+        let (_, c) = chars.next().expect("scanner validated payload");
+        let value = if c == '\\' {
             let mut chars = chars.peekable();
-            let value = util::parse_escaped_char(pos.clone(), &mut chars)?;
-            let end = chars.next().map(|(i, _)| i).unwrap_or_else(|| text.len());
-            (value, end)
+            util::parse_escaped_char(pos.clone(), &mut chars)?
         } else {
-            let value = c;
-            let end = chars.next().map(|(i, _)| i).unwrap_or_else(|| text.len());
-            (value, end)
+            c
         };
-        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
-        Ok(CharToken { value, text, pos })
+        Ok(CharToken {
+            value,
+            text: slice.to_owned(),
+            pos,
+        })
     }
 
     /// Returns the value of this token.
@@ -325,13 +310,11 @@ impl CommentToken {
 
     /// Tries to convert from any prefixes of the text to a `CommentToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        if !text.starts_with('%') {
-            return Err(Error::invalid_comment_token(pos));
-        }
-
-        let end = text.find('\n').unwrap_or(text.len());
-        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
-        Ok(CommentToken { text, pos })
+        let scanned = crate::lex::scan_comment(text, pos.clone())?;
+        Ok(CommentToken {
+            text: text[..scanned.len].to_owned(),
+            pos,
+        })
     }
 
     /// Returns the value of this token.
@@ -460,182 +443,65 @@ impl FloatToken {
 
     /// Tries to convert from any prefixes of the text to a `FloatToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        if Self::is_based(text) {
-            return Self::from_text_radix(text, pos);
-        }
+        let scanned = crate::lex::scan_float(text, pos.clone())?;
+        let slice = &text[..scanned.len];
+        let value = if let Some(hash) = slice.find('#') {
+            Self::decode_radix(slice, hash)
+        } else {
+            util::strip_underscores(slice)
+                .parse::<f64>()
+                .expect("scanner validated decimal float")
+        };
+        Ok(FloatToken {
+            value,
+            text: slice.to_owned(),
+            pos,
+        })
+    }
 
-        fn read_digits(
-            buf: &mut String,
-            chars: &mut std::iter::Peekable<impl Iterator<Item = (usize, char)>>,
-            pos: &Position,
-        ) -> Result<()> {
-            let mut needs_digit = true;
-            while let Some((_, c @ ('0'..='9' | '_'))) = chars.peek().cloned() {
-                if c == '_' {
-                    if needs_digit {
-                        break;
-                    }
-                    needs_digit = true;
-                } else {
-                    buf.push(c);
-                    needs_digit = false;
-                }
-                let _ = chars.next();
-            }
-            if needs_digit {
-                Err(Error::invalid_float_token(pos.clone()))
-            } else {
-                Ok(())
-            }
-        }
-
-        let mut chars = text.char_indices().peekable();
-        let mut buf = String::new();
-        read_digits(&mut buf, &mut chars, &pos)?;
-        if chars.next().map(|(_, c)| c) != Some('.') {
-            return Err(Error::invalid_float_token(pos));
-        }
-        buf.push('.');
-
-        read_digits(&mut buf, &mut chars, &pos)?;
-
-        if let Some((_, c @ ('e' | 'E'))) = chars.peek().cloned() {
-            let _ = chars.next();
-            buf.push(c);
-            if let Some((_, c @ ('+' | '-'))) = chars.peek().cloned() {
-                let _ = chars.next();
-                buf.push(c);
-            }
-            read_digits(&mut buf, &mut chars, &pos)?;
-        }
-
-        let end = chars.next().map(|(i, _)| i).unwrap_or_else(|| text.len());
-        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
-        let value = buf
+    fn decode_radix(slice: &str, hash: usize) -> f64 {
+        let radix: u32 = util::strip_underscores(&slice[..hash])
             .parse()
-            .map_err(|_| Error::invalid_float_token(pos.clone()))?;
-        Ok(FloatToken { value, text, pos })
-    }
+            .expect("scanner validated radix");
+        let rest = &slice[hash + 1..];
+        let dot = rest.find('.').expect("scanner validated dot");
+        let int_part = &rest[..dot];
+        let after_dot = &rest[dot + 1..];
+        let (frac_part, exp_opt) = if let Some(second_hash) = after_dot.find('#') {
+            (
+                &after_dot[..second_hash],
+                Some(&after_dot[second_hash + 2..]),
+            )
+        } else {
+            (after_dot, None)
+        };
 
-    fn is_based(text: &str) -> bool {
-        for (i, c) in text.char_indices() {
-            if matches!(c, '0'..='9' | '_') {
+        let mut value = 0.0_f64;
+        for c in int_part.chars() {
+            if c == '_' {
                 continue;
             }
-            if i > 0 && c == '#' {
-                return true;
-            }
-            break;
+            let d = c.to_digit(radix).expect("scanner validated integer digit");
+            value = value * radix as f64 + d as f64;
         }
-        false
-    }
-
-    fn parse_digits<T: std::str::FromStr>(text: &str, pos: &Position) -> Result<T> {
-        let mut s = String::new();
-        let mut is_prev_digit = false;
-        for (i, c) in text.char_indices() {
-            if i == 0 && c == '-' {
-                s.push(c);
-                is_prev_digit = false;
-            } else if c.is_ascii_digit() {
-                s.push(c);
-                is_prev_digit = true;
-            } else if is_prev_digit && c == '_' {
-                is_prev_digit = false;
-            } else {
-                return Err(Error::invalid_float_token(pos.clone()));
-            }
-        }
-        if !is_prev_digit {
-            return Err(Error::invalid_float_token(pos.clone()));
-        }
-        s.parse::<T>()
-            .map_err(|_| Error::invalid_float_token(pos.clone()))
-    }
-
-    fn from_text_radix(text: &str, pos: Position) -> Result<Self> {
-        let s = text;
-        let i = s.find('#').expect("infallible");
-        let radix = Self::parse_digits(&s[..i], &pos)?;
-        if !(1 < radix && radix < 37) {
-            return Err(Error::invalid_float_token(pos));
-        }
-
-        let mut s = &s[i + 1..];
-        if s.is_empty() {
-            return Err(Error::invalid_float_token(pos));
-        }
-
-        let mut value = 0.0;
-        let mut is_prev_digit = false;
-        while let Some(c) = s.chars().next() {
-            s = &s[c.len_utf8()..];
-
-            if is_prev_digit && c == '_' {
-                is_prev_digit = false;
+        let mut j = 1_i32;
+        for c in frac_part.chars() {
+            if c == '_' {
                 continue;
             }
-            if is_prev_digit && c == '.' {
-                is_prev_digit = true;
-                break;
-            }
-            is_prev_digit = true;
-
-            let n = c
+            let d = c
                 .to_digit(radix)
-                .ok_or_else(|| Error::invalid_float_token(pos.clone()))?;
-            value = value * radix as f64 + n as f64;
+                .expect("scanner validated fractional digit");
+            value += d as f64 / (radix as f64).powi(j);
+            j += 1;
         }
-        if !is_prev_digit || s.is_empty() {
-            return Err(Error::invalid_float_token(pos));
-        }
-
-        let mut is_prev_digit = false;
-        let mut j = 1;
-        let mut has_exp = false;
-        while let Some(c) = s.chars().next() {
-            if is_prev_digit && c == '_' {
-                s = &s[c.len_utf8()..];
-                is_prev_digit = false;
-                continue;
-            }
-            if is_prev_digit && c == '#' {
-                s = &s[c.len_utf8()..];
-                is_prev_digit = true;
-                has_exp = true;
-                break;
-            }
-
-            if let Some(n) = c.to_digit(radix) {
-                s = &s[c.len_utf8()..];
-                is_prev_digit = true;
-                value += n as f64 / (radix as f64).powi(j);
-                j += 1;
-            } else {
-                break;
-            }
-        }
-        if !is_prev_digit {
-            return Err(Error::invalid_float_token(pos));
-        }
-
-        if has_exp {
-            if !s.starts_with('e') {
-                return Err(Error::invalid_float_token(pos));
-            }
-            s = &s[1..];
-            let i = s
-                .char_indices()
-                .position(|(i, c)| !((i == 0 && c == '-') || matches!(c, '0'..='9' | '_')))
-                .unwrap_or(s.len());
-            let exp: i32 = Self::parse_digits(&s[..i], &pos)?;
+        if let Some(exp_str) = exp_opt {
+            let exp: i32 = util::strip_underscores(exp_str)
+                .parse()
+                .expect("scanner validated exponent");
             value *= (radix as f64).powi(exp);
-            s = &s[i..];
         }
-
-        let end = text.len() - s.len();
-        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
-        Ok(FloatToken { value, text, pos })
+        value
     }
 
     /// Returns the value of this token.
@@ -750,47 +616,27 @@ impl IntegerToken {
     /// Returns `Ok` even if the parsed value is out of range for `i64`;
     /// in such cases, `value()` will return `None`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let mut has_radix = false;
-        let mut radix = 10;
-        let mut chars = text.char_indices().peekable();
-        let mut digits = String::new();
-        let mut needs_digit = true;
-        while let Some((_, c)) = chars.peek().cloned() {
-            if c == '#' && !has_radix && !needs_digit {
-                radix = digits
-                    .parse()
-                    .map_err(|_| Error::invalid_integer_token(pos.clone()))?;
-                if !(1 < radix && radix < 37) {
-                    return Err(Error::invalid_integer_token(pos));
-                }
-                digits.clear();
-                needs_digit = true;
-                has_radix = true;
-            } else if c.is_digit(radix) {
-                digits.push(c);
-                needs_digit = false;
-            } else if c == '_' && !needs_digit {
-                needs_digit = true;
-            } else {
-                break;
-            }
-            chars.next();
-        }
-        if needs_digit {
-            return Err(Error::invalid_integer_token(pos));
-        }
-
-        let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
-
-        // Try to parse as i64, but don't fail if out of range
-        let value = if radix == 10 {
-            digits.parse::<i64>().ok()
+        let scanned = crate::lex::scan_integer(text, pos.clone())?;
+        let slice = &text[..scanned.len];
+        let (radix, digits_slice) = if let Some(hash) = slice.find('#') {
+            let radix: u32 = util::strip_underscores(&slice[..hash])
+                .parse()
+                .expect("scanner validated radix");
+            (radix, &slice[hash + 1..])
         } else {
-            i64::from_str_radix(&digits, radix).ok()
+            (10u32, slice)
         };
-
-        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
-        Ok(IntegerToken { value, text, pos })
+        let cleaned = util::strip_underscores(digits_slice);
+        let value = if radix == 10 {
+            cleaned.parse::<i64>().ok()
+        } else {
+            i64::from_str_radix(&cleaned, radix).ok()
+        };
+        Ok(IntegerToken {
+            value,
+            text: slice.to_owned(),
+            pos,
+        })
     }
 
     /// Returns the value of this token.
@@ -894,40 +740,11 @@ impl KeywordToken {
 
     /// Tries to convert from any prefixes of the text to a `KeywordToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let atom = AtomToken::from_text(text, pos.clone())?;
-        let value = match atom.text() {
-            "after" => Keyword::After,
-            "and" => Keyword::And,
-            "andalso" => Keyword::Andalso,
-            "band" => Keyword::Band,
-            "begin" => Keyword::Begin,
-            "bnot" => Keyword::Bnot,
-            "bor" => Keyword::Bor,
-            "bsl" => Keyword::Bsl,
-            "bsr" => Keyword::Bsr,
-            "bxor" => Keyword::Bxor,
-            "case" => Keyword::Case,
-            "catch" => Keyword::Catch,
-            "cond" => Keyword::Cond,
-            "div" => Keyword::Div,
-            "end" => Keyword::End,
-            "fun" => Keyword::Fun,
-            "if" => Keyword::If,
-            "let" => Keyword::Let,
-            "not" => Keyword::Not,
-            "of" => Keyword::Of,
-            "or" => Keyword::Or,
-            "orelse" => Keyword::Orelse,
-            "receive" => Keyword::Receive,
-            "rem" => Keyword::Rem,
-            "try" => Keyword::Try,
-            "when" => Keyword::When,
-            "xor" => Keyword::Xor,
-            "maybe" => Keyword::Maybe,
-            "else" => Keyword::Else,
-            s => return Err(Error::unknown_keyword(pos, s.to_owned())),
-        };
-        Ok(KeywordToken { value, pos })
+        let scanned = crate::lex::scan_keyword(text, pos.clone())?;
+        match scanned.kind {
+            crate::lex::ScanKind::Keyword(value) => Ok(KeywordToken { value, pos }),
+            _ => unreachable!("scan_keyword returns Keyword or errors"),
+        }
     }
 
     /// Returns the value of this token.
@@ -1056,48 +873,42 @@ impl SigilStringToken {
 
     /// Tries to convert from any prefixes of the text to a [`SigilStringToken`].
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        if !text.starts_with('~') {
-            return Err(Error::invalid_sigil_string_token(pos));
+        let scanned = crate::lex::scan_sigil_string(text, pos.clone())?;
+        let slice = &text[..scanned.len];
+        let mut offset = 1;
+        for c in slice[offset..].chars() {
+            if !util::is_atom_non_head_char(c) {
+                break;
+            }
+            offset += c.len_utf8();
         }
-
-        let offset = 1;
-        let prefix: String = text[offset..]
-            .chars()
-            .take_while(|c| util::is_atom_non_head_char(*c))
-            .collect();
-
-        let offset = offset + prefix.len();
-        let Some(open_delimiter) = text[offset..].chars().next() else {
-            return Err(Error::invalid_sigil_string_token(pos));
-        };
-        let (content, offset) = if open_delimiter == '"' {
-            let t = StringToken::from_text(&text[offset..], pos.clone().step_by_width(offset))?;
-            let content = t.value().to_owned();
-            (content, offset + t.text().len())
+        let prefix = slice[1..offset].to_owned();
+        let open_delimiter = slice[offset..].chars().next().expect("scanner validated");
+        let (content, content_end) = if open_delimiter == '"' {
+            let t = StringToken::from_text(&slice[offset..], pos.clone().step_by_width(offset))?;
+            let end = offset + t.text().len();
+            (t.value().to_owned(), end)
         } else {
             let close_delimiter = match open_delimiter {
                 '(' => ')',
                 '[' => ']',
                 '{' => '}',
                 '<' => '>',
-                '/' | '|' | '\'' | '`' | '#' => open_delimiter,
-                _ => return Err(Error::invalid_sigil_string_token(pos)),
+                other => other,
             };
-            util::parse_quotation(pos.clone(), &text[offset + 1..], close_delimiter)
-                .map(|(v, end)| (v.into_owned(), offset + 1 + end + 1))?
+            let (v, end) = util::parse_quotation(
+                pos.clone().step_by_width(offset + 1),
+                &slice[offset + 1..],
+                close_delimiter,
+            )?;
+            (v.into_owned(), offset + 1 + end + 1)
         };
-
-        let suffix: String = text[offset..]
-            .chars()
-            .take_while(|c| util::is_atom_non_head_char(*c))
-            .collect();
-        let offset = offset + suffix.len();
-
+        let suffix = slice[content_end..].to_owned();
         Ok(Self {
             prefix,
             content,
             suffix,
-            text: text[..offset].to_owned(),
+            text: slice.to_owned(),
             pos,
         })
     }
@@ -1179,31 +990,23 @@ impl StringToken {
 
     /// Tries to convert from any prefixes of the text to a `StringToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        if text.is_empty() {
-            return Err(Error::invalid_string_token(pos));
-        }
-
-        let (value, end) = if text.starts_with(r#"""""#) {
-            // Triple-quoted strings: https://www.erlang.org/eeps/eep-0064
-            Self::parse_triple_quoted(text, pos.clone())?
+        let scanned = crate::lex::scan_string(text, pos.clone())?;
+        let slice = &text[..scanned.len];
+        let value = if slice.starts_with(r#"""""#) {
+            let (v, _) = Self::parse_triple_quoted(slice, pos.clone())?;
+            Some(v.into_owned())
         } else {
-            let (head, tail) = text.split_at(1);
-            if head != "\"" {
-                return Err(Error::invalid_string_token(pos));
+            let (v, _) = util::parse_quotation(pos.clone(), &slice[1..], '"')?;
+            match v {
+                Cow::Borrowed(_) => None,
+                Cow::Owned(s) => Some(s),
             }
-            util::parse_quotation(pos.clone(), tail, '"').map(|(v, end)| (v, end + 2))?
         };
-        if text.get(end..end + 1) == Some("\"") {
-            let pos = pos.step_by_text(&text[0..end]);
-            return Err(Error::adjacent_string_literals(pos));
-        }
-
-        let value = match value {
-            Cow::Borrowed(_) => None,
-            Cow::Owned(v) => Some(v),
-        };
-        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
-        Ok(StringToken { value, text, pos })
+        Ok(StringToken {
+            value,
+            text: slice.to_owned(),
+            pos,
+        })
     }
 
     fn parse_triple_quoted(text: &str, pos: Position) -> Result<(Cow<'_, str>, usize)> {
@@ -1398,73 +1201,10 @@ impl SymbolToken {
 
     /// Tries to convert from any prefixes of the text to a `SymbolToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let bytes = text.as_bytes();
-        let mut symbol = if bytes.len() >= 3 {
-            match &bytes[0..3] {
-                b"=:=" => Some(Symbol::ExactEq),
-                b"=/=" => Some(Symbol::ExactNotEq),
-                b"..." => Some(Symbol::TripleDot),
-                b"<:-" => Some(Symbol::StrictLeftArrow),
-                b"<:=" => Some(Symbol::StrictDoubleLeftArrow),
-                _ => None,
-            }
-        } else {
-            None
-        };
-        if symbol.is_none() && bytes.len() >= 2 {
-            symbol = match &bytes[0..2] {
-                b"::" => Some(Symbol::DoubleColon),
-                b":=" => Some(Symbol::MapMatch),
-                b"||" => Some(Symbol::DoubleVerticalBar),
-                b"--" => Some(Symbol::MinusMinus),
-                b"++" => Some(Symbol::PlusPlus),
-                b"->" => Some(Symbol::RightArrow),
-                b"<-" => Some(Symbol::LeftArrow),
-                b"=>" => Some(Symbol::DoubleRightArrow),
-                b"<=" => Some(Symbol::DoubleLeftArrow),
-                b">>" => Some(Symbol::DoubleRightAngle),
-                b"<<" => Some(Symbol::DoubleLeftAngle),
-                b"==" => Some(Symbol::Eq),
-                b"/=" => Some(Symbol::NotEq),
-                b">=" => Some(Symbol::GreaterEq),
-                b"=<" => Some(Symbol::LessEq),
-                b"??" => Some(Symbol::DoubleQuestion),
-                b"?=" => Some(Symbol::MaybeMatch),
-                b".." => Some(Symbol::DoubleDot),
-                b"&&" => Some(Symbol::DoubleAmpersand),
-                _ => None,
-            };
-        }
-        if symbol.is_none() && !bytes.is_empty() {
-            symbol = match bytes[0] {
-                b'[' => Some(Symbol::OpenSquare),
-                b']' => Some(Symbol::CloseSquare),
-                b'(' => Some(Symbol::OpenParen),
-                b')' => Some(Symbol::CloseParen),
-                b'{' => Some(Symbol::OpenBrace),
-                b'}' => Some(Symbol::CloseBrace),
-                b'#' => Some(Symbol::Sharp),
-                b'/' => Some(Symbol::Slash),
-                b'.' => Some(Symbol::Dot),
-                b',' => Some(Symbol::Comma),
-                b':' => Some(Symbol::Colon),
-                b';' => Some(Symbol::Semicolon),
-                b'=' => Some(Symbol::Match),
-                b'|' => Some(Symbol::VerticalBar),
-                b'?' => Some(Symbol::Question),
-                b'!' => Some(Symbol::Bang),
-                b'-' => Some(Symbol::Hyphen),
-                b'+' => Some(Symbol::Plus),
-                b'*' => Some(Symbol::Multiply),
-                b'>' => Some(Symbol::Greater),
-                b'<' => Some(Symbol::Less),
-                _ => None,
-            };
-        }
-        if let Some(value) = symbol {
-            Ok(SymbolToken { value, pos })
-        } else {
-            Err(Error::invalid_symbol_token(pos))
+        let scanned = crate::lex::scan_symbol(text, pos.clone())?;
+        match scanned.kind {
+            crate::lex::ScanKind::Symbol(value) => Ok(SymbolToken { value, pos }),
+            _ => unreachable!("scan_symbol returns Symbol or errors"),
         }
     }
 
@@ -1564,19 +1304,11 @@ impl VariableToken {
 
     /// Tries to convert from any prefixes of the text to a `VariableToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let mut chars = text.char_indices();
-        let (_, head) = chars
-            .next()
-            .ok_or_else(|| Error::invalid_variable_token(pos.clone()))?;
-        if !util::is_variable_head_char(head) {
-            return Err(Error::invalid_variable_token(pos));
-        }
-        let end = chars
-            .find(|&(_, c)| !util::is_variable_non_head_char(c))
-            .map(|(i, _)| i)
-            .unwrap_or_else(|| text.len());
-        let text = unsafe { text.get_unchecked(0..end) }.to_owned();
-        Ok(VariableToken { text, pos })
+        let scanned = crate::lex::scan_variable(text, pos.clone())?;
+        Ok(VariableToken {
+            text: text[..scanned.len].to_owned(),
+            pos,
+        })
     }
 
     /// Returns the value of this token.
@@ -1669,19 +1401,11 @@ impl WhitespaceToken {
 
     /// Tries to convert from any prefixes of the text to a `WhitespaceToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let value = if let Some(c) = text.chars().next() {
-            match c {
-                ' ' => Whitespace::Space,
-                '\t' => Whitespace::Tab,
-                '\r' => Whitespace::Return,
-                '\n' => Whitespace::Newline,
-                '\u{a0}' => Whitespace::NoBreakSpace,
-                _ => return Err(Error::invalid_whitespace_token(pos)),
-            }
-        } else {
-            return Err(Error::invalid_whitespace_token(pos));
-        };
-        Ok(WhitespaceToken { value, pos })
+        let scanned = crate::lex::scan_whitespace(text, pos.clone())?;
+        match scanned.kind {
+            crate::lex::ScanKind::Whitespace(value) => Ok(WhitespaceToken { value, pos }),
+            _ => unreachable!("scan_whitespace returns Whitespace or errors"),
+        }
     }
 
     /// Returns the value of this token.
