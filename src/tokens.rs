@@ -18,14 +18,14 @@ use crate::{Error, Position, PositionRange, Result};
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(AtomToken::from_text("foo", pos.clone()).unwrap().value(), "foo");
-/// assert_eq!(AtomToken::from_text("foo  ", pos.clone()).unwrap().value(), "foo");
-/// assert_eq!(AtomToken::from_text("'foo'", pos.clone()).unwrap().value(), "foo");
-/// assert_eq!(AtomToken::from_text(r"'f\x6Fo'", pos.clone()).unwrap().value(), "foo");
+/// assert_eq!(AtomToken::from_text("foo", pos).unwrap().value(), "foo");
+/// assert_eq!(AtomToken::from_text("foo  ", pos).unwrap().value(), "foo");
+/// assert_eq!(AtomToken::from_text("'foo'", pos).unwrap().value(), "foo");
+/// assert_eq!(AtomToken::from_text(r"'f\x6Fo'", pos).unwrap().value(), "foo");
 ///
 /// // Err
-/// assert!(AtomToken::from_text("  foo", pos.clone()).is_err());
-/// assert!(AtomToken::from_text("123", pos.clone()).is_err());
+/// assert!(AtomToken::from_text("  foo", pos).is_err());
+/// assert!(AtomToken::from_text("123", pos).is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct AtomToken {
@@ -51,9 +51,9 @@ impl AtomToken {
     /// use erl_tokenize::tokens::AtomToken;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(AtomToken::from_value("foo", pos.clone()).text(), "'foo'");
-    /// assert_eq!(AtomToken::from_value("foo's", pos.clone()).text(), r"'foo\'s'");
-    /// assert_eq!(AtomToken::from_value("a\0b", pos.clone()).text(), r"'a\x{0}b'");
+    /// assert_eq!(AtomToken::from_value("foo", pos).text(), "'foo'");
+    /// assert_eq!(AtomToken::from_value("foo's", pos).text(), r"'foo\'s'");
+    /// assert_eq!(AtomToken::from_value("a\0b", pos).text(), r"'a\x{0}b'");
     /// ```
     pub fn from_value(value: &str, pos: Position) -> Self {
         let mut text = String::from("'");
@@ -70,10 +70,10 @@ impl AtomToken {
 
     /// Tries to convert from any prefixes of the input text to an `AtomToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_atom(text, pos.clone())?;
+        let scanned = crate::lex::scan_atom(text, pos)?;
         let slice = &text[..scanned.len];
         let value = if let Some(inner) = slice.strip_prefix('\'') {
-            let (v, _) = util::parse_quotation(pos.clone(), inner, '\'')?;
+            let (v, _) = util::parse_quotation(pos, inner, '\'')?;
             Some(v.into_owned())
         } else {
             None
@@ -95,9 +95,9 @@ impl AtomToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(AtomToken::from_text("foo", pos.clone()).unwrap().value(), "foo");
-    /// assert_eq!(AtomToken::from_text("'foo'", pos.clone()).unwrap().value(), "foo");
-    /// assert_eq!(AtomToken::from_text(r"'f\x6Fo'", pos.clone()).unwrap().value(), "foo");
+    /// assert_eq!(AtomToken::from_text("foo", pos).unwrap().value(), "foo");
+    /// assert_eq!(AtomToken::from_text("'foo'", pos).unwrap().value(), "foo");
+    /// assert_eq!(AtomToken::from_text(r"'f\x6Fo'", pos).unwrap().value(), "foo");
     /// ```
     pub fn value(&self) -> &str {
         self.value.as_ref().unwrap_or(&self.text)
@@ -113,9 +113,9 @@ impl AtomToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(AtomToken::from_text("foo", pos.clone()).unwrap().text(), "foo");
-    /// assert_eq!(AtomToken::from_text("'foo'", pos.clone()).unwrap().text(), "'foo'");
-    /// assert_eq!(AtomToken::from_text(r"'f\x6Fo'", pos.clone()).unwrap().text(), r"'f\x6Fo'");
+    /// assert_eq!(AtomToken::from_text("foo", pos).unwrap().text(), "foo");
+    /// assert_eq!(AtomToken::from_text("'foo'", pos).unwrap().text(), "'foo'");
+    /// assert_eq!(AtomToken::from_text(r"'f\x6Fo'", pos).unwrap().text(), r"'f\x6Fo'");
     /// ```
     pub fn text(&self) -> &str {
         &self.text
@@ -123,13 +123,13 @@ impl AtomToken {
 }
 impl PositionRange for AtomToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
     fn end_position(&self) -> Position {
         if self.value.is_none() {
-            self.pos.clone().step_by_width(self.text.len())
+            self.pos.step_by_width(self.text.len())
         } else {
-            self.pos.clone().step_by_text(&self.text)
+            self.pos.step_by_text(&self.text)
         }
     }
 }
@@ -150,18 +150,18 @@ impl fmt::Display for AtomToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(CharToken::from_text("$a", pos.clone()).unwrap().value(), 'a');
-/// assert_eq!(CharToken::from_text("$a  ", pos.clone()).unwrap().value(), 'a');
-/// assert_eq!(CharToken::from_text(r"$\t", pos.clone()).unwrap().value(), '\t');
-/// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().value(), 'S'); // 0o123 = 83 = 'S'
-/// assert_eq!(CharToken::from_text(r"$\x6F", pos.clone()).unwrap().value(), 'o');
-/// assert_eq!(CharToken::from_text(r"$\x{06F}", pos.clone()).unwrap().value(), 'o');
-/// assert_eq!(CharToken::from_text(r"$\^a", pos.clone()).unwrap().value(), '\u{1}');
+/// assert_eq!(CharToken::from_text("$a", pos).unwrap().value(), 'a');
+/// assert_eq!(CharToken::from_text("$a  ", pos).unwrap().value(), 'a');
+/// assert_eq!(CharToken::from_text(r"$\t", pos).unwrap().value(), '\t');
+/// assert_eq!(CharToken::from_text(r"$\123", pos).unwrap().value(), 'S'); // 0o123 = 83 = 'S'
+/// assert_eq!(CharToken::from_text(r"$\x6F", pos).unwrap().value(), 'o');
+/// assert_eq!(CharToken::from_text(r"$\x{06F}", pos).unwrap().value(), 'o');
+/// assert_eq!(CharToken::from_text(r"$\^a", pos).unwrap().value(), '\u{1}');
 ///
 /// // Err
-/// assert!(CharToken::from_text("  $a", pos.clone()).is_err());
-/// assert!(CharToken::from_text(r"$\", pos.clone()).is_err());
-/// assert!(CharToken::from_text("a", pos.clone()).is_err());
+/// assert!(CharToken::from_text("  $a", pos).is_err());
+/// assert!(CharToken::from_text(r"$\", pos).is_err());
+/// assert!(CharToken::from_text("a", pos).is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct CharToken {
@@ -187,9 +187,9 @@ impl CharToken {
     /// use erl_tokenize::tokens::CharToken;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(CharToken::from_value('a', pos.clone()).text(), "$a");
-    /// assert_eq!(CharToken::from_value('\n', pos.clone()).text(), r"$\n");
-    /// assert_eq!(CharToken::from_value('\0', pos.clone()).text(), r"$\x{0}");
+    /// assert_eq!(CharToken::from_value('a', pos).text(), "$a");
+    /// assert_eq!(CharToken::from_value('\n', pos).text(), r"$\n");
+    /// assert_eq!(CharToken::from_value('\0', pos).text(), r"$\x{0}");
     /// ```
     pub fn from_value(value: char, pos: Position) -> Self {
         let mut text = String::from("$");
@@ -199,14 +199,14 @@ impl CharToken {
 
     /// Tries to convert from any prefixes of the text to a `CharToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_char(text, pos.clone())?;
+        let scanned = crate::lex::scan_char(text, pos)?;
         let slice = &text[..scanned.len];
         let mut chars = slice.char_indices();
         let _ = chars.next();
         let (_, c) = chars.next().expect("scanner validated payload");
         let value = if c == '\\' {
             let mut chars = chars.peekable();
-            util::parse_escaped_char(pos.clone(), &mut chars)?
+            util::parse_escaped_char(pos, &mut chars)?
         } else {
             c
         };
@@ -227,8 +227,8 @@ impl CharToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(CharToken::from_text("$a", pos.clone()).unwrap().value(), 'a');
-    /// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().value(), 'S'); // 0o123 = 83 = 'S'
+    /// assert_eq!(CharToken::from_text("$a", pos).unwrap().value(), 'a');
+    /// assert_eq!(CharToken::from_text(r"$\123", pos).unwrap().value(), 'S'); // 0o123 = 83 = 'S'
     /// ```
     pub fn value(&self) -> char {
         self.value
@@ -244,8 +244,8 @@ impl CharToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(CharToken::from_text("$a", pos.clone()).unwrap().text(), "$a");
-    /// assert_eq!(CharToken::from_text(r"$\123", pos.clone()).unwrap().text(), r#"$\123"#);
+    /// assert_eq!(CharToken::from_text("$a", pos).unwrap().text(), "$a");
+    /// assert_eq!(CharToken::from_text(r"$\123", pos).unwrap().text(), r#"$\123"#);
     /// ```
     pub fn text(&self) -> &str {
         &self.text
@@ -253,10 +253,10 @@ impl CharToken {
 }
 impl PositionRange for CharToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
     fn end_position(&self) -> Position {
-        self.pos.clone().step_by_text(&self.text)
+        self.pos.step_by_text(&self.text)
     }
 }
 impl fmt::Display for CharToken {
@@ -276,11 +276,11 @@ impl fmt::Display for CharToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(CommentToken::from_text("%", pos.clone()).unwrap().value(), "");
-/// assert_eq!(CommentToken::from_text("%% foo ", pos.clone()).unwrap().value(), "% foo ");
+/// assert_eq!(CommentToken::from_text("%", pos).unwrap().value(), "");
+/// assert_eq!(CommentToken::from_text("%% foo ", pos).unwrap().value(), "% foo ");
 ///
 /// // Err
-/// assert!(CommentToken::from_text("  % foo", pos.clone()).is_err());
+/// assert!(CommentToken::from_text("  % foo", pos).is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct CommentToken {
@@ -297,7 +297,7 @@ impl CommentToken {
     /// use erl_tokenize::tokens::CommentToken;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(CommentToken::from_value("foo", pos.clone()).unwrap().text(), "%foo");
+    /// assert_eq!(CommentToken::from_value("foo", pos).unwrap().text(), "%foo");
     /// ```
     pub fn from_value(value: &str, pos: Position) -> Result<Self> {
         if value.find('\n').is_some() {
@@ -310,7 +310,7 @@ impl CommentToken {
 
     /// Tries to convert from any prefixes of the text to a `CommentToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_comment(text, pos.clone())?;
+        let scanned = crate::lex::scan_comment(text, pos)?;
         Ok(CommentToken {
             text: text[..scanned.len].to_owned(),
             pos,
@@ -327,8 +327,8 @@ impl CommentToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(CommentToken::from_text("%", pos.clone()).unwrap().value(), "");
-    /// assert_eq!(CommentToken::from_text("%% foo ", pos.clone()).unwrap().value(), "% foo ");
+    /// assert_eq!(CommentToken::from_text("%", pos).unwrap().value(), "");
+    /// assert_eq!(CommentToken::from_text("%% foo ", pos).unwrap().value(), "% foo ");
     /// ```
     pub fn value(&self) -> &str {
         unsafe { self.text().get_unchecked(1..self.text.len()) }
@@ -344,8 +344,8 @@ impl CommentToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(CommentToken::from_text("%", pos.clone()).unwrap().text(), "%");
-    /// assert_eq!(CommentToken::from_text("%% foo ", pos.clone()).unwrap().text(), "%% foo ");
+    /// assert_eq!(CommentToken::from_text("%", pos).unwrap().text(), "%");
+    /// assert_eq!(CommentToken::from_text("%% foo ", pos).unwrap().text(), "%% foo ");
     /// ```
     pub fn text(&self) -> &str {
         &self.text
@@ -353,10 +353,10 @@ impl CommentToken {
 }
 impl PositionRange for CommentToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
     fn end_position(&self) -> Position {
-        self.pos.clone().step_by_width(self.text.len())
+        self.pos.step_by_width(self.text.len())
     }
 }
 impl fmt::Display for CommentToken {
@@ -376,33 +376,33 @@ impl fmt::Display for CommentToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(FloatToken::from_text("0.1", pos.clone()).unwrap().value(), 0.1);
-/// assert_eq!(FloatToken::from_text("12.3e-1  ", pos.clone()).unwrap().value(), 1.23);
-/// assert_eq!(FloatToken::from_text("1_2.3_4e-1_0", pos.clone()).unwrap().value(), 0.000000001234);
-/// assert_eq!(FloatToken::from_text("2#0.111", pos.clone()).unwrap().value(), 0.875);
-/// assert_eq!(FloatToken::from_text("2#0.10101#e8", pos.clone()).unwrap().value(), 168.0);
-/// assert_eq!(FloatToken::from_text("16#f_f.F_F", pos.clone()).unwrap().value(), 255.99609375);
-/// assert_eq!(FloatToken::from_text("1_6#fefe.fefe#e1_6", pos.clone()).unwrap().value(), 1.2041849337671418e24);
-/// assert_eq!(FloatToken::from_text("32#vrv.vrv#e15", pos.clone()).unwrap().value(), 1.2331041872800477e27);
+/// assert_eq!(FloatToken::from_text("0.1", pos).unwrap().value(), 0.1);
+/// assert_eq!(FloatToken::from_text("12.3e-1  ", pos).unwrap().value(), 1.23);
+/// assert_eq!(FloatToken::from_text("1_2.3_4e-1_0", pos).unwrap().value(), 0.000000001234);
+/// assert_eq!(FloatToken::from_text("2#0.111", pos).unwrap().value(), 0.875);
+/// assert_eq!(FloatToken::from_text("2#0.10101#e8", pos).unwrap().value(), 168.0);
+/// assert_eq!(FloatToken::from_text("16#f_f.F_F", pos).unwrap().value(), 255.99609375);
+/// assert_eq!(FloatToken::from_text("1_6#fefe.fefe#e1_6", pos).unwrap().value(), 1.2041849337671418e24);
+/// assert_eq!(FloatToken::from_text("32#vrv.vrv#e15", pos).unwrap().value(), 1.2331041872800477e27);
 ///
 /// // Err
-/// assert!(FloatToken::from_text("123", pos.clone()).is_err());
-/// assert!(FloatToken::from_text(".123", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("10#.123", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("1.", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("10#1.", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("12_.3", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("10#12_.3", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("12._3", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("10#12._3", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("12.3_", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("10#12.3_", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("1__2.3", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("10#1__2.3", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("12.3__4", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("10#12.3__4", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("10_#12.34", pos.clone()).is_err());
-/// assert!(FloatToken::from_text("12.34e-1__0", pos.clone()).is_err());
+/// assert!(FloatToken::from_text("123", pos).is_err());
+/// assert!(FloatToken::from_text(".123", pos).is_err());
+/// assert!(FloatToken::from_text("10#.123", pos).is_err());
+/// assert!(FloatToken::from_text("1.", pos).is_err());
+/// assert!(FloatToken::from_text("10#1.", pos).is_err());
+/// assert!(FloatToken::from_text("12_.3", pos).is_err());
+/// assert!(FloatToken::from_text("10#12_.3", pos).is_err());
+/// assert!(FloatToken::from_text("12._3", pos).is_err());
+/// assert!(FloatToken::from_text("10#12._3", pos).is_err());
+/// assert!(FloatToken::from_text("12.3_", pos).is_err());
+/// assert!(FloatToken::from_text("10#12.3_", pos).is_err());
+/// assert!(FloatToken::from_text("1__2.3", pos).is_err());
+/// assert!(FloatToken::from_text("10#1__2.3", pos).is_err());
+/// assert!(FloatToken::from_text("12.3__4", pos).is_err());
+/// assert!(FloatToken::from_text("10#12.3__4", pos).is_err());
+/// assert!(FloatToken::from_text("10_#12.34", pos).is_err());
+/// assert!(FloatToken::from_text("12.34e-1__0", pos).is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct FloatToken {
@@ -424,9 +424,9 @@ impl FloatToken {
     /// use erl_tokenize::tokens::FloatToken;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(FloatToken::from_value(1.23, pos.clone()).text(), "1.23");
-    /// assert_eq!(FloatToken::from_value(1.0, pos.clone()).text(), "1.0");
-    /// assert_eq!(FloatToken::from_value(-0.0, pos.clone()).text(), "0.0");
+    /// assert_eq!(FloatToken::from_value(1.23, pos).text(), "1.23");
+    /// assert_eq!(FloatToken::from_value(1.0, pos).text(), "1.0");
+    /// assert_eq!(FloatToken::from_value(-0.0, pos).text(), "0.0");
     /// ```
     pub fn from_value(value: f64, pos: Position) -> Self {
         // `-0.0` is not negative in comparison but its `Display` form `"-0"`
@@ -443,7 +443,7 @@ impl FloatToken {
 
     /// Tries to convert from any prefixes of the text to a `FloatToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_float(text, pos.clone())?;
+        let scanned = crate::lex::scan_float(text, pos)?;
         let slice = &text[..scanned.len];
         let value = if let Some(hash) = slice.find('#') {
             Self::decode_radix(slice, hash)
@@ -514,8 +514,8 @@ impl FloatToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(FloatToken::from_text("0.1", pos.clone()).unwrap().value(), 0.1);
-    /// assert_eq!(FloatToken::from_text("12.3e-1", pos.clone()).unwrap().value(), 1.23);
+    /// assert_eq!(FloatToken::from_text("0.1", pos).unwrap().value(), 0.1);
+    /// assert_eq!(FloatToken::from_text("12.3e-1", pos).unwrap().value(), 1.23);
     /// ```
     pub fn value(&self) -> f64 {
         self.value
@@ -531,8 +531,8 @@ impl FloatToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(FloatToken::from_text("0.1", pos.clone()).unwrap().text(), "0.1");
-    /// assert_eq!(FloatToken::from_text("12.3e-1", pos.clone()).unwrap().text(), "12.3e-1");
+    /// assert_eq!(FloatToken::from_text("0.1", pos).unwrap().text(), "0.1");
+    /// assert_eq!(FloatToken::from_text("12.3e-1", pos).unwrap().text(), "12.3e-1");
     /// ```
     pub fn text(&self) -> &str {
         &self.text
@@ -540,10 +540,10 @@ impl FloatToken {
 }
 impl PositionRange for FloatToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
     fn end_position(&self) -> Position {
-        self.pos.clone().step_by_width(self.text.len())
+        self.pos.step_by_width(self.text.len())
     }
 }
 impl fmt::Display for FloatToken {
@@ -565,23 +565,23 @@ impl fmt::Display for FloatToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value(),
+/// assert_eq!(IntegerToken::from_text("10", pos).unwrap().value(),
 ///            Some(10i64));
-/// assert_eq!(IntegerToken::from_text("123_456", pos.clone()).unwrap().value(),
+/// assert_eq!(IntegerToken::from_text("123_456", pos).unwrap().value(),
 ///            Some(123456i64));
-/// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value(),
+/// assert_eq!(IntegerToken::from_text("16#ab0e", pos).unwrap().value(),
 ///            Some(0xab0e));
-/// assert_eq!(IntegerToken::from_text("1_6#a_b_0e", pos.clone()).unwrap().value(),
+/// assert_eq!(IntegerToken::from_text("1_6#a_b_0e", pos).unwrap().value(),
 ///            Some(0xab0e));
 ///
 /// // Out of range returns None
-/// assert_eq!(IntegerToken::from_text("9223372036854775808", pos.clone()).unwrap().value(),
+/// assert_eq!(IntegerToken::from_text("9223372036854775808", pos).unwrap().value(),
 ///            None);
 ///
 /// // Err
-/// assert!(IntegerToken::from_text("-10", pos.clone()).is_err());
-/// assert!(IntegerToken::from_text("123_456_", pos.clone()).is_err());
-/// assert!(IntegerToken::from_text("123__456", pos.clone()).is_err());
+/// assert!(IntegerToken::from_text("-10", pos).is_err());
+/// assert!(IntegerToken::from_text("123_456_", pos).is_err());
+/// assert!(IntegerToken::from_text("123__456", pos).is_err());
 /// # }
 /// ```
 #[derive(Debug, Clone)]
@@ -600,7 +600,7 @@ impl IntegerToken {
     /// use erl_tokenize::tokens::IntegerToken;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(IntegerToken::from_value(123, pos.clone()).text(), "123");
+    /// assert_eq!(IntegerToken::from_value(123, pos).text(), "123");
     /// ```
     pub fn from_value(value: i64, pos: Position) -> Self {
         let text = format!("{value}");
@@ -616,7 +616,7 @@ impl IntegerToken {
     /// Returns `Ok` even if the parsed value is out of range for `i64`;
     /// in such cases, `value()` will return `None`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_integer(text, pos.clone())?;
+        let scanned = crate::lex::scan_integer(text, pos)?;
         let slice = &text[..scanned.len];
         let (radix, digits_slice) = if let Some(hash) = slice.find('#') {
             let radix: u32 = util::strip_underscores(&slice[..hash])
@@ -653,11 +653,11 @@ impl IntegerToken {
     /// # fn main() {
     /// let pos = Position::new();
     ///
-    /// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().value(),
+    /// assert_eq!(IntegerToken::from_text("10", pos).unwrap().value(),
     ///            Some(10i64));
-    /// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().value(),
+    /// assert_eq!(IntegerToken::from_text("16#ab0e", pos).unwrap().value(),
     ///            Some(0xab0e));
-    /// assert_eq!(IntegerToken::from_text("9223372036854775808", pos.clone()).unwrap().value(),
+    /// assert_eq!(IntegerToken::from_text("9223372036854775808", pos).unwrap().value(),
     ///            None);
     /// # }
     /// ```
@@ -675,8 +675,8 @@ impl IntegerToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(IntegerToken::from_text("10", pos.clone()).unwrap().text(), "10");
-    /// assert_eq!(IntegerToken::from_text("16#ab0e", pos.clone()).unwrap().text(), "16#ab0e");
+    /// assert_eq!(IntegerToken::from_text("10", pos).unwrap().text(), "10");
+    /// assert_eq!(IntegerToken::from_text("16#ab0e", pos).unwrap().text(), "16#ab0e");
     /// ```
     pub fn text(&self) -> &str {
         &self.text
@@ -684,10 +684,10 @@ impl IntegerToken {
 }
 impl PositionRange for IntegerToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
     fn end_position(&self) -> Position {
-        self.pos.clone().step_by_width(self.text.len())
+        self.pos.step_by_width(self.text.len())
     }
 }
 impl fmt::Display for IntegerToken {
@@ -708,13 +708,13 @@ impl fmt::Display for IntegerToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(KeywordToken::from_text("receive", pos.clone()).unwrap().value(), Keyword::Receive);
-/// assert_eq!(KeywordToken::from_text("and  ", pos.clone()).unwrap().value(), Keyword::And);
+/// assert_eq!(KeywordToken::from_text("receive", pos).unwrap().value(), Keyword::Receive);
+/// assert_eq!(KeywordToken::from_text("and  ", pos).unwrap().value(), Keyword::And);
 ///
 /// // Err
-/// assert!(KeywordToken::from_text("foo", pos.clone()).is_err());
-/// assert!(KeywordToken::from_text("  and", pos.clone()).is_err());
-/// assert!(KeywordToken::from_text("andfoo", pos.clone()).is_err());
+/// assert!(KeywordToken::from_text("foo", pos).is_err());
+/// assert!(KeywordToken::from_text("  and", pos).is_err());
+/// assert!(KeywordToken::from_text("andfoo", pos).is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct KeywordToken {
@@ -732,7 +732,7 @@ impl KeywordToken {
     /// use erl_tokenize::values::Keyword;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(KeywordToken::from_value(Keyword::Case, pos.clone()).text(), "case");
+    /// assert_eq!(KeywordToken::from_value(Keyword::Case, pos).text(), "case");
     /// ```
     pub fn from_value(value: Keyword, pos: Position) -> Self {
         KeywordToken { value, pos }
@@ -740,7 +740,7 @@ impl KeywordToken {
 
     /// Tries to convert from any prefixes of the text to a `KeywordToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_keyword(text, pos.clone())?;
+        let scanned = crate::lex::scan_keyword(text, pos)?;
         match scanned.kind {
             crate::lex::ScanKind::Keyword(value) => Ok(KeywordToken { value, pos }),
             _ => unreachable!("scan_keyword returns Keyword or errors"),
@@ -758,9 +758,9 @@ impl KeywordToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(KeywordToken::from_text("receive", pos.clone()).unwrap().value(),
+    /// assert_eq!(KeywordToken::from_text("receive", pos).unwrap().value(),
     ///            Keyword::Receive);
-    /// assert_eq!(KeywordToken::from_text("and  ", pos.clone()).unwrap().value(),
+    /// assert_eq!(KeywordToken::from_text("and  ", pos).unwrap().value(),
     ///            Keyword::And);
     /// ```
     pub fn value(&self) -> Keyword {
@@ -777,8 +777,8 @@ impl KeywordToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(KeywordToken::from_text("receive", pos.clone()).unwrap().text(), "receive");
-    /// assert_eq!(KeywordToken::from_text("and  ", pos.clone()).unwrap().text(), "and");
+    /// assert_eq!(KeywordToken::from_text("receive", pos).unwrap().text(), "receive");
+    /// assert_eq!(KeywordToken::from_text("and  ", pos).unwrap().text(), "and");
     /// ```
     pub fn text(&self) -> &'static str {
         self.value.as_str()
@@ -786,10 +786,10 @@ impl KeywordToken {
 }
 impl PositionRange for KeywordToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
     fn end_position(&self) -> Position {
-        self.pos.clone().step_by_width(self.text().len())
+        self.pos.step_by_width(self.text().len())
     }
 }
 impl fmt::Display for KeywordToken {
@@ -810,12 +810,12 @@ impl fmt::Display for KeywordToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos.clone())?.value(), ("", "foo", ""));
-/// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos.clone())?.value(), ("", "foo", ""));
-/// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos.clone())?.value(), ("b", "foo", ""));
+/// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos)?.value(), ("", "foo", ""));
+/// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos)?.value(), ("", "foo", ""));
+/// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos)?.value(), ("b", "foo", ""));
 ///
 /// // Err
-/// assert!(SigilStringToken::from_text(r#""foo""#, pos.clone()).is_err());
+/// assert!(SigilStringToken::from_text(r#""foo""#, pos).is_err());
 /// # Ok(())
 /// # }
 /// ```
@@ -840,9 +840,9 @@ impl SigilStringToken {
     /// # fn main() -> erl_tokenize::Result<()> {
     /// let pos = Position::new();
     ///
-    /// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos.clone())?.value(), ("", "foo", ""));
-    /// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos.clone())?.value(), ("", "foo", ""));
-    /// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos.clone())?.value(), ("b", "foo", ""));
+    /// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos)?.value(), ("", "foo", ""));
+    /// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos)?.value(), ("", "foo", ""));
+    /// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos)?.value(), ("b", "foo", ""));
     /// # Ok(())
     /// # }
     /// ```
@@ -861,9 +861,9 @@ impl SigilStringToken {
     /// # fn main() -> erl_tokenize::Result<()> {
     /// let pos = Position::new();
     ///
-    /// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos.clone())?.text(), r#"~"foo""#);
-    /// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos.clone())?.text(), r#"~(foo)"#);
-    /// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos.clone())?.text(), r#"~b"foo""#);
+    /// assert_eq!(SigilStringToken::from_text(r#"~"foo""#, pos)?.text(), r#"~"foo""#);
+    /// assert_eq!(SigilStringToken::from_text(r#"~(foo)"#, pos)?.text(), r#"~(foo)"#);
+    /// assert_eq!(SigilStringToken::from_text(r#"~b"foo"  "#, pos)?.text(), r#"~b"foo""#);
     /// # Ok(())
     /// # }
     /// ```
@@ -873,7 +873,7 @@ impl SigilStringToken {
 
     /// Tries to convert from any prefixes of the text to a [`SigilStringToken`].
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_sigil_string(text, pos.clone())?;
+        let scanned = crate::lex::scan_sigil_string(text, pos)?;
         let slice = &text[..scanned.len];
         let mut offset = 1;
         for c in slice[offset..].chars() {
@@ -885,7 +885,7 @@ impl SigilStringToken {
         let prefix = slice[1..offset].to_owned();
         let open_delimiter = slice[offset..].chars().next().expect("scanner validated");
         let (content, content_end) = if open_delimiter == '"' {
-            let t = StringToken::from_text(&slice[offset..], pos.clone().step_by_width(offset))?;
+            let t = StringToken::from_text(&slice[offset..], pos.step_by_width(offset))?;
             let end = offset + t.text().len();
             (t.value().to_owned(), end)
         } else {
@@ -897,7 +897,7 @@ impl SigilStringToken {
                 other => other,
             };
             let (v, end) = util::parse_quotation(
-                pos.clone().step_by_width(offset + 1),
+                pos.step_by_width(offset + 1),
                 &slice[offset + 1..],
                 close_delimiter,
             )?;
@@ -916,11 +916,11 @@ impl SigilStringToken {
 
 impl PositionRange for SigilStringToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
 
     fn end_position(&self) -> Position {
-        self.pos.clone().step_by_text(&self.text)
+        self.pos.step_by_text(&self.text)
     }
 }
 
@@ -941,12 +941,12 @@ impl fmt::Display for SigilStringToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(StringToken::from_text(r#""foo""#, pos.clone()).unwrap().value(), "foo");
-/// assert_eq!(StringToken::from_text(r#""foo"  "#, pos.clone()).unwrap().value(), "foo");
-/// assert_eq!(StringToken::from_text(r#""f\x6Fo""#, pos.clone()).unwrap().value(), "foo");
+/// assert_eq!(StringToken::from_text(r#""foo""#, pos).unwrap().value(), "foo");
+/// assert_eq!(StringToken::from_text(r#""foo"  "#, pos).unwrap().value(), "foo");
+/// assert_eq!(StringToken::from_text(r#""f\x6Fo""#, pos).unwrap().value(), "foo");
 ///
 /// // Err
-/// assert!(StringToken::from_text(r#"  "foo""#, pos.clone()).is_err());
+/// assert!(StringToken::from_text(r#"  "foo""#, pos).is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct StringToken {
@@ -972,8 +972,8 @@ impl StringToken {
     /// use erl_tokenize::tokens::StringToken;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(StringToken::from_value("foo", pos.clone()).text(), r#""foo""#);
-    /// assert_eq!(StringToken::from_value("a\u{1}b", pos.clone()).text(), r#""a\x{1}b""#);
+    /// assert_eq!(StringToken::from_value("foo", pos).text(), r#""foo""#);
+    /// assert_eq!(StringToken::from_value("a\u{1}b", pos).text(), r#""a\x{1}b""#);
     /// ```
     pub fn from_value(value: &str, pos: Position) -> Self {
         let mut text = String::from("\"");
@@ -990,13 +990,13 @@ impl StringToken {
 
     /// Tries to convert from any prefixes of the text to a `StringToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_string(text, pos.clone())?;
+        let scanned = crate::lex::scan_string(text, pos)?;
         let slice = &text[..scanned.len];
         let value = if slice.starts_with(r#"""""#) {
-            let (v, _) = Self::parse_triple_quoted(slice, pos.clone())?;
+            let (v, _) = Self::parse_triple_quoted(slice, pos)?;
             Some(v.into_owned())
         } else {
-            let (v, _) = util::parse_quotation(pos.clone(), &slice[1..], '"')?;
+            let (v, _) = util::parse_quotation(pos, &slice[1..], '"')?;
             match v {
                 Cow::Borrowed(_) => None,
                 Cow::Owned(s) => Some(s),
@@ -1110,9 +1110,9 @@ impl StringToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(StringToken::from_text(r#""foo""#, pos.clone()).unwrap().value(), "foo");
-    /// assert_eq!(StringToken::from_text(r#""foo"  "#, pos.clone()).unwrap().value(), "foo");
-    /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#, pos.clone()).unwrap().value(), "foo");
+    /// assert_eq!(StringToken::from_text(r#""foo""#, pos).unwrap().value(), "foo");
+    /// assert_eq!(StringToken::from_text(r#""foo"  "#, pos).unwrap().value(), "foo");
+    /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#, pos).unwrap().value(), "foo");
     /// ```
     pub fn value(&self) -> &str {
         if let Some(v) = self.value.as_ref() {
@@ -1133,11 +1133,11 @@ impl StringToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(StringToken::from_text(r#""foo""#, pos.clone()).unwrap().text(),
+    /// assert_eq!(StringToken::from_text(r#""foo""#, pos).unwrap().text(),
     ///            r#""foo""#);
-    /// assert_eq!(StringToken::from_text(r#""foo"  "#, pos.clone()).unwrap().text(),
+    /// assert_eq!(StringToken::from_text(r#""foo"  "#, pos).unwrap().text(),
     ///            r#""foo""#);
-    /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#, pos.clone()).unwrap().text(),
+    /// assert_eq!(StringToken::from_text(r#""f\x6Fo""#, pos).unwrap().text(),
     ///            r#""f\x6Fo""#);
     /// ```
     pub fn text(&self) -> &str {
@@ -1146,10 +1146,10 @@ impl StringToken {
 }
 impl PositionRange for StringToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
     fn end_position(&self) -> Position {
-        self.pos.clone().step_by_text(&self.text)
+        self.pos.step_by_text(&self.text)
     }
 }
 impl fmt::Display for StringToken {
@@ -1170,12 +1170,12 @@ impl fmt::Display for StringToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(SymbolToken::from_text(".", pos.clone()).unwrap().value(), Symbol::Dot);
-/// assert_eq!(SymbolToken::from_text(":=  ", pos.clone()).unwrap().value(), Symbol::MapMatch);
+/// assert_eq!(SymbolToken::from_text(".", pos).unwrap().value(), Symbol::Dot);
+/// assert_eq!(SymbolToken::from_text(":=  ", pos).unwrap().value(), Symbol::MapMatch);
 ///
 /// // Err
-/// assert!(SymbolToken::from_text("  .", pos.clone()).is_err());
-/// assert!(SymbolToken::from_text("foo", pos.clone()).is_err());
+/// assert!(SymbolToken::from_text("  .", pos).is_err());
+/// assert!(SymbolToken::from_text("foo", pos).is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct SymbolToken {
@@ -1193,7 +1193,7 @@ impl SymbolToken {
     /// use erl_tokenize::values::Symbol;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(SymbolToken::from_value(Symbol::Dot, pos.clone()).text(), ".");
+    /// assert_eq!(SymbolToken::from_value(Symbol::Dot, pos).text(), ".");
     /// ```
     pub fn from_value(value: Symbol, pos: Position) -> Self {
         SymbolToken { value, pos }
@@ -1201,7 +1201,7 @@ impl SymbolToken {
 
     /// Tries to convert from any prefixes of the text to a `SymbolToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_symbol(text, pos.clone())?;
+        let scanned = crate::lex::scan_symbol(text, pos)?;
         match scanned.kind {
             crate::lex::ScanKind::Symbol(value) => Ok(SymbolToken { value, pos }),
             _ => unreachable!("scan_symbol returns Symbol or errors"),
@@ -1219,8 +1219,8 @@ impl SymbolToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(SymbolToken::from_text(".", pos.clone()).unwrap().value(), Symbol::Dot);
-    /// assert_eq!(SymbolToken::from_text(":=  ", pos.clone()).unwrap().value(), Symbol::MapMatch);
+    /// assert_eq!(SymbolToken::from_text(".", pos).unwrap().value(), Symbol::Dot);
+    /// assert_eq!(SymbolToken::from_text(":=  ", pos).unwrap().value(), Symbol::MapMatch);
     /// ```
     pub fn value(&self) -> Symbol {
         self.value
@@ -1236,8 +1236,8 @@ impl SymbolToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(SymbolToken::from_text(".", pos.clone()).unwrap().text(), ".");
-    /// assert_eq!(SymbolToken::from_text(":=  ", pos.clone()).unwrap().text(), ":=");
+    /// assert_eq!(SymbolToken::from_text(".", pos).unwrap().text(), ".");
+    /// assert_eq!(SymbolToken::from_text(":=  ", pos).unwrap().text(), ":=");
     /// ```
     pub fn text(&self) -> &'static str {
         self.value.as_str()
@@ -1245,10 +1245,10 @@ impl SymbolToken {
 }
 impl PositionRange for SymbolToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
     fn end_position(&self) -> Position {
-        self.pos.clone().step_by_width(self.text().len())
+        self.pos.step_by_width(self.text().len())
     }
 }
 impl fmt::Display for SymbolToken {
@@ -1268,13 +1268,13 @@ impl fmt::Display for SymbolToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(VariableToken::from_text("Foo", pos.clone()).unwrap().value(), "Foo");
-/// assert_eq!(VariableToken::from_text("_  ", pos.clone()).unwrap().value(), "_");
-/// assert_eq!(VariableToken::from_text("_foo@bar", pos.clone()).unwrap().value(), "_foo@bar");
+/// assert_eq!(VariableToken::from_text("Foo", pos).unwrap().value(), "Foo");
+/// assert_eq!(VariableToken::from_text("_  ", pos).unwrap().value(), "_");
+/// assert_eq!(VariableToken::from_text("_foo@bar", pos).unwrap().value(), "_foo@bar");
 ///
 /// // Err
-/// assert!(VariableToken::from_text("foo", pos.clone()).is_err());
-/// assert!(VariableToken::from_text("  Foo", pos.clone()).is_err());
+/// assert!(VariableToken::from_text("foo", pos).is_err());
+/// assert!(VariableToken::from_text("  Foo", pos).is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct VariableToken {
@@ -1291,10 +1291,10 @@ impl VariableToken {
     /// use erl_tokenize::tokens::VariableToken;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(VariableToken::from_value("Foo", pos.clone()).unwrap().text(), "Foo");
+    /// assert_eq!(VariableToken::from_value("Foo", pos).unwrap().text(), "Foo");
     /// ```
     pub fn from_value(value: &str, pos: Position) -> Result<Self> {
-        let var = Self::from_text(value, pos.clone())?;
+        let var = Self::from_text(value, pos)?;
         if var.text().len() != value.len() {
             Err(Error::invalid_variable_token(pos))
         } else {
@@ -1304,7 +1304,7 @@ impl VariableToken {
 
     /// Tries to convert from any prefixes of the text to a `VariableToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_variable(text, pos.clone())?;
+        let scanned = crate::lex::scan_variable(text, pos)?;
         Ok(VariableToken {
             text: text[..scanned.len].to_owned(),
             pos,
@@ -1321,8 +1321,8 @@ impl VariableToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(VariableToken::from_text("Foo", pos.clone()).unwrap().value(), "Foo");
-    /// assert_eq!(VariableToken::from_text("_foo  ", pos.clone()).unwrap().value(), "_foo");
+    /// assert_eq!(VariableToken::from_text("Foo", pos).unwrap().value(), "Foo");
+    /// assert_eq!(VariableToken::from_text("_foo  ", pos).unwrap().value(), "_foo");
     /// ```
     pub fn value(&self) -> &str {
         &self.text
@@ -1338,8 +1338,8 @@ impl VariableToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(VariableToken::from_text("Foo", pos.clone()).unwrap().text(), "Foo");
-    /// assert_eq!(VariableToken::from_text("_foo  ", pos.clone()).unwrap().text(), "_foo");
+    /// assert_eq!(VariableToken::from_text("Foo", pos).unwrap().text(), "Foo");
+    /// assert_eq!(VariableToken::from_text("_foo  ", pos).unwrap().text(), "_foo");
     /// ```
     pub fn text(&self) -> &str {
         &self.text
@@ -1347,10 +1347,10 @@ impl VariableToken {
 }
 impl PositionRange for VariableToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
     fn end_position(&self) -> Position {
-        self.pos.clone().step_by_width(self.text.len())
+        self.pos.step_by_width(self.text.len())
     }
 }
 impl fmt::Display for VariableToken {
@@ -1371,11 +1371,11 @@ impl fmt::Display for VariableToken {
 /// let pos = Position::new();
 ///
 /// // Ok
-/// assert_eq!(WhitespaceToken::from_text(" ", pos.clone()).unwrap().value(), Whitespace::Space);
-/// assert_eq!(WhitespaceToken::from_text("\t ", pos.clone()).unwrap().value(), Whitespace::Tab);
+/// assert_eq!(WhitespaceToken::from_text(" ", pos).unwrap().value(), Whitespace::Space);
+/// assert_eq!(WhitespaceToken::from_text("\t ", pos).unwrap().value(), Whitespace::Tab);
 ///
 /// // Err
-/// assert!(WhitespaceToken::from_text("foo", pos.clone()).is_err());
+/// assert!(WhitespaceToken::from_text("foo", pos).is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub struct WhitespaceToken {
@@ -1393,7 +1393,7 @@ impl WhitespaceToken {
     /// use erl_tokenize::values::Whitespace;
     ///
     /// let pos = Position::new();
-    /// assert_eq!(WhitespaceToken::from_value(Whitespace::Space, pos.clone()).text(), " ");
+    /// assert_eq!(WhitespaceToken::from_value(Whitespace::Space, pos).text(), " ");
     /// ```
     pub fn from_value(value: Whitespace, pos: Position) -> Self {
         WhitespaceToken { value, pos }
@@ -1401,7 +1401,7 @@ impl WhitespaceToken {
 
     /// Tries to convert from any prefixes of the text to a `WhitespaceToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_whitespace(text, pos.clone())?;
+        let scanned = crate::lex::scan_whitespace(text, pos)?;
         match scanned.kind {
             crate::lex::ScanKind::Whitespace(value) => Ok(WhitespaceToken { value, pos }),
             _ => unreachable!("scan_whitespace returns Whitespace or errors"),
@@ -1419,9 +1419,9 @@ impl WhitespaceToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(WhitespaceToken::from_text(" ", pos.clone()).unwrap().value(),
+    /// assert_eq!(WhitespaceToken::from_text(" ", pos).unwrap().value(),
     ///            Whitespace::Space);
-    /// assert_eq!(WhitespaceToken::from_text("\t ", pos.clone()).unwrap().value(),
+    /// assert_eq!(WhitespaceToken::from_text("\t ", pos).unwrap().value(),
     ///            Whitespace::Tab);
     /// ```
     pub fn value(&self) -> Whitespace {
@@ -1438,8 +1438,8 @@ impl WhitespaceToken {
     ///
     /// let pos = Position::new();
     ///
-    /// assert_eq!(WhitespaceToken::from_text(" ", pos.clone()).unwrap().text(), " ");
-    /// assert_eq!(WhitespaceToken::from_text("\t ", pos.clone()).unwrap().text(), "\t");
+    /// assert_eq!(WhitespaceToken::from_text(" ", pos).unwrap().text(), " ");
+    /// assert_eq!(WhitespaceToken::from_text("\t ", pos).unwrap().text(), "\t");
     /// ```
     pub fn text(&self) -> &'static str {
         self.value.as_str()
@@ -1447,10 +1447,10 @@ impl WhitespaceToken {
 }
 impl PositionRange for WhitespaceToken {
     fn start_position(&self) -> Position {
-        self.pos.clone()
+        self.pos
     }
     fn end_position(&self) -> Position {
-        self.pos.clone().step_by_text(self.text())
+        self.pos.step_by_text(self.text())
     }
 }
 impl fmt::Display for WhitespaceToken {

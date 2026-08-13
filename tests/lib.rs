@@ -3,14 +3,15 @@ use erl_tokenize::tokens::{
     StringToken, SymbolToken, VariableToken, WhitespaceToken,
 };
 use erl_tokenize::values::{Keyword, Symbol, Whitespace};
-use erl_tokenize::{Lexer, Position, PositionRange, Token, Tokenizer};
+use erl_tokenize::{Position, PositionRange, TokenKind, Tokenizer, scan_token};
 
 macro_rules! tokenize {
-    ($text:expr) => {
-        Tokenizer::new($text)
-            .map(|t| t.unwrap().text().to_string())
+    ($text:expr) => {{
+        let src: &str = $text;
+        Tokenizer::new(src)
+            .map(|t| t.unwrap().text(src).to_string())
             .collect::<Vec<_>>()
-    };
+    }};
 }
 
 fn pos() -> Position {
@@ -77,14 +78,14 @@ fn atom_from_value() {
 
 #[test]
 fn atom_vs_keyword() {
-    let token = Token::from_text("case", pos()).unwrap();
-    assert!(token.as_keyword_token().is_some());
+    let token = scan_token("case", pos()).unwrap().unwrap();
+    assert!(matches!(token.kind(), TokenKind::Keyword(Keyword::Case)));
 
-    let token = Token::from_text("case_x", pos()).unwrap();
-    assert!(token.as_atom_token().is_some());
+    let token = scan_token("case_x", pos()).unwrap().unwrap();
+    assert_eq!(token.kind(), TokenKind::Atom);
 
-    let token = Token::from_text("foo", pos()).unwrap();
-    assert!(token.as_atom_token().is_some());
+    let token = scan_token("foo", pos()).unwrap().unwrap();
+    assert_eq!(token.kind(), TokenKind::Atom);
 }
 
 #[test]
@@ -262,10 +263,7 @@ fn char_octal() {
 
     // The octal escape must stop after 3 digits: `$\1234` tokenizes as
     // the char `$\123` followed by the integer `4`.
-    let tokens: Vec<String> = Tokenizer::new(r"$\1234")
-        .map(|t| t.unwrap().text().to_string())
-        .collect();
-    assert_eq!(tokens, [r"$\123", "4"]);
+    assert_eq!(tokenize!(r"$\1234"), [r"$\123", "4"]);
 }
 
 #[test]
@@ -1347,55 +1345,43 @@ fn tokenize_comment_in_code() {
 
 #[test]
 fn tokenize_empty_string() {
-    let tokens: Vec<String> = Tokenizer::new("")
-        .map(|t| t.unwrap().text().to_string())
-        .collect();
-    assert!(tokens.is_empty());
+    assert!(tokenize!("").is_empty());
+    assert_eq!(scan_token("", pos()).unwrap(), None);
 }
 
 // ============================================================
-// Lexer tests
+// Token filtering tests (replaces the deleted Lexer type)
 // ============================================================
 
-#[test]
-fn lexer_filters_whitespace() {
-    let src = "foo bar";
-    let tokens: Vec<String> = Lexer::new(src)
-        .map(|t| t.unwrap().text().to_owned())
-        .collect();
-    assert_eq!(tokens, ["foo", "bar"]);
+fn lexical_texts(src: &str) -> Vec<&str> {
+    Tokenizer::new(src)
+        .filter_map(|t| {
+            let t = t.unwrap();
+            t.is_lexical().then(|| t.text(src))
+        })
+        .collect()
 }
 
 #[test]
-fn lexer_filters_comments() {
-    let src = "foo % comment\nbar";
-    let tokens: Vec<String> = Lexer::new(src)
-        .map(|t| t.unwrap().text().to_owned())
-        .collect();
-    assert_eq!(tokens, ["foo", "bar"]);
+fn tokenizer_filter_skips_whitespace() {
+    assert_eq!(lexical_texts("foo bar"), ["foo", "bar"]);
 }
 
 #[test]
-fn lexer_complex() {
+fn tokenizer_filter_skips_comments() {
+    assert_eq!(lexical_texts("foo % comment\nbar"), ["foo", "bar"]);
+}
+
+#[test]
+fn tokenizer_filter_complex() {
     let src = "-module(foo).\n\n-export([bar/0]).\n\nbar() -> ok.";
-    let tokens: Vec<String> = Lexer::new(src)
-        .map(|t| t.unwrap().text().to_owned())
-        .collect();
     assert_eq!(
-        tokens,
+        lexical_texts(src),
         [
             "-", "module", "(", "foo", ")", ".", "-", "export", "(", "[", "bar", "/", "0", "]",
             ")", ".", "bar", "(", ")", "->", "ok", "."
         ]
     );
-}
-
-#[test]
-fn lexer_finish() {
-    let src = String::from("hello");
-    let lexer = Lexer::new(src);
-    let recovered: String = lexer.finish();
-    assert_eq!(recovered, "hello");
 }
 
 // ============================================================
@@ -1462,35 +1448,7 @@ fn position_set_and_reset() {
     assert_eq!(tokenizer.next_position().offset(), 4);
 
     let t = tokenizer.next().unwrap().unwrap();
-    assert_eq!(t.text(), "bar");
-}
-
-#[test]
-fn position_consume_char() {
-    let src = "abc";
-    let mut tokenizer = Tokenizer::new(src);
-
-    assert_eq!(tokenizer.consume_char(), Some('a'));
-    assert_eq!(tokenizer.next_position().offset(), 1);
-
-    assert_eq!(tokenizer.consume_char(), Some('b'));
-    assert_eq!(tokenizer.next_position().offset(), 2);
-
-    assert_eq!(tokenizer.consume_char(), Some('c'));
-    assert_eq!(tokenizer.next_position().offset(), 3);
-
-    assert_eq!(tokenizer.consume_char(), None);
-}
-
-#[test]
-fn position_filepath() {
-    let src = "foo";
-    let mut tokenizer = Tokenizer::new(src);
-    tokenizer.set_filepath("test.erl");
-
-    let t = tokenizer.next().unwrap().unwrap();
-    let p = t.start_position();
-    assert_eq!(p.filepath().unwrap().to_str().unwrap(), "test.erl");
+    assert_eq!(t.text(src), "bar");
 }
 
 #[test]
@@ -1511,118 +1469,72 @@ fn position_range_string_multiline() {
 }
 
 // ============================================================
-// Token conversion tests
+// TokenKind / classification tests
 // ============================================================
 
 #[test]
 fn token_is_lexical_or_hidden() {
-    let atom = Token::from_text("foo", pos()).unwrap();
-    assert!(atom.is_lexical_token());
-    assert!(!atom.is_hidden_token());
+    let atom = scan_token("foo", pos()).unwrap().unwrap();
+    assert!(atom.is_lexical());
+    assert!(!atom.is_hidden());
 
-    let ws = Token::from_text(" ", pos()).unwrap();
-    assert!(!ws.is_lexical_token());
-    assert!(ws.is_hidden_token());
+    let ws = scan_token(" ", pos()).unwrap().unwrap();
+    assert!(!ws.is_lexical());
+    assert!(ws.is_hidden());
 
-    let comment = Token::from_text("% test", pos()).unwrap();
-    assert!(!comment.is_lexical_token());
-    assert!(comment.is_hidden_token());
+    let comment = scan_token("% test", pos()).unwrap().unwrap();
+    assert!(!comment.is_lexical());
+    assert!(comment.is_hidden());
 }
 
 #[test]
-fn token_into_lexical() {
-    let atom = Token::from_text("foo", pos()).unwrap();
-    assert!(atom.into_lexical_token().is_ok());
-
-    let ws = Token::from_text(" ", pos()).unwrap();
-    assert!(ws.into_lexical_token().is_err());
-}
-
-#[test]
-fn token_into_hidden() {
-    let ws = Token::from_text(" ", pos()).unwrap();
-    assert!(ws.into_hidden_token().is_ok());
-
-    let comment = Token::from_text("% test", pos()).unwrap();
-    assert!(comment.into_hidden_token().is_ok());
-
-    let atom = Token::from_text("foo", pos()).unwrap();
-    assert!(atom.into_hidden_token().is_err());
-}
-
-#[test]
-fn token_as_accessors() {
-    let t = Token::from_text("foo", pos()).unwrap();
-    assert!(t.as_atom_token().is_some());
-    assert!(t.as_char_token().is_none());
-
-    let t = Token::from_text("$a", pos()).unwrap();
-    assert!(t.as_char_token().is_some());
-
-    let t = Token::from_text("42", pos()).unwrap();
-    assert!(t.as_integer_token().is_some());
-
-    let t = Token::from_text("1.5", pos()).unwrap();
-    assert!(t.as_float_token().is_some());
-
-    let t = Token::from_text("case", pos()).unwrap();
-    assert!(t.as_keyword_token().is_some());
-
-    let t = Token::from_text(r#""hello""#, pos()).unwrap();
-    assert!(t.as_string_token().is_some());
-
-    let t = Token::from_text(".", pos()).unwrap();
-    assert!(t.as_symbol_token().is_some());
-
-    let t = Token::from_text("Foo", pos()).unwrap();
-    assert!(t.as_variable_token().is_some());
-
-    let t = Token::from_text("% comment", pos()).unwrap();
-    assert!(t.as_comment_token().is_some());
-
-    let t = Token::from_text(" ", pos()).unwrap();
-    assert!(t.as_whitespace_token().is_some());
-}
-
-#[test]
-fn token_into_specific() {
-    let t = Token::from_text("foo", pos()).unwrap();
-    assert!(t.into_atom_token().is_ok());
-
-    let t = Token::from_text("$a", pos()).unwrap();
-    assert!(t.into_char_token().is_ok());
-
-    let t = Token::from_text("42", pos()).unwrap();
-    assert!(t.into_integer_token().is_ok());
-
-    let t = Token::from_text("1.5", pos()).unwrap();
-    assert!(t.into_float_token().is_ok());
-
-    let t = Token::from_text("case", pos()).unwrap();
-    assert!(t.into_keyword_token().is_ok());
-
-    let t = Token::from_text(r#""hello""#, pos()).unwrap();
-    assert!(t.into_string_token().is_ok());
-
-    let t = Token::from_text(".", pos()).unwrap();
-    assert!(t.into_symbol_token().is_ok());
-
-    let t = Token::from_text("Foo", pos()).unwrap();
-    assert!(t.into_variable_token().is_ok());
-
-    let t = Token::from_text("% comment", pos()).unwrap();
-    assert!(t.into_comment_token().is_ok());
-
-    let t = Token::from_text(" ", pos()).unwrap();
-    assert!(t.into_whitespace_token().is_ok());
+fn token_kinds() {
+    let cases: &[(&str, TokenKind)] = &[
+        ("foo", TokenKind::Atom),
+        ("$a", TokenKind::Char),
+        ("42", TokenKind::Integer),
+        ("1.5", TokenKind::Float),
+        ("case", TokenKind::Keyword(Keyword::Case)),
+        (r#""hello""#, TokenKind::String),
+        ("~b\"hello\"", TokenKind::SigilString),
+        (".", TokenKind::Symbol(Symbol::Dot)),
+        ("Foo", TokenKind::Variable),
+        ("% comment", TokenKind::Comment),
+        (" ", TokenKind::Whitespace),
+    ];
+    for (src, expected) in cases {
+        let t = scan_token(src, pos()).unwrap().unwrap();
+        assert_eq!(t.kind(), *expected, "kind mismatch for {src:?}");
+    }
 }
 
 // ============================================================
-// Display / text round-trip tests
+// scan_token contract tests
 // ============================================================
 
 #[test]
-fn display_matches_text() {
+fn scan_token_returns_none_at_eof() {
+    assert_eq!(scan_token("", Position::new()).unwrap(), None);
+
+    let src = "foo";
+    let t = scan_token(src, Position::new()).unwrap().unwrap();
+    assert_eq!(scan_token(src, t.end()).unwrap(), None);
+}
+
+#[test]
+fn scan_token_walks_source() {
+    let src = "io:format(\"Hello\").";
+    let mut p = Position::new();
+    let mut texts = Vec::new();
+    while let Some(token) = scan_token(src, p).unwrap() {
+        texts.push(token.text(src).to_owned());
+        p = token.end();
+    }
+    assert_eq!(texts, ["io", ":", "format", "(", "\"Hello\"", ")", "."]);
+}
+
+#[test]
+fn token_text_matches_source_slice() {
     let cases = [
         "foo",
         "'bar'",
@@ -1637,9 +1549,22 @@ fn display_matches_text() {
         " ",
     ];
     for src in cases {
-        let t = Token::from_text(src, pos()).unwrap();
-        assert_eq!(format!("{t}"), t.text(), "Display mismatch for: {src}");
+        let t = scan_token(src, pos()).unwrap().unwrap();
+        assert_eq!(t.text(src), src, "text mismatch for {src:?}");
     }
+}
+
+#[test]
+fn token_is_copy_and_hashable() {
+    fn take_copy<T: Copy>(_: T) {}
+    fn take_hash<T: std::hash::Hash>(_: T) {}
+    let t = scan_token("foo", pos()).unwrap().unwrap();
+    take_copy(t);
+    take_hash(t);
+    take_copy(t.kind());
+    take_copy(t.start());
+    let cloned = t;
+    assert_eq!(t.kind(), cloned.kind());
 }
 
 // ============================================================
@@ -1647,19 +1572,75 @@ fn display_matches_text() {
 // ============================================================
 
 #[test]
-fn error_recovery_with_consume_char() {
+fn tokenizer_auto_recovers_via_resume_position() {
     let text = "-module(repro).\n-moduledoc \"\"\"\n\u{5e94}\u{8be5}\u{62a5}\u{9519}\n\"\".";
-    let mut tokenizer = Tokenizer::new(text);
     let mut token_count = 0;
-    while let Some(token) = tokenizer.next() {
-        match token {
-            Ok(_) => token_count += 1,
-            Err(_) => {
-                tokenizer.consume_char();
-            }
+    for token in Tokenizer::new(text) {
+        if token.is_ok() {
+            token_count += 1;
         }
     }
     assert!(token_count > 0);
+}
+
+#[test]
+fn resume_position_advances_one_unicode_scalar() {
+    // Non-ASCII invalid symbol should advance by the character's UTF-8
+    // length, not a single byte, so we never land in the middle of a code
+    // point.
+    let src = "\u{1F600} rest";
+    let err = scan_token(src, Position::new()).unwrap_err();
+    let resume = err.resume_position();
+    assert_eq!(resume.offset(), '\u{1F600}'.len_utf8());
+    assert!(src.is_char_boundary(resume.offset()));
+    // The next scan yields a well-formed token.
+    let next = scan_token(src, resume).unwrap().unwrap();
+    assert_eq!(next.text(src), " ");
+}
+
+#[test]
+fn resume_position_updates_line_on_lf() {
+    let src = "\n";
+    let mut pos = Position::new();
+    // Whitespace scan succeeds for `\n`; ensure the diagnostic path we
+    // want to exercise instead uses an invalid symbol.
+    let err_src = "\u{2603}"; // snowman: fails as a symbol.
+    let err = scan_token(err_src, pos).unwrap_err();
+    assert_eq!(err.position().line(), 1);
+    assert_eq!(err.resume_position().offset(), '\u{2603}'.len_utf8());
+
+    // LF path
+    let ws = scan_token(src, pos).unwrap().unwrap();
+    pos = ws.end();
+    assert_eq!(pos.line(), 2);
+    assert_eq!(pos.column(), 1);
+}
+
+#[test]
+fn resume_position_makes_repeated_errors_monotonic() {
+    // Two invalid characters in a row must each advance by one Unicode
+    // scalar value.
+    let src = "\u{FFFC}\u{FFFC}"; // OBJECT REPLACEMENT CHARACTER twice.
+    let mut pos = Position::new();
+    let e1 = scan_token(src, pos).unwrap_err();
+    assert!(e1.resume_position().offset() > pos.offset());
+    pos = e1.resume_position();
+
+    let e2 = scan_token(src, pos).unwrap_err();
+    assert!(e2.resume_position().offset() > pos.offset());
+    pos = e2.resume_position();
+
+    assert_eq!(pos.offset(), src.len());
+    assert_eq!(scan_token(src, pos).unwrap(), None);
+}
+
+#[test]
+fn error_is_copy() {
+    fn take_copy<T: Copy>(_: T) {}
+    let err = scan_token("\u{2603}", Position::new()).unwrap_err();
+    take_copy(err);
+    let _ = err.position();
+    let _ = err.resume_position();
 }
 
 // ============================================================

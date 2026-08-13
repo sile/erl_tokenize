@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::time::{Duration, Instant};
 
-use erl_tokenize::{PositionRange, Tokenizer};
+use erl_tokenize::Tokenizer;
 
 fn main() -> noargs::Result<()> {
     let mut args = noargs::raw_args();
@@ -33,7 +33,7 @@ fn main() -> noargs::Result<()> {
     for result in tokenizer {
         let token = result?;
         if !silent {
-            println!("[{:?}] {:?}", token.start_position(), token.text());
+            println!("[{}] {:?}", token.start(), token.text(&src));
         }
         count += 1;
     }

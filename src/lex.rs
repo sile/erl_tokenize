@@ -58,13 +58,31 @@ impl Scanned {
 
 /// Scan a single token at the start of `source`.
 ///
-/// Dispatches on the first character in the same order as the historical
-/// `Token::from_text` implementation.
+/// Any error returned from this function carries the resume position that
+/// [`crate::scan_token`] passes back to the caller (`pos.step_by_char(first_char)`
+/// on non-empty input, `pos` on empty).
 pub(crate) fn scan_one(source: &str, pos: Position) -> Result<Scanned> {
+    scan_one_impl(source, pos).map_err(|e| e.with_resume(resume_from(source, pos)))
+}
+
+/// Compute the resume position from the scan-start position and the first
+/// character of the input at that position.
+///
+/// On non-empty input this advances by exactly one Unicode scalar value,
+/// updating line and column via [`Position::step_by_char`]. On empty
+/// input it returns `pos` unchanged (there is nothing to advance past).
+fn resume_from(source: &str, pos: Position) -> Position {
+    match source.chars().next() {
+        Some(c) => pos.step_by_char(c),
+        None => pos,
+    }
+}
+
+fn scan_one_impl(source: &str, pos: Position) -> Result<Scanned> {
     let head = source
         .chars()
         .next()
-        .ok_or_else(|| Error::missing_token(pos.clone()))?;
+        .ok_or_else(|| Error::missing_token(pos))?;
     match head {
         ' ' | '\t' | '\r' | '\n' | '\u{A0}' => scan_whitespace(source, pos),
         'A'..='Z' | '_' => scan_variable(source, pos),
@@ -87,7 +105,7 @@ pub(crate) fn scan_one(source: &str, pos: Position) -> Result<Scanned> {
             // characters (digits, symbols, punctuation) go to
             // `scan_symbol`.
             if head.is_alphabetic() {
-                let atom = scan_atom(source, pos.clone())?;
+                let atom = scan_atom(source, pos)?;
                 let text = &source[..atom.len];
                 if let Some(k) = keyword_from_text(text) {
                     Ok(Scanned::new(ScanKind::Keyword(k), atom.len))
@@ -124,7 +142,7 @@ pub(crate) fn scan_atom(source: &str, pos: Position) -> Result<Scanned> {
     let head = source
         .chars()
         .next()
-        .ok_or_else(|| Error::invalid_atom_token(pos.clone()))?;
+        .ok_or_else(|| Error::invalid_atom_token(pos))?;
     if head == '\'' {
         let inner_end = util::find_quotation_end(pos, &source[1..], '\'')?;
         Ok(Scanned::new(ScanKind::Atom, 1 + inner_end + 1))
@@ -147,18 +165,14 @@ pub(crate) fn scan_atom(source: &str, pos: Position) -> Result<Scanned> {
 /// length.
 pub(crate) fn scan_char(source: &str, pos: Position) -> Result<Scanned> {
     let mut chars = source.char_indices();
-    let (_, dollar) = chars
-        .next()
-        .ok_or_else(|| Error::invalid_char_token(pos.clone()))?;
+    let (_, dollar) = chars.next().ok_or_else(|| Error::invalid_char_token(pos))?;
     if dollar != '$' {
         return Err(Error::invalid_char_token(pos));
     }
-    let (i, c) = chars
-        .next()
-        .ok_or_else(|| Error::invalid_char_token(pos.clone()))?;
+    let (i, c) = chars.next().ok_or_else(|| Error::invalid_char_token(pos))?;
     let end = if c == '\\' {
         let mut chars = chars.peekable();
-        util::parse_escaped_char(pos.clone() + i + 1, &mut chars)?;
+        util::parse_escaped_char(pos.step_by_width(i + 1), &mut chars)?;
         chars.peek().map(|&(i, _)| i).unwrap_or(source.len())
     } else {
         i + c.len_utf8()
@@ -220,11 +234,11 @@ pub(crate) fn scan_integer(source: &str, pos: Position) -> Result<Scanned> {
 /// Delegates the token shape to [`scan_atom`] and then requires the atom
 /// text to match one of the reserved words.
 pub(crate) fn scan_keyword(source: &str, pos: Position) -> Result<Scanned> {
-    let atom = scan_atom(source, pos.clone())?;
+    let atom = scan_atom(source, pos)?;
     let text = &source[..atom.len];
     match keyword_from_text(text) {
         Some(k) => Ok(Scanned::new(ScanKind::Keyword(k), atom.len)),
-        None => Err(Error::unknown_keyword(pos, text.to_owned())),
+        None => Err(Error::unknown_keyword(pos)),
     }
 }
 
@@ -273,12 +287,12 @@ pub(crate) fn scan_string(source: &str, pos: Position) -> Result<Scanned> {
         return Err(Error::invalid_string_token(pos));
     }
     let (end, is_triple) = if source.starts_with(r#"""""#) {
-        (scan_triple_quoted(source, pos.clone())?, true)
+        (scan_triple_quoted(source, pos)?, true)
     } else {
         if !source.starts_with('"') {
             return Err(Error::invalid_string_token(pos));
         }
-        let inner_end = util::find_quotation_end(pos.clone(), &source[1..], '"')?;
+        let inner_end = util::find_quotation_end(pos, &source[1..], '"')?;
         (1 + inner_end + 1, false)
     };
     // Adjacent string literals without intervening whitespace are rejected
@@ -394,9 +408,9 @@ pub(crate) fn scan_sigil_string(source: &str, pos: Position) -> Result<Scanned> 
     let open = source[offset..]
         .chars()
         .next()
-        .ok_or_else(|| Error::invalid_sigil_string_token(pos.clone()))?;
+        .ok_or_else(|| Error::invalid_sigil_string_token(pos))?;
     let content_end = if open == '"' {
-        let inner = scan_string(&source[offset..], pos.clone().step_by_width(offset))?;
+        let inner = scan_string(&source[offset..], pos.step_by_width(offset))?;
         offset + inner.len
     } else {
         let close = match open {
@@ -407,11 +421,8 @@ pub(crate) fn scan_sigil_string(source: &str, pos: Position) -> Result<Scanned> 
             '/' | '|' | '\'' | '`' | '#' => open,
             _ => return Err(Error::invalid_sigil_string_token(pos)),
         };
-        let inner_end = util::find_quotation_end(
-            pos.clone().step_by_width(offset + 1),
-            &source[offset + 1..],
-            close,
-        )?;
+        let inner_end =
+            util::find_quotation_end(pos.step_by_width(offset + 1), &source[offset + 1..], close)?;
         offset + 1 + inner_end + 1
     };
     let mut end = content_end;
@@ -507,7 +518,7 @@ pub(crate) fn scan_variable(source: &str, pos: Position) -> Result<Scanned> {
     let head = source
         .chars()
         .next()
-        .ok_or_else(|| Error::invalid_variable_token(pos.clone()))?;
+        .ok_or_else(|| Error::invalid_variable_token(pos))?;
     if !util::is_variable_head_char(head) {
         return Err(Error::invalid_variable_token(pos));
     }
@@ -527,7 +538,7 @@ pub(crate) fn scan_whitespace(source: &str, pos: Position) -> Result<Scanned> {
     let c = source
         .chars()
         .next()
-        .ok_or_else(|| Error::invalid_whitespace_token(pos.clone()))?;
+        .ok_or_else(|| Error::invalid_whitespace_token(pos))?;
     let ws = match c {
         ' ' => Whitespace::Space,
         '\t' => Whitespace::Tab,
@@ -544,20 +555,20 @@ pub(crate) fn scan_float(source: &str, pos: Position) -> Result<Scanned> {
     if is_based(source) {
         return scan_float_radix(source, pos);
     }
-    let mut idx = read_digit_run(source, 0, &pos)?;
+    let mut idx = read_digit_run(source, 0, pos)?;
     let after_int = &source[idx..];
     let mut chars = after_int.chars();
     if chars.next() != Some('.') {
         return Err(Error::invalid_float_token(pos));
     }
     idx += 1;
-    idx = read_digit_run(source, idx, &pos)?;
+    idx = read_digit_run(source, idx, pos)?;
     if matches!(source[idx..].chars().next(), Some('e' | 'E')) {
         idx += 1;
         if matches!(source[idx..].chars().next(), Some('+' | '-')) {
             idx += 1;
         }
-        idx = read_digit_run(source, idx, &pos)?;
+        idx = read_digit_run(source, idx, pos)?;
     }
     Ok(Scanned::new(ScanKind::Float, idx))
 }
@@ -578,7 +589,7 @@ fn is_based(source: &str) -> bool {
 /// Read a run of ASCII decimal digits with underscore separators, starting
 /// at `start`. The run must start and end on a digit; a trailing or double
 /// underscore is rejected.
-fn read_digit_run(source: &str, start: usize, pos: &Position) -> Result<usize> {
+fn read_digit_run(source: &str, start: usize, pos: Position) -> Result<usize> {
     let mut idx = start;
     let mut needs_digit = true;
     for (i, c) in source[start..].char_indices() {
@@ -590,7 +601,7 @@ fn read_digit_run(source: &str, start: usize, pos: &Position) -> Result<usize> {
             }
             '_' => {
                 if needs_digit {
-                    return Err(Error::invalid_float_token(pos.clone()));
+                    return Err(Error::invalid_float_token(pos));
                 }
                 needs_digit = true;
                 idx = at + 1;
@@ -599,7 +610,7 @@ fn read_digit_run(source: &str, start: usize, pos: &Position) -> Result<usize> {
         }
     }
     if needs_digit {
-        Err(Error::invalid_float_token(pos.clone()))
+        Err(Error::invalid_float_token(pos))
     } else {
         Ok(idx)
     }
@@ -608,7 +619,7 @@ fn read_digit_run(source: &str, start: usize, pos: &Position) -> Result<usize> {
 /// Radix-based float form: `<radix>#<digits>.<digits>[#e<exp>]`.
 fn scan_float_radix(source: &str, pos: Position) -> Result<Scanned> {
     let hash = source.find('#').expect("looks_like_float / is_based guard");
-    let radix = parse_radix_digits(&source[..hash], &pos)?;
+    let radix = parse_radix_digits(&source[..hash], pos)?;
     if !(1 < radix && radix < 37) {
         return Err(Error::invalid_float_token(pos));
     }
@@ -616,26 +627,26 @@ fn scan_float_radix(source: &str, pos: Position) -> Result<Scanned> {
     if idx >= source.len() {
         return Err(Error::invalid_float_token(pos));
     }
-    let (int_end, saw_dot) = read_radix_digit_run(source, idx, radix, &pos, true)?;
+    let (int_end, saw_dot) = read_radix_digit_run(source, idx, radix, pos, true)?;
     idx = int_end;
     if !saw_dot {
         return Err(Error::invalid_float_token(pos));
     }
-    let (frac_end, has_exp) = read_radix_digit_run(source, idx, radix, &pos, false)?;
+    let (frac_end, has_exp) = read_radix_digit_run(source, idx, radix, pos, false)?;
     idx = frac_end;
     if has_exp {
         if !source[idx..].starts_with('e') {
             return Err(Error::invalid_float_token(pos));
         }
         idx += 1;
-        idx = read_exp_digit_run(source, idx, &pos)?;
+        idx = read_exp_digit_run(source, idx, pos)?;
     }
     Ok(Scanned::new(ScanKind::Float, idx))
 }
 
 /// Parse the radix prefix (before `#`) as a decimal integer, allowing
 /// underscore separators between digits.
-fn parse_radix_digits(text: &str, pos: &Position) -> Result<u32> {
+fn parse_radix_digits(text: &str, pos: Position) -> Result<u32> {
     let mut value: u32 = 0;
     let mut has_digit = false;
     let mut prev_digit = false;
@@ -650,11 +661,11 @@ fn parse_radix_digits(text: &str, pos: &Position) -> Result<u32> {
         } else if c == '_' && prev_digit {
             prev_digit = false;
         } else {
-            return Err(Error::invalid_float_token(pos.clone()));
+            return Err(Error::invalid_float_token(pos));
         }
     }
     if !has_digit || !prev_digit {
-        return Err(Error::invalid_float_token(pos.clone()));
+        return Err(Error::invalid_float_token(pos));
     }
     Ok(value)
 }
@@ -667,7 +678,7 @@ fn read_radix_digit_run(
     source: &str,
     start: usize,
     radix: u32,
-    pos: &Position,
+    pos: Position,
     expect_dot: bool,
 ) -> Result<(usize, bool)> {
     let mut idx = start;
@@ -698,7 +709,7 @@ fn read_radix_digit_run(
         }
     }
     if !is_prev_digit && !terminator {
-        return Err(Error::invalid_float_token(pos.clone()));
+        return Err(Error::invalid_float_token(pos));
     }
     if terminator && !expect_dot {
         // The fractional part terminated on `#`, so the caller must find
@@ -714,7 +725,7 @@ fn read_radix_digit_run(
 
 /// Consume the exponent digits (with a leading optional `-` and underscore
 /// separators).
-fn read_exp_digit_run(source: &str, start: usize, pos: &Position) -> Result<usize> {
+fn read_exp_digit_run(source: &str, start: usize, pos: Position) -> Result<usize> {
     let mut idx = start;
     let mut is_prev_digit = false;
     let mut saw_any = false;
@@ -735,7 +746,7 @@ fn read_exp_digit_run(source: &str, start: usize, pos: &Position) -> Result<usiz
         }
     }
     if !saw_any || !is_prev_digit {
-        return Err(Error::invalid_float_token(pos.clone()));
+        return Err(Error::invalid_float_token(pos));
     }
     Ok(idx)
 }

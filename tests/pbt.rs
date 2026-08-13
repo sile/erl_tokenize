@@ -10,7 +10,7 @@ use std::cell::Cell;
 use erl_tokenize::tokens::{
     AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, StringToken,
 };
-use erl_tokenize::{Position, Token, Tokenizer};
+use erl_tokenize::{Position, Tokenizer, scan_token};
 
 const CASES: usize = 256;
 const MAX_LEN: usize = 64;
@@ -587,8 +587,8 @@ fn token_from_text_prefix_invariant() -> noprop::TestResult {
 
     runner.run(CASES, |ctx| {
         let text = sample_text(ctx);
-        if let Ok(token) = Token::from_text(&text, Position::new()) {
-            let t = token.text();
+        if let Ok(Some(token)) = scan_token(&text, Position::new()) {
+            let t = token.text(&text);
             assert!(!t.is_empty(), "token with empty text for {text:?}");
             assert!(
                 text.starts_with(t),
@@ -603,7 +603,8 @@ fn token_from_text_prefix_invariant() -> noprop::TestResult {
 
 /// A differential position test: maintains a (offset, line, column) model of
 /// the input and checks it against `Tokenizer::next_position()` after every
-/// step, with error recovery via `consume_char`.
+/// step. Recovery uses `Error::resume_position` (via `Tokenizer::next()`)
+/// so a bad token still advances by exactly one Unicode scalar value.
 ///
 /// This catches position bookkeeping bugs (e.g. the char-boundary panic of
 /// erlls issue 5) as well as token texts that are not prefixes of the
@@ -636,7 +637,7 @@ fn tokenizer_position_model() -> noprop::TestResult {
                 None => break,
                 Some(Ok(token)) => {
                     saw_ok = true;
-                    let t = token.text();
+                    let t = token.text(text.as_str());
                     let rest = text.get(offset..).expect("offset must be a char boundary");
                     assert!(
                         rest.starts_with(t),
@@ -650,9 +651,10 @@ fn tokenizer_position_model() -> noprop::TestResult {
                 }
                 Some(Err(_)) => {
                     saw_error = true;
-                    let c = tokenizer
-                        .consume_char()
-                        .expect("consume_char at a non-EOF position");
+                    let c = text[offset..]
+                        .chars()
+                        .next()
+                        .expect("error at a non-EOF position");
                     (offset, line, column) = step_char(offset, line, column, c);
                 }
             }
@@ -731,7 +733,7 @@ fn tokenizer_concat_invariant() -> noprop::TestResult {
         let parsed = Tokenizer::new(input.as_str())
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("unexpected error at {:?}: {e}", e.position()))?;
-        let concat: String = parsed.iter().map(|t| t.text()).collect();
+        let concat: String = parsed.iter().map(|t| t.text(input.as_str())).collect();
         assert_eq!(concat, input, "token text concatenation mismatch");
 
         if parsed.len() >= 2 {
