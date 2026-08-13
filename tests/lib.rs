@@ -3,7 +3,9 @@ use erl_tokenize::tokens::{
     StringToken, SymbolToken, VariableToken, WhitespaceToken,
 };
 use erl_tokenize::values::{Keyword, Symbol, Whitespace};
-use erl_tokenize::{Position, PositionRange, TokenKind, Tokenizer, scan_token};
+use std::borrow::Cow;
+
+use erl_tokenize::{Position, PositionRange, TokenKind, TokenValue, Tokenizer, scan_token};
 
 macro_rules! tokenize {
     ($text:expr) => {{
@@ -1839,4 +1841,294 @@ handle_cast(increment, #state{count = Count} = State) ->
         assert!(t.is_ok(), "unexpected error: {t:?}");
     }
     assert!(tokens.len() > 100);
+}
+
+// ============================================================
+// Token::value / TokenValue tests
+// ============================================================
+
+fn scan_value<'a>(src: &'a str) -> TokenValue<'a> {
+    scan_token(src, Position::new())
+        .unwrap()
+        .unwrap()
+        .value(src)
+}
+
+#[test]
+fn value_atom_bare_borrowed() {
+    let src = "foo";
+    match scan_value(src) {
+        TokenValue::Atom(Cow::Borrowed(s)) => assert_eq!(s, "foo"),
+        other => panic!("expected Atom(Borrowed), got {other:?}"),
+    }
+}
+
+#[test]
+fn value_atom_quoted_no_escape_borrowed() {
+    let src = "'hello world'";
+    match scan_value(src) {
+        TokenValue::Atom(Cow::Borrowed(s)) => assert_eq!(s, "hello world"),
+        other => panic!("expected Atom(Borrowed), got {other:?}"),
+    }
+}
+
+#[test]
+fn value_atom_quoted_escape_owned() {
+    let src = r"'f\x6Fo'";
+    match scan_value(src) {
+        TokenValue::Atom(Cow::Owned(s)) => assert_eq!(s, "foo"),
+        other => panic!("expected Atom(Owned), got {other:?}"),
+    }
+}
+
+#[test]
+fn value_char_ascii() {
+    match scan_value("$a") {
+        TokenValue::Char(c) => assert_eq!(c, 'a'),
+        other => panic!("expected Char, got {other:?}"),
+    }
+}
+
+#[test]
+fn value_char_escapes() {
+    let cases: &[(&str, char)] = &[
+        (r"$\n", '\n'),
+        (r"$\t", '\t'),
+        (r"$\r", '\r'),
+        (r"$\b", 8 as char),
+        (r"$\d", 127 as char),
+        (r"$\e", 27 as char),
+        (r"$\f", 12 as char),
+        (r"$\s", ' '),
+        (r"$\v", 11 as char),
+        (r"$\^a", '\u{1}'),
+        (r"$\^?", 127 as char),
+        (r"$\123", 'S'),    // octal
+        (r"$\x6F", 'o'),    // fixed-width hex
+        (r"$\x{06F}", 'o'), // braced hex
+        (r"$\x{10FFFF}", '\u{10FFFF}'),
+    ];
+    for (src, expected) in cases {
+        match scan_value(src) {
+            TokenValue::Char(c) => assert_eq!(c, *expected, "for {src}"),
+            other => panic!("expected Char for {src}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn value_comment_strips_leading_percent() {
+    match scan_value("%") {
+        TokenValue::Comment(s) => assert_eq!(s, ""),
+        other => panic!("expected Comment, got {other:?}"),
+    }
+    match scan_value("%% hello") {
+        TokenValue::Comment(s) => assert_eq!(s, "% hello"),
+        other => panic!("expected Comment, got {other:?}"),
+    }
+}
+
+#[test]
+fn value_float_decimal_and_exponent() {
+    let cases: &[(&str, f64)] = &[
+        ("0.1", 0.1),
+        ("12.3e-1", 1.23),
+        ("1_2.3_4e-1_0", 0.000000001234),
+    ];
+    for (src, expected) in cases {
+        match scan_value(src) {
+            TokenValue::Float(v) => assert_eq!(v, *expected, "for {src}"),
+            other => panic!("expected Float for {src}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn value_float_radix() {
+    let cases: &[(&str, f64)] = &[
+        ("2#0.111", 0.875),
+        ("2#0.10101#e8", 168.0),
+        ("16#f_f.F_F", 255.99609375),
+    ];
+    for (src, expected) in cases {
+        match scan_value(src) {
+            TokenValue::Float(v) => assert_eq!(v, *expected, "for {src}"),
+            other => panic!("expected Float for {src}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn value_integer_in_range_and_overflow() {
+    match scan_value("10") {
+        TokenValue::Integer(Some(v)) => assert_eq!(v, 10),
+        other => panic!("expected Integer(Some), got {other:?}"),
+    }
+    match scan_value("16#ab0e") {
+        TokenValue::Integer(Some(v)) => assert_eq!(v, 0xab0e),
+        other => panic!("expected Integer(Some), got {other:?}"),
+    }
+    // i64::MAX
+    match scan_value("9223372036854775807") {
+        TokenValue::Integer(Some(v)) => assert_eq!(v, i64::MAX),
+        other => panic!("expected Integer(Some), got {other:?}"),
+    }
+    // Just above i64::MAX
+    match scan_value("9223372036854775808") {
+        TokenValue::Integer(None) => {}
+        other => panic!("expected Integer(None), got {other:?}"),
+    }
+    // Huge radix literal
+    match scan_value("16#ffffffffffffffffff") {
+        TokenValue::Integer(None) => {}
+        other => panic!("expected Integer(None), got {other:?}"),
+    }
+}
+
+#[test]
+fn value_keyword_and_symbol_from_kind() {
+    match scan_value("case") {
+        TokenValue::Keyword(k) => assert_eq!(k, Keyword::Case),
+        other => panic!("expected Keyword, got {other:?}"),
+    }
+    match scan_value(":=") {
+        TokenValue::Symbol(s) => assert_eq!(s, Symbol::MapMatch),
+        other => panic!("expected Symbol, got {other:?}"),
+    }
+}
+
+#[test]
+fn value_string_regular_borrowed_and_owned() {
+    // No escape → borrowed.
+    match scan_value(r#""hello""#) {
+        TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "hello"),
+        other => panic!("expected String(Borrowed), got {other:?}"),
+    }
+    // Escape → owned.
+    match scan_value(r#""a\nb""#) {
+        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "a\nb"),
+        other => panic!("expected String(Owned), got {other:?}"),
+    }
+}
+
+#[test]
+fn value_string_triple_quoted_no_indent_borrowed() {
+    let src = "\"\"\"\nhello\nworld\n\"\"\"";
+    match scan_value(src) {
+        TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "hello\nworld"),
+        other => panic!("expected String(Borrowed), got {other:?}"),
+    }
+}
+
+#[test]
+fn value_string_triple_quoted_indent_owned() {
+    let src = "\"\"\"\n  hello\n  world\n  \"\"\"";
+    match scan_value(src) {
+        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "hello\nworld"),
+        other => panic!("expected String(Owned), got {other:?}"),
+    }
+}
+
+#[test]
+fn value_sigil_string_string_delim() {
+    match scan_value(r#"~b"foo""#) {
+        TokenValue::SigilString {
+            prefix,
+            content,
+            suffix,
+        } => {
+            assert_eq!(prefix, "b");
+            assert_eq!(suffix, "");
+            match content {
+                Cow::Borrowed(s) => assert_eq!(s, "foo"),
+                Cow::Owned(_) => panic!("expected borrowed content"),
+            }
+        }
+        other => panic!("expected SigilString, got {other:?}"),
+    }
+}
+
+#[test]
+fn value_sigil_string_delimiters_and_affixes() {
+    // Each delimiter pair; prefix and suffix borrow slices from source.
+    let cases: &[(&str, &str, &str, &str)] = &[
+        ("~(foo)", "", "foo", ""),
+        ("~[bar]qq", "", "bar", "qq"),
+        ("~a{baz}", "a", "baz", ""),
+        ("~<qux>", "", "qux", ""),
+        ("~/quux/", "", "quux", ""),
+        ("~|corge|", "", "corge", ""),
+        ("~'grault'", "", "grault", ""),
+        ("~`garply`", "", "garply", ""),
+        ("~#waldo#", "", "waldo", ""),
+    ];
+    for (src, prefix, content, suffix) in cases {
+        match scan_value(src) {
+            TokenValue::SigilString {
+                prefix: p,
+                content: c,
+                suffix: s,
+            } => {
+                assert_eq!(p, *prefix, "prefix mismatch for {src}");
+                assert_eq!(c.as_ref(), *content, "content mismatch for {src}");
+                assert_eq!(s, *suffix, "suffix mismatch for {src}");
+            }
+            other => panic!("expected SigilString for {src}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn value_sigil_string_content_escape_owned() {
+    match scan_value(r#"~(a\nb)"#) {
+        TokenValue::SigilString {
+            content: Cow::Owned(s),
+            ..
+        } => assert_eq!(s, "a\nb"),
+        other => panic!("expected SigilString(Owned content), got {other:?}"),
+    }
+}
+
+#[test]
+fn value_variable_borrows_source() {
+    let src = "Foo_1@bar";
+    match scan_value(src) {
+        TokenValue::Variable(s) => {
+            assert_eq!(s, src);
+            // Prove it's a slice of the source.
+            assert_eq!(s.as_ptr(), src.as_ptr());
+        }
+        other => panic!("expected Variable, got {other:?}"),
+    }
+}
+
+#[test]
+fn value_whitespace_borrows_source() {
+    let src = " ";
+    match scan_value(src) {
+        TokenValue::Whitespace(s) => {
+            assert_eq!(s, " ");
+            assert_eq!(s.as_ptr(), src.as_ptr());
+        }
+        other => panic!("expected Whitespace, got {other:?}"),
+    }
+}
+
+#[test]
+fn value_is_not_cached_on_token() {
+    // Token is Copy, so it holds no interior storage; value(source) must
+    // decode each time it is called.
+    let src = r"'f\x6Fo'";
+    let t = scan_token(src, Position::new()).unwrap().unwrap();
+    let v1 = t.value(src);
+    let v2 = t.value(src);
+    assert_eq!(v1, v2);
+    // Different `Cow::Owned` instances (independent allocations).
+    match (v1, v2) {
+        (TokenValue::Atom(Cow::Owned(a)), TokenValue::Atom(Cow::Owned(b))) => {
+            assert_eq!(a, b);
+            assert_ne!(a.as_ptr(), b.as_ptr());
+        }
+        _ => panic!("expected two independent owned atoms"),
+    }
 }
