@@ -1284,19 +1284,19 @@ fn tokenize_crlf() {
 #[test]
 fn tokenize_multiple_spaces() {
     let src = "a   b";
-    assert_eq!(tokenize!(src), ["a", " ", " ", " ", "b"]);
+    assert_eq!(tokenize!(src), ["a", "   ", "b"]);
 }
 
 #[test]
 fn tokenize_tabs() {
     let src = "a\t\tb";
-    assert_eq!(tokenize!(src), ["a", "\t", "\t", "b"]);
+    assert_eq!(tokenize!(src), ["a", "\t\t", "b"]);
 }
 
 #[test]
 fn tokenize_mixed_whitespace() {
     let src = "a \t \n b";
-    assert_eq!(tokenize!(src), ["a", " ", "\t", " ", "\n", " ", "b"]);
+    assert_eq!(tokenize!(src), ["a", " \t ", "\n ", "b"]);
 }
 
 #[test]
@@ -2130,5 +2130,150 @@ fn value_is_not_cached_on_token() {
             assert_ne!(a.as_ptr(), b.as_ptr());
         }
         _ => panic!("expected two independent owned atoms"),
+    }
+}
+
+// ============================================================
+// Whitespace aggregation tests (erl_scan return_white_spaces rules)
+// ============================================================
+
+fn whitespace_texts(src: &str) -> Vec<&str> {
+    Tokenizer::new(src).map(|t| t.unwrap().text(src)).collect()
+}
+
+#[test]
+fn whitespace_aggregation_table() {
+    // Boundary cases for the erl_scan `return_white_spaces` rules:
+    // non-LF runs aggregate; LF starts a new token; each token holds at
+    // most one LF and only at the start; CR is not a line break.
+    let cases: &[(&str, &[&str])] = &[
+        ("   \t", &["   \t"]),
+        (" \t\n", &[" \t", "\n"]),
+        ("\n \t", &["\n \t"]),
+        ("\n\n", &["\n", "\n"]),
+        ("\n \n\t", &["\n ", "\n\t"]),
+        ("\r\n ", &["\r", "\n "]),
+        ("\u{A0} \t", &["\u{A0} \t"]),
+    ];
+    for (src, expected) in cases {
+        assert_eq!(
+            whitespace_texts(src),
+            *expected,
+            "aggregation mismatch for {src:?}"
+        );
+    }
+}
+
+#[test]
+fn whitespace_at_most_one_lf_per_token() {
+    // Every whitespace token has at most one LF, always at the start.
+    let src = "a  \n  b\n\nc";
+    for t in Tokenizer::new(src) {
+        let t = t.unwrap();
+        if t.kind() != TokenKind::Whitespace {
+            continue;
+        }
+        let text = t.text(src);
+        assert_eq!(
+            text.matches('\n').count(),
+            if text.starts_with('\n') { 1 } else { 0 },
+            "unexpected LF count in {text:?}",
+        );
+    }
+}
+
+#[test]
+fn whitespace_boundaries_around_other_tokens() {
+    // Adjacent tokens must not be swallowed by whitespace aggregation.
+    let src = "foo\t\t bar";
+    let texts = whitespace_texts(src);
+    assert_eq!(texts, ["foo", "\t\t ", "bar"]);
+
+    let src = "1 . 2";
+    let texts = whitespace_texts(src);
+    assert_eq!(texts, ["1", " ", ".", " ", "2"]);
+}
+
+#[test]
+fn comment_terminating_lf_is_next_whitespace_token() {
+    // The LF at the end of a comment is scanned as the head of the next
+    // whitespace token, not consumed by the comment.
+    let src = "% comment\n  foo";
+    let texts: Vec<_> = Tokenizer::new(src).map(|t| t.unwrap().text(src)).collect();
+    assert_eq!(texts, ["% comment", "\n  ", "foo"]);
+}
+
+#[test]
+fn whitespace_position_transition() {
+    // After an aggregated whitespace token, the tokenizer's next
+    // position must advance across the whole run.
+    let src = "  \n \tX";
+    let mut p = Position::new();
+    let mut kinds = Vec::new();
+    while let Some(t) = scan_token(src, p).unwrap() {
+        kinds.push((t.kind(), t.text(src).to_owned()));
+        p = t.end();
+    }
+    assert_eq!(
+        kinds,
+        vec![
+            (TokenKind::Whitespace, "  ".to_owned()),
+            (TokenKind::Whitespace, "\n \t".to_owned()),
+            (TokenKind::Variable, "X".to_owned()),
+        ]
+    );
+    // Position after "  " should be line 1, col 3; after "\n \t" line 2,
+    // col 3; after "X" line 2, col 4.
+    let mut p = Position::new();
+    let t1 = scan_token(src, p).unwrap().unwrap();
+    p = t1.end();
+    assert_eq!(p.line(), 1);
+    assert_eq!(p.column(), 3);
+    let t2 = scan_token(src, p).unwrap().unwrap();
+    p = t2.end();
+    assert_eq!(p.line(), 2);
+    assert_eq!(p.column(), 3);
+    let t3 = scan_token(src, p).unwrap().unwrap();
+    p = t3.end();
+    assert_eq!(p.line(), 2);
+    assert_eq!(p.column(), 4);
+}
+
+#[test]
+fn all_token_texts_concatenate_to_source() {
+    // Aggregation must not lose any bytes: concatenating every token's
+    // text reproduces the original source exactly.
+    let src = "a  \n\tb\n\n c";
+    let mut concat = String::new();
+    for t in Tokenizer::new(src) {
+        concat.push_str(t.unwrap().text(src));
+    }
+    assert_eq!(concat, src);
+}
+
+#[test]
+fn hidden_filter_matches_lexical_only() {
+    // Filtering out hidden (whitespace + comments) yields the same
+    // lexical sequence regardless of aggregation.
+    let src = "foo  \n  bar % tail\n baz";
+    let lex: Vec<_> = Tokenizer::new(src)
+        .filter_map(|t| {
+            let t = t.unwrap();
+            t.is_lexical().then(|| t.text(src))
+        })
+        .collect();
+    assert_eq!(lex, ["foo", "bar", "baz"]);
+}
+
+#[test]
+fn whitespace_value_borrows_aggregated_text() {
+    let src = " \t \n\t";
+    let t = scan_token(src, Position::new()).unwrap().unwrap();
+    match t.value(src) {
+        TokenValue::Whitespace(s) => {
+            assert_eq!(s, " \t ");
+            assert_eq!(s.as_ptr(), src.as_ptr());
+        }
+        other => panic!("expected Whitespace, got {other:?}"),
     }
 }

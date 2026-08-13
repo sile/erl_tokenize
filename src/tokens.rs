@@ -1208,11 +1208,16 @@ impl WhitespaceToken {
 
     /// Tries to convert from any prefixes of the text to a `WhitespaceToken`.
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
-        let scanned = crate::lex::scan_whitespace(text, pos)?;
-        match scanned.kind {
-            crate::lex::ScanKind::Whitespace(value) => Ok(WhitespaceToken { value, pos }),
-            _ => unreachable!("scan_whitespace returns Whitespace or errors"),
-        }
+        crate::lex::scan_whitespace_single(text, pos)?;
+        let value = match text.chars().next().expect("scanner validated one char") {
+            ' ' => Whitespace::Space,
+            '\t' => Whitespace::Tab,
+            '\r' => Whitespace::Return,
+            '\n' => Whitespace::Newline,
+            '\u{A0}' => Whitespace::NoBreakSpace,
+            _ => unreachable!("scanner validated whitespace char"),
+        };
+        Ok(WhitespaceToken { value, pos })
     }
 
     /// Returns the value of this token.
