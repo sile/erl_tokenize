@@ -584,10 +584,24 @@ pub(crate) fn scan_whitespace(source: &str, pos: Position) -> Result<Scanned> {
 }
 
 /// Validate a float literal at the start of `source` and return its length.
+///
+/// Rejects overflow (a value that decodes to a non-finite `f64`) with
+/// the same [`Error::invalid_float_token`] as syntactic errors, matching
+/// `erl_scan`'s behavior. Underflow is not an error: it collapses to
+/// `0.0`, which is finite.
 pub(crate) fn scan_float(source: &str, pos: Position) -> Result<Scanned> {
-    if is_based(source) {
-        return scan_float_radix(source, pos);
+    let scanned = if is_based(source) {
+        scan_float_radix(source, pos)?
+    } else {
+        scan_float_decimal(source, pos)?
+    };
+    if !decode_float(&source[..scanned.len]).is_finite() {
+        return Err(Error::invalid_float_token(pos));
     }
+    Ok(scanned)
+}
+
+fn scan_float_decimal(source: &str, pos: Position) -> Result<Scanned> {
     let mut idx = read_digit_run(source, 0, pos)?;
     let after_int = &source[idx..];
     let mut chars = after_int.chars();
@@ -832,9 +846,11 @@ pub(crate) fn decode_comment(text: &str) -> &str {
 
 /// Decode an integer token's value from its validated text.
 ///
-/// Returns `Some(value)` when the value fits in `i64`, and `None` when it
-/// overflows (checked, never wrapped).
-pub(crate) fn decode_integer(text: &str) -> Option<i64> {
+/// Erlang integer literals are always non-negative (unary `-` is a
+/// separate token), so the value fits in `u64` whenever it does not
+/// overflow. Returns `Some(value)` in range, `None` when it exceeds
+/// `u64::MAX` (checked, never wrapped).
+pub(crate) fn decode_integer(text: &str) -> Option<u64> {
     let (radix, digits_slice) = if let Some(hash) = text.find('#') {
         let radix: u32 = util::strip_underscores(&text[..hash])
             .parse()
@@ -845,9 +861,9 @@ pub(crate) fn decode_integer(text: &str) -> Option<i64> {
     };
     let cleaned = util::strip_underscores(digits_slice);
     if radix == 10 {
-        cleaned.parse::<i64>().ok()
+        cleaned.parse::<u64>().ok()
     } else {
-        i64::from_str_radix(&cleaned, radix).ok()
+        u64::from_str_radix(&cleaned, radix).ok()
     }
 }
 

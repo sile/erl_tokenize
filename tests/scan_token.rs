@@ -265,7 +265,7 @@ fn comment_stops_at_lf_and_hands_off_to_whitespace() {
 #[test]
 fn integer_basic_and_underscores() {
     for (src, expected) in [
-        ("0", 0_i64),
+        ("0", 0_u64),
         ("42", 42),
         ("123456789", 123456789),
         ("123_456", 123456),
@@ -279,7 +279,7 @@ fn integer_basic_and_underscores() {
 #[test]
 fn integer_radix() {
     for (src, expected) in [
-        ("2#101", 0b101_i64),
+        ("2#101", 0b101_u64),
         ("8#777", 0o777),
         ("16#ab0e", 0xab0e),
         ("1_6#a_b_0e", 0xab0e),
@@ -290,12 +290,24 @@ fn integer_radix() {
 
 #[test]
 fn integer_overflow_is_none() {
+    // i64::MAX still fits in u64.
     assert_eq!(
         first_value("9223372036854775807"),
-        TokenValue::Integer(Some(i64::MAX))
+        TokenValue::Integer(Some(i64::MAX as u64))
     );
+    // i64::MAX + 1 fits in u64.
     assert_eq!(
         first_value("9223372036854775808"),
+        TokenValue::Integer(Some(1u64 << 63))
+    );
+    // u64::MAX is the last representable value.
+    assert_eq!(
+        first_value("18446744073709551615"),
+        TokenValue::Integer(Some(u64::MAX))
+    );
+    // Just past u64::MAX overflows to None.
+    assert_eq!(
+        first_value("18446744073709551616"),
         TokenValue::Integer(None)
     );
     assert_eq!(
@@ -369,6 +381,31 @@ fn float_errors() {
         "`.123` splits into dot and integer"
     );
     assert_eq!(first("123").kind(), TokenKind::Integer);
+}
+
+#[test]
+fn float_overflow_is_error() {
+    // Matches `erl_scan`: a decoded value outside the finite f64 range
+    // is rejected with the same InvalidFloatToken as syntactic errors.
+    for src in ["1.8e308", "1.0e400", "2#1.0#e10000"] {
+        assert!(
+            scan_token(src, pos()).is_err(),
+            "expected overflow error for {src}"
+        );
+    }
+    // The last representable magnitude scans successfully.
+    assert_eq!(
+        first_value("1.7e308"),
+        TokenValue::Float(1.7e308),
+        "1.7e308 should still be scannable"
+    );
+}
+
+#[test]
+fn float_underflow_is_zero() {
+    // Matches `erl_scan`: an exponent that underflows collapses to 0.0.
+    assert_eq!(first_value("1.0e-400"), TokenValue::Float(0.0));
+    assert_eq!(first_value("1.0e-500"), TokenValue::Float(0.0));
 }
 
 // ============================================================

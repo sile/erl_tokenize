@@ -26,7 +26,7 @@ enum Expected {
     Char(char),
     Comment(String),
     Float(f64),
-    Integer(Option<i64>),
+    Integer(Option<u64>),
     Keyword(Keyword),
     SigilString {
         prefix: String,

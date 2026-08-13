@@ -333,15 +333,15 @@ pub fn sample_comment(ctx: &mut noprop::TestCaseContext) -> String {
     }
 }
 
-/// Sample a decimal integer literal in the i64 range. Returns
+/// Sample a decimal integer literal in the u64 range. Returns
 /// `(text, value)`.
-pub fn sample_decimal_integer(ctx: &mut noprop::TestCaseContext) -> (String, i64) {
+pub fn sample_decimal_integer(ctx: &mut noprop::TestCaseContext) -> (String, u64) {
     let v = noprop::sample_with_boundaries(
         ctx,
-        &[0_u64, 1, i64::MAX as u64],
+        &[0_u64, 1, i64::MAX as u64, u64::MAX],
         noprop::Ratio::one_nth(5),
-        |ctx| noprop::sample_u64(ctx) & i64::MAX as u64,
-    ) as i64;
+        noprop::sample_u64,
+    );
     let text = if noprop::sample_bool(ctx) {
         insert_underscores(&v.to_string(), ctx)
     } else {
@@ -350,19 +350,19 @@ pub fn sample_decimal_integer(ctx: &mut noprop::TestCaseContext) -> (String, i64
     (text, v)
 }
 
-/// Sample a radix integer literal in the i64 range. Returns
+/// Sample a radix integer literal in the u64 range. Returns
 /// `(text, value)`.
-pub fn sample_radix_integer(ctx: &mut noprop::TestCaseContext) -> (String, i64) {
+pub fn sample_radix_integer(ctx: &mut noprop::TestCaseContext) -> (String, u64) {
     let radix: u32 = noprop::sample_usize_in(ctx, 2..=36) as u32;
-    let v = (noprop::sample_u64(ctx) & i64::MAX as u64) as i64;
-    let digits = to_radix_digits(v as u64, radix);
+    let v = noprop::sample_u64(ctx);
+    let digits = to_radix_digits(v, radix);
     (format!("{radix}#{digits}"), v)
 }
 
-/// Sample an integer literal whose value exceeds `i64::MAX`.
+/// Sample an integer literal whose value exceeds `u64::MAX`.
 pub fn sample_overflow_integer(ctx: &mut noprop::TestCaseContext) -> String {
     let extra = noprop::sample_usize_in(ctx, 0..=999) as u128;
-    let n = i64::MAX as u128 + 1 + extra;
+    let n = u64::MAX as u128 + 1 + extra;
     match noprop::sample_weighted_index(ctx, &[2, 1]) {
         0 => n.to_string(),
         _ => format!("16#{n:x}"),
