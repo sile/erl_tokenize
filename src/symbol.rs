@@ -1,4 +1,7 @@
-/// Symbol.
+/// Punctuation or operator symbol.
+///
+/// Each variant corresponds to exactly one textual form. Convert to and
+/// from the textual form with [`Symbol::as_str`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Symbol {
     /// `[`
