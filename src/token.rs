@@ -1,8 +1,9 @@
 use std::borrow::Cow;
 use std::fmt;
 
+use crate::keyword::Keyword;
 use crate::lex::{self, ScanKind};
-use crate::values::{Keyword, Symbol};
+use crate::symbol::Symbol;
 use crate::{Position, Result};
 
 /// Kind of a scanned token.
