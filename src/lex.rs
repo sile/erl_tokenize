@@ -102,12 +102,12 @@ fn scan_one_impl(source: &str, pos: Position) -> Result<Scanned> {
         '%' => scan_comment(source, pos),
         '~' => scan_sigil_string(source, pos),
         _ => {
-            // `is_alphabetic` mirrors the historical top-level dispatch:
-            // any non-lowercase alphabetic reaches `scan_atom` and then
-            // fails with `InvalidAtomToken` inside it. Other non-atom-head
-            // characters (digits, symbols, punctuation) go to
-            // `scan_symbol`.
-            if head.is_alphabetic() {
+            // `erl_scan` routes Latin-1 uppercase letters (`À..Þ` minus
+            // `×`) to variables and Latin-1 lowercase letters to atoms;
+            // everything else non-alphabetic falls through to `scan_symbol`.
+            if util::is_variable_head_char(head) {
+                scan_variable(source, pos)
+            } else if head.is_alphabetic() {
                 let atom = scan_atom(source, pos)?;
                 let text = &source[..atom.len];
                 if let Some(k) = keyword_from_text(text) {
@@ -293,21 +293,9 @@ pub(crate) fn keyword_from_text(text: &str) -> Option<Keyword> {
 ///
 /// Accepts both ordinary `"..."` and triple-quoted `"""..."""` forms.
 pub(crate) fn scan_string(source: &str, pos: Position) -> Result<Scanned> {
-    if source.is_empty() {
-        return Err(Error::invalid_string_token(pos));
-    }
-    let (end, is_triple) = if source.starts_with(r#"""""#) {
-        (scan_triple_quoted(source, pos)?, true)
-    } else {
-        if !source.starts_with('"') {
-            return Err(Error::invalid_string_token(pos));
-        }
-        let inner_end = util::find_quotation_end(pos, &source[1..], '"')?;
-        (1 + inner_end + 1, false)
-    };
+    let (end, is_triple) = scan_string_body(source, pos, false)?;
     // Adjacent string literals without intervening whitespace are rejected
-    // only for the ordinary (non-triple) form to match the historical
-    // behaviour.
+    // only for the ordinary (non-triple) form to match `erl_scan`.
     if !is_triple && source.get(end..end + 1) == Some("\"") {
         let pos = pos.step_by_text(&source[0..end]);
         return Err(Error::adjacent_string_literals(pos));
@@ -315,10 +303,97 @@ pub(crate) fn scan_string(source: &str, pos: Position) -> Result<Scanned> {
     Ok(Scanned::new(ScanKind::String, end))
 }
 
+/// Scan a `"..."` or `"""..."""` string body and return `(length,
+/// is_triple)` without applying the adjacent-string rejection rule.
+///
+/// `verbatim` disables escape processing for the ordinary form, mirroring
+/// `erl_scan`'s handling of verbatim sigils (e.g. `~B"..."`, `~S"..."`).
+/// Triple-quoted content is always verbatim per EEP 64, so `verbatim`
+/// only affects the ordinary `"..."` branch.
+fn scan_string_body(source: &str, pos: Position, verbatim: bool) -> Result<(usize, bool)> {
+    if source.is_empty() {
+        return Err(Error::invalid_string_token(pos));
+    }
+    if source.starts_with(r#"""""#) {
+        Ok((scan_triple_quoted(source, pos)?, true))
+    } else {
+        if !source.starts_with('"') {
+            return Err(Error::invalid_string_token(pos));
+        }
+        let inner_end = if verbatim {
+            util::find_verbatim_quotation_end(pos, &source[1..], '"')?
+        } else {
+            util::find_quotation_end(pos, &source[1..], '"')?
+        };
+        Ok((1 + inner_end + 1, false))
+    }
+}
+
+/// Locate the closing delimiter of a triple-quoted string body.
+///
+/// `body_start` is the byte offset of the character immediately after the
+/// LF that follows the opening delimiter, and `quote_count` is the number
+/// of `"` characters in that opening delimiter. Returns `(indent,
+/// end_line_start, end_line_end)` on success, where:
+///
+/// * `indent` is the whitespace column count on the closing line (`0`
+///   means the closer sits flush against column 1);
+/// * `end_line_start` is the byte offset of the first character of the
+///   closing line (i.e. the character just past the preceding LF);
+/// * `end_line_end` is the byte offset just past the last `"` of the
+///   closing delimiter.
+///
+/// The closer is only accepted when it consists of `quote_count`
+/// contiguous `"` characters on a line otherwise containing only
+/// whitespace, matching `erl_scan`'s `scan_tqstring_lines` rules — a run
+/// like `""" ""` does not close a 3-quote string because the space
+/// interrupts the quote run.
+fn find_triple_quoted_closer(
+    source: &str,
+    body_start: usize,
+    quote_count: usize,
+) -> Option<(usize, usize, usize)> {
+    let mut indent = 0usize;
+    let mut end_line_start = body_start;
+    let mut end_line_end = body_start;
+    // `remaining` is the number of quote characters still needed to close.
+    // `on_end_line` tracks whether the current line is still eligible to be
+    // the closing line — a non-quote non-whitespace character disqualifies
+    // it, and so does whitespace *after* a partial quote run.
+    let mut remaining = quote_count;
+    let mut on_end_line = true;
+    for c in source[body_start..].chars() {
+        end_line_end += c.len_utf8();
+        if c == '\n' {
+            indent = 0;
+            remaining = quote_count;
+            on_end_line = true;
+            end_line_start = end_line_end;
+        } else if on_end_line && c == '"' {
+            remaining -= 1;
+            if remaining == 0 {
+                return Some((indent, end_line_start, end_line_end));
+            }
+        } else if c.is_ascii_whitespace() {
+            if remaining == quote_count {
+                // Still in the leading indent of the line.
+                indent += 1;
+            } else if on_end_line {
+                // A partial quote run followed by whitespace is not a
+                // valid closer.
+                on_end_line = false;
+            }
+        } else {
+            on_end_line = false;
+        }
+    }
+    None
+}
+
 /// Scan a triple-quoted string literal and return its byte length.
 ///
-/// Mirrors [`crate::tokens::StringToken::parse_triple_quoted`] but without
-/// building the decoded content.
+/// Mirrors [`decode_triple_quoted`] but without building the decoded
+/// content.
 fn scan_triple_quoted(source: &str, pos: Position) -> Result<usize> {
     let mut quote_count = 0usize;
     let mut chars = source.chars().peekable();
@@ -347,32 +422,9 @@ fn scan_triple_quoted(source: &str, pos: Position) -> Result<usize> {
         return Err(Error::no_closing_quotation(pos));
     }
 
-    let mut indent = 0usize;
-    let mut maybe_end_line = true;
-    let mut remaining_quote_count = quote_count;
-    let mut end_line_start = start_line_end;
-    let mut end_line_end = start_line_end;
-    for c in source[start_line_end..].chars() {
-        end_line_end += c.len_utf8();
-        if c == '\n' {
-            indent = 0;
-            maybe_end_line = true;
-            remaining_quote_count = quote_count;
-            end_line_start = end_line_end;
-        } else if c.is_ascii_whitespace() {
-            indent += 1;
-        } else if maybe_end_line && c == '"' {
-            remaining_quote_count -= 1;
-            if remaining_quote_count == 0 {
-                break;
-            }
-        } else {
-            maybe_end_line = false;
-        }
-    }
-    if remaining_quote_count != 0 {
-        return Err(Error::no_closing_quotation(pos));
-    }
+    let (indent, end_line_start, end_line_end) =
+        find_triple_quoted_closer(source, start_line_end, quote_count)
+            .ok_or_else(|| Error::no_closing_quotation(pos))?;
 
     // An indented closer with no body lines has `end_line_start ==
     // start_line_end`; `saturating_sub` keeps the range well-formed
@@ -380,7 +432,7 @@ fn scan_triple_quoted(source: &str, pos: Position) -> Result<usize> {
     if indent > 0 {
         let body_end = end_line_start.saturating_sub(1).max(start_line_end);
         for line in source[start_line_end..body_end].lines() {
-            if line == "\n" {
+            if line.trim().is_empty() {
                 continue;
             }
             let mut valid_line = false;
@@ -417,13 +469,20 @@ pub(crate) fn scan_sigil_string(source: &str, pos: Position) -> Result<Scanned> 
         }
         offset += c.len_utf8();
     }
+    let prefix = &source[1..offset];
+    let verbatim = is_verbatim_sigil_prefix(prefix);
     let open = source[offset..]
         .chars()
         .next()
         .ok_or_else(|| Error::invalid_sigil_string_token(pos))?;
     let content_end = if open == '"' {
-        let inner = scan_string(&source[offset..], pos.step_by_width(offset))?;
-        offset + inner.len
+        // Reuse the string-body scanner so that both single- and
+        // triple-quoted forms behave identically for sigils, minus the
+        // adjacent-string rejection (which is checked later against the
+        // sigil suffix).
+        let (len, _is_triple) =
+            scan_string_body(&source[offset..], pos.step_by_width(offset), verbatim)?;
+        offset + len
     } else {
         let close = match open {
             '(' => ')',
@@ -433,8 +492,13 @@ pub(crate) fn scan_sigil_string(source: &str, pos: Position) -> Result<Scanned> 
             '/' | '|' | '\'' | '`' | '#' => open,
             _ => return Err(Error::invalid_sigil_string_token(pos)),
         };
-        let inner_end =
-            util::find_quotation_end(pos.step_by_width(offset + 1), &source[offset + 1..], close)?;
+        let inner_pos = pos.step_by_width(offset + 1);
+        let content = &source[offset + 1..];
+        let inner_end = if verbatim {
+            util::find_verbatim_quotation_end(inner_pos, content, close)?
+        } else {
+            util::find_quotation_end(inner_pos, content, close)?
+        };
         offset + 1 + inner_end + 1
     };
     let mut end = content_end;
@@ -444,7 +508,24 @@ pub(crate) fn scan_sigil_string(source: &str, pos: Position) -> Result<Scanned> 
         }
         end += c.len_utf8();
     }
+    // A sigil with an empty suffix followed by `"` is an adjacent-string
+    // error, matching `erl_scan`'s `scan_string_concat` rule; a non-empty
+    // suffix separates the tokens and no error is raised.
+    if end == content_end && source.get(end..end + 1) == Some("\"") {
+        let pos = pos.step_by_text(&source[0..end]);
+        return Err(Error::adjacent_string_literals(pos));
+    }
     Ok(Scanned::new(ScanKind::SigilString, end))
+}
+
+/// Return `true` when the sigil prefix indicates a verbatim string, i.e.
+/// escape sequences inside the content are preserved as-is.
+///
+/// `erl_scan` classifies the empty prefix (`~"..."`), `b` (`~b"..."`),
+/// and `s` (`~s"..."`) as non-verbatim; every other prefix — `~B`, `~S`,
+/// `~foo`, `~X`, and so on — is verbatim.
+fn is_verbatim_sigil_prefix(prefix: &str) -> bool {
+    !matches!(prefix, "" | "b" | "s")
 }
 
 /// Validate a symbol at the start of `source` and return its length.
@@ -966,30 +1047,9 @@ fn decode_triple_quoted(text: &str) -> Cow<'_, str> {
         .map(|i| idx + i + 1)
         .expect("scanner validated opening newline");
 
-    // Walk the body to find the closing indentation line.
-    let mut indent = 0usize;
-    let mut maybe_end_line = true;
-    let mut remaining = quote_count;
-    let mut end_line_start = start_line_end;
-    let mut end_line_end = start_line_end;
-    for c in text[start_line_end..].chars() {
-        end_line_end += c.len_utf8();
-        if c == '\n' {
-            indent = 0;
-            maybe_end_line = true;
-            remaining = quote_count;
-            end_line_start = end_line_end;
-        } else if c.is_ascii_whitespace() {
-            indent += 1;
-        } else if maybe_end_line && c == '"' {
-            remaining -= 1;
-            if remaining == 0 {
-                break;
-            }
-        } else {
-            maybe_end_line = false;
-        }
-    }
+    let (indent, end_line_start, _end_line_end) =
+        find_triple_quoted_closer(text, start_line_end, quote_count)
+            .expect("scanner validated triple-quoted closer");
 
     let body_end = end_line_start.saturating_sub(1).max(start_line_end);
     let body = &text[start_line_end..body_end];
@@ -1027,6 +1087,7 @@ pub(crate) fn decode_sigil(text: &str) -> (&str, Cow<'_, str>, &str) {
         prefix_end += c.len_utf8();
     }
     let prefix = &text[1..prefix_end];
+    let verbatim = is_verbatim_sigil_prefix(prefix);
     let open = text[prefix_end..]
         .chars()
         .next()
@@ -1034,8 +1095,15 @@ pub(crate) fn decode_sigil(text: &str) -> (&str, Cow<'_, str>, &str) {
     let (content, content_end) = if open == '"' {
         // The content is itself a full (regular or triple-quoted) string.
         let sub = &text[prefix_end..];
-        let scanned = scan_string(sub, Position::new()).expect("scanner validated sigil string");
-        (decode_string(&sub[..scanned.len]), prefix_end + scanned.len)
+        let (len, is_triple) = scan_string_body(sub, Position::new(), verbatim)
+            .expect("scanner validated sigil string");
+        let body = &sub[..len];
+        let value = if is_triple {
+            decode_triple_quoted(body)
+        } else {
+            decode_regular_string(&body[1..len - 1], verbatim)
+        };
+        (value, prefix_end + len)
     } else {
         let close = match open {
             '(' => ')',
@@ -1045,18 +1113,29 @@ pub(crate) fn decode_sigil(text: &str) -> (&str, Cow<'_, str>, &str) {
             other => other,
         };
         let content_start = prefix_end + 1;
-        let content_len = util::find_quotation_end(Position::new(), &text[content_start..], close)
-            .expect("scanner validated sigil close");
-        let inner = &text[content_start..content_start + content_len];
-        let value = if inner.contains('\\') {
-            let (v, _) = util::parse_quotation(Position::new(), &text[content_start..], close)
-                .expect("scanner validated sigil close");
-            v
+        let content_len = if verbatim {
+            util::find_verbatim_quotation_end(Position::new(), &text[content_start..], close)
+                .expect("scanner validated sigil close")
         } else {
-            Cow::Borrowed(inner)
+            util::find_quotation_end(Position::new(), &text[content_start..], close)
+                .expect("scanner validated sigil close")
         };
+        let inner = &text[content_start..content_start + content_len];
+        let value = decode_regular_string(inner, verbatim);
         (value, content_start + content_len + 1)
     };
     let suffix = &text[content_end..];
     (prefix, content, suffix)
+}
+
+/// Decode the content between the delimiters of an ordinary (non-triple)
+/// quoted region. Non-verbatim content borrows when it has no `\` escapes
+/// and is otherwise decoded into an owned `String`; verbatim content
+/// always borrows the raw slice.
+fn decode_regular_string(inner: &str, verbatim: bool) -> Cow<'_, str> {
+    if verbatim || !inner.contains('\\') {
+        Cow::Borrowed(inner)
+    } else {
+        Cow::Owned(util::decode_quotation_content(Position::new(), inner))
+    }
 }

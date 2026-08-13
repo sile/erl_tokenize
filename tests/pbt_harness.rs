@@ -489,6 +489,14 @@ pub fn sample_triple_quoted_string(ctx: &mut noprop::TestCaseContext) -> (String
 
 /// Sample a sigil string literal. Returns
 /// `(text, prefix, decoded_content, suffix)`.
+///
+/// `erl_scan` treats the empty prefix, `b`, and `s` as non-verbatim
+/// (escape sequences are decoded); every other prefix — including `~B`,
+/// `~S`, and multi-letter forms — is verbatim, so the content is emitted
+/// literally and `\` is not an escape introducer. The generator picks a
+/// verbatim / non-verbatim branch first and then samples a prefix and
+/// content consistent with that choice, so `decoded_content` always
+/// matches what the tokenizer will produce.
 pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String, String, String) {
     const DELIMS: [(char, char); 9] = [
         ('(', ')'),
@@ -502,13 +510,27 @@ pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String
         ('#', '#'),
     ];
     const AFFIX: [char; 6] = ['a', 'b', 'x', '_', '1', 'Q'];
+    const NON_VERBATIM_PREFIXES: [&str; 3] = ["", "b", "s"];
 
-    let prefix_len = noprop::sample_usize_in(ctx, 0..=3);
+    let verbatim = noprop::sample_weighted_index(ctx, &[1, 1]) == 0;
+    let prefix = if verbatim {
+        let mut p = String::new();
+        // Ensure the resulting prefix is neither empty nor `b`/`s` so it
+        // is truly verbatim; if the sample happens to land on one of
+        // those, upgrade the head char to `Q` (a stable member of AFFIX
+        // that is neither `b` nor `s`).
+        let len = noprop::sample_usize_in(ctx, 1..=3);
+        for _ in 0..len {
+            p.push(noprop::sample_choice(ctx, &AFFIX));
+        }
+        if matches!(p.as_str(), "" | "b" | "s") {
+            p.insert(0, 'Q');
+        }
+        p
+    } else {
+        noprop::sample_choice(ctx, &NON_VERBATIM_PREFIXES).to_owned()
+    };
     let suffix_len = noprop::sample_usize_in(ctx, 0..=3);
-    let mut prefix = String::new();
-    for _ in 0..prefix_len {
-        prefix.push(noprop::sample_choice(ctx, &AFFIX));
-    }
     let mut suffix = String::new();
     for _ in 0..suffix_len {
         suffix.push(noprop::sample_choice(ctx, &AFFIX));
@@ -517,13 +539,23 @@ pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String
     match noprop::sample_weighted_index(ctx, &[3, 2, 1]) {
         0 => {
             let (open, close) = noprop::sample_choice(ctx, &DELIMS);
-            let (inner, decoded) = sample_quoted_body(ctx, close);
+            let (inner, decoded) = if verbatim {
+                let raw = sample_verbatim_body(ctx, close);
+                (raw.clone(), raw)
+            } else {
+                sample_quoted_body(ctx, close)
+            };
             let text = format!("~{prefix}{open}{inner}{close}{suffix}");
             (text, prefix, decoded, suffix)
         }
         1 => {
-            let (string_text, decoded) = sample_regular_string(ctx);
-            let text = format!("~{prefix}{string_text}{suffix}");
+            let (inner, decoded) = if verbatim {
+                let raw = sample_verbatim_body(ctx, '"');
+                (raw.clone(), raw)
+            } else {
+                sample_quoted_body(ctx, '"')
+            };
+            let text = format!("~{prefix}\"{inner}\"{suffix}");
             (text, prefix, decoded, suffix)
         }
         _ => {
@@ -532,6 +564,23 @@ pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String
             (text, prefix, decoded, suffix)
         }
     }
+}
+
+/// Sample the inner body of a verbatim quoted region: no `\` characters
+/// (which would be preserved literally and desync the samplers' decoded
+/// oracle), and no occurrence of the closing `terminator`.
+pub fn sample_verbatim_body(ctx: &mut noprop::TestCaseContext, terminator: char) -> String {
+    const PLAIN: [char; 9] = ['a', 'b', 'c', 'd', 'e', ' ', 'X', '0', '_'];
+    let len = noprop::sample_usize_in(ctx, 0..=8);
+    let mut raw = String::new();
+    for _ in 0..len {
+        let c = noprop::sample_choice(ctx, &PLAIN);
+        if c == terminator {
+            continue;
+        }
+        raw.push(c);
+    }
+    raw
 }
 
 /// Sample a whitespace-only source, including empty / CRLF / consecutive

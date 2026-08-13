@@ -91,8 +91,6 @@ fn sample_anomaly_source(ctx: &mut noprop::TestCaseContext) -> String {
                 "\"\"\"\nfoo",
                 // Indented closer, a body line shorter than the indent.
                 "\"\"\"\n  foo\n bar\n  \"\"\"",
-                // Indented closer, a blank body line.
-                "\"\"\"\n  \n  \"\"\"",
             ],
         )
         .to_string(),

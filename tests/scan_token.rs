@@ -528,6 +528,100 @@ fn sigil_string_errors() {
     assert_eq!(first(r#""foo""#).kind(), TokenKind::String);
 }
 
+#[test]
+fn sigil_string_verbatim_prefix_preserves_backslash() {
+    // Uppercase prefix (`~B`) is a verbatim binary sigil: `\` is a
+    // literal character, not an escape introducer, so `~B"\"` is a valid
+    // one-character content ending at the second `"`.
+    let src = r#"~B"\""#;
+    match first_value(src) {
+        TokenValue::SigilString {
+            prefix,
+            content: Cow::Borrowed(s),
+            suffix,
+        } => {
+            assert_eq!(prefix, "B");
+            assert_eq!(s, "\\");
+            assert_eq!(suffix, "");
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn sigil_string_verbatim_non_string_delim() {
+    // Verbatim rule applies to non-string delimiters too: `~R(\)` scans
+    // as content `\`, not an ill-formed escape.
+    match first_value(r#"~R(\)"#) {
+        TokenValue::SigilString {
+            prefix,
+            content: Cow::Borrowed(s),
+            suffix,
+        } => {
+            assert_eq!(prefix, "R");
+            assert_eq!(s, "\\");
+            assert_eq!(suffix, "");
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn sigil_string_lowercase_prefix_processes_escapes() {
+    // `~s` and `~b` (and empty prefix) still process escapes.
+    match first_value(r#"~s"a\nb""#) {
+        TokenValue::SigilString {
+            prefix,
+            content: Cow::Owned(s),
+            ..
+        } => {
+            assert_eq!(prefix, "s");
+            assert_eq!(s, "a\nb");
+        }
+        other => panic!("{other:?}"),
+    }
+    match first_value(r#"~b"a\nb""#) {
+        TokenValue::SigilString {
+            prefix,
+            content: Cow::Owned(s),
+            ..
+        } => {
+            assert_eq!(prefix, "b");
+            assert_eq!(s, "a\nb");
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn sigil_string_empty_content_followed_by_semicolon() {
+    // `~"";` in the middle of a case clause used to be rejected as an
+    // adjacent string literal; the sigil suffix scanner should treat the
+    // `;` as a separate token, not a repeated string opener.
+    let tokens = scan_tokens("~\"\";");
+    assert_eq!(tokens.len(), 2);
+    assert_eq!(tokens[0].kind(), TokenKind::SigilString);
+    assert_eq!(tokens[1].kind(), TokenKind::Symbol(Symbol::Semicolon));
+}
+
+#[test]
+fn sigil_string_empty_content_followed_by_string_rejects() {
+    // A sigil with empty suffix followed immediately by `"` is still
+    // adjacent-string, matching `scan_string_concat` in `erl_scan`.
+    assert!(scan_token(r#"~""""foo""#, pos()).is_err());
+}
+
+#[test]
+fn sigil_string_suffix_separates_from_next_string() {
+    // A non-empty sigil suffix separates the tokens, so a `"..."` may
+    // follow without triggering adjacent-string.
+    let src = r#"~"foo"s"bar""#;
+    let tokens = scan_tokens(src);
+    assert_eq!(tokens.len(), 2);
+    assert_eq!(tokens[0].kind(), TokenKind::SigilString);
+    assert_eq!(tokens[1].kind(), TokenKind::String);
+}
+
 // ============================================================
 // String
 // ============================================================
@@ -594,8 +688,51 @@ fn string_triple_quoted_empty_indented() {
 }
 
 #[test]
+fn string_triple_quoted_with_blank_lines_borrowed() {
+    let src = "\"\"\"\nfoo\n\nbar\n\"\"\"";
+    match first_value(src) {
+        TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "foo\n\nbar"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn string_triple_quoted_with_blank_line_indented() {
+    let src = "\"\"\"\n  foo\n\n  bar\n  \"\"\"";
+    match first_value(src) {
+        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "foo\n\nbar"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
 fn string_adjacent_literals_reject() {
     assert!(scan_token(r#""foo""bar""#, pos()).is_err());
+}
+
+#[test]
+fn string_triple_quoted_four_quote_closer() {
+    // An opener of N quotes must be matched by exactly N quotes on the
+    // closer line. `""""` opens a 4-quote string; a 3-quote body line is
+    // ordinary content.
+    let src = "\"\"\"\"\n  \"\"\"\n  body\n  \"\"\"\"";
+    match first_value(src) {
+        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "\"\"\"\nbody"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn string_triple_quoted_closer_requires_contiguous_quotes() {
+    // For a 4-quote opener `""""`, a body line of `""" ""` (3 quotes,
+    // space, 2 quotes) is not a valid closer: the closer must be a
+    // contiguous run of exactly N `"` on a line with only leading
+    // whitespace. The real closer is the `""""` on the last line.
+    // This is the shape used by OTP's `sigils_SUITE.erl` line 249.
+    let src = "\"\"\"\"\n  \"\"\" \"\"\n  \"\"\"\"";
+    let t = first(src);
+    assert_eq!(t.kind(), TokenKind::String);
+    assert_eq!(t.text(src), src);
 }
 
 #[test]
@@ -678,6 +815,18 @@ fn variable_basic_and_borrow() {
         assert_eq!(t.kind(), TokenKind::Variable);
         assert_eq!(t.text(src), src);
         assert_eq!(t.value(src), TokenValue::Variable(src));
+    }
+}
+
+#[test]
+fn variable_latin1_uppercase_head() {
+    // Latin-1 uppercase letters (`À..Þ` minus `×`) are valid variable
+    // heads in `erl_scan`. The `compile_SUITE_data/small.erl` fixture in
+    // OTP uses `Överskott` as a parameter name.
+    for src in ["Överskott", "Ärger", "Ünique"] {
+        let t = first(src);
+        assert_eq!(t.kind(), TokenKind::Variable, "for {src}");
+        assert_eq!(t.text(src), src);
     }
 }
 
