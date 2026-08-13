@@ -62,7 +62,7 @@ impl From<ScanKind> for TokenKind {
             ScanKind::String => TokenKind::String,
             ScanKind::Symbol(s) => TokenKind::Symbol(s),
             ScanKind::Variable => TokenKind::Variable,
-            ScanKind::Whitespace(_) => TokenKind::Whitespace,
+            ScanKind::Whitespace => TokenKind::Whitespace,
         }
     }
 }

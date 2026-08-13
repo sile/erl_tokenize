@@ -19,7 +19,7 @@
 use std::borrow::Cow;
 
 use crate::util;
-use crate::values::{Keyword, Symbol, Whitespace};
+use crate::values::{Keyword, Symbol};
 use crate::{Error, Position, Result};
 
 /// Kind of the token that a scanner recognized at the start of a source
@@ -40,7 +40,7 @@ pub(crate) enum ScanKind {
     String,
     Symbol(Symbol),
     Variable,
-    Whitespace(Whitespace),
+    Whitespace,
 }
 
 /// Result of scanning one token at the start of a source slice.
@@ -554,22 +554,58 @@ pub(crate) fn scan_variable(source: &str, pos: Position) -> Result<Scanned> {
     Ok(Scanned::new(ScanKind::Variable, end))
 }
 
-/// Validate a whitespace token at the start of `source` and return its
-/// length.
+/// Return `true` for the ASCII/NBSP whitespace characters recognised by
+/// the tokenizer. LF (`\n`) is intentionally included.
+fn is_whitespace_char(c: char) -> bool {
+    matches!(c, ' ' | '\t' | '\r' | '\n' | '\u{A0}')
+}
+
+/// Same as [`is_whitespace_char`] but excludes LF; used to walk the
+/// non-newline half of an aggregated whitespace token.
+fn is_non_lf_whitespace_char(c: char) -> bool {
+    matches!(c, ' ' | '\t' | '\r' | '\u{A0}')
+}
+
+/// Aggregate a whitespace run at the start of `source`, following the
+/// `erl_scan` `return_white_spaces` rules:
+///
+/// - a leading LF starts a token, followed by non-LF whitespace up to
+///   (but not including) the next LF or non-whitespace character;
+/// - a leading non-LF whitespace starts a token, followed by more non-LF
+///   whitespace up to (but not including) the next LF or non-whitespace
+///   character;
+/// - each token contains at most one LF, always at the very start.
 pub(crate) fn scan_whitespace(source: &str, pos: Position) -> Result<Scanned> {
+    let head = source
+        .chars()
+        .next()
+        .ok_or_else(|| Error::invalid_whitespace_token(pos))?;
+    if !is_whitespace_char(head) {
+        return Err(Error::invalid_whitespace_token(pos));
+    }
+    let mut end = head.len_utf8();
+    for c in source[end..].chars() {
+        if !is_non_lf_whitespace_char(c) {
+            break;
+        }
+        end += c.len_utf8();
+    }
+    Ok(Scanned::new(ScanKind::Whitespace, end))
+}
+
+/// Consume exactly one whitespace character. Used by the legacy
+/// [`crate::tokens::WhitespaceToken`] entry point, which is single-char
+/// by contract; the aggregated [`scan_whitespace`] powers the new
+/// [`crate::scan_token`] API.
+pub(crate) fn scan_whitespace_single(source: &str, pos: Position) -> Result<Scanned> {
     let c = source
         .chars()
         .next()
         .ok_or_else(|| Error::invalid_whitespace_token(pos))?;
-    let ws = match c {
-        ' ' => Whitespace::Space,
-        '\t' => Whitespace::Tab,
-        '\r' => Whitespace::Return,
-        '\n' => Whitespace::Newline,
-        '\u{A0}' => Whitespace::NoBreakSpace,
-        _ => return Err(Error::invalid_whitespace_token(pos)),
-    };
-    Ok(Scanned::new(ScanKind::Whitespace(ws), c.len_utf8()))
+    if !is_whitespace_char(c) {
+        return Err(Error::invalid_whitespace_token(pos));
+    }
+    Ok(Scanned::new(ScanKind::Whitespace, c.len_utf8()))
 }
 
 /// Validate a float literal at the start of `source` and return its length.
