@@ -20,11 +20,26 @@ pub(crate) fn is_atom_non_head_char(c: char) -> bool {
 }
 
 pub(crate) fn is_variable_head_char(c: char) -> bool {
-    matches!(c, 'A'..='Z' | '_')
+    // Matches erl_scan: ASCII `A-Z`, `_`, and Latin-1 uppercase letters
+    // (`À..Þ` minus the multiplication sign `×`).
+    matches!(c, 'A'..='Z' | '_' | 'À'..='Ö' | 'Ø'..='Þ')
 }
 
 pub(crate) fn is_variable_non_head_char(c: char) -> bool {
-    matches!(c, 'a'..='z' | 'A'..='Z' | '@' | '_' | '0'..='9')
+    // Matches erl_scan's `scan_name`: ASCII alphanumerics, `_`, `@`, and
+    // Latin-1 letters (`À..Þ` minus `×`, `ß..ÿ` minus `÷`).
+    matches!(
+        c,
+        'a'..='z'
+            | 'A'..='Z'
+            | '@'
+            | '_'
+            | '0'..='9'
+            | 'À'..='Ö'
+            | 'Ø'..='Þ'
+            | 'ß'..='ö'
+            | 'ø'..='ÿ'
+    )
 }
 
 /// Walk a quoted region and return the byte index of the closing
@@ -39,6 +54,23 @@ pub(crate) fn find_quotation_end(pos: Position, input: &str, terminator: char) -
         if c == '\\' {
             parse_escaped_char(pos.step_by_width(1 + i), &mut chars)?;
         } else if c == terminator {
+            return Ok(i);
+        }
+    }
+    Err(Error::no_closing_quotation(pos))
+}
+
+/// Verbatim variant of [`find_quotation_end`]: does not treat `\` as an
+/// escape introducer, so the terminator matches the first literal
+/// occurrence. Used for verbatim sigil strings (`~B"..."`, `~S"..."`
+/// etc.) whose content preserves `\` as-is.
+pub(crate) fn find_verbatim_quotation_end(
+    pos: Position,
+    input: &str,
+    terminator: char,
+) -> Result<usize> {
+    for (i, c) in input.char_indices() {
+        if c == terminator {
             return Ok(i);
         }
     }
@@ -66,7 +98,7 @@ pub(crate) fn parse_quotation(
 /// Assumes the input has already been validated by
 /// [`find_quotation_end`] (every `\` introduces a well-formed escape
 /// sequence and the input does not contain the unescaped terminator).
-fn decode_quotation_content(pos: Position, input: &str) -> String {
+pub(crate) fn decode_quotation_content(pos: Position, input: &str) -> String {
     let mut buf = String::with_capacity(input.len());
     let mut chars = input.char_indices().peekable();
     while let Some((i, c)) = chars.next() {
