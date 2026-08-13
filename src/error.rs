@@ -2,10 +2,11 @@ use crate::Position;
 
 /// Lexical error produced by the scanner.
 ///
-/// `Error` is `Copy`: it holds only the diagnostic position and a resume
-/// position that the caller can pass back to
-/// [`scan_token`](crate::scan_token) to continue past the offending
-/// input.
+/// Each variant carries the diagnostic position of the offending input
+/// and a resume position that the caller can pass back to
+/// [`scan_token`](crate::scan_token) to continue past it. Use
+/// [`position`](Self::position) to report where the error occurred and
+/// [`resume_position`](Self::resume_position) to continue scanning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
     /// The scanner reached the end of the source without finding the
