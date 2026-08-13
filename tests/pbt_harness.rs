@@ -398,7 +398,7 @@ pub fn sample_decimal_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) 
 
 /// Sample a radix-prefixed float. Returns `(text, value)`.
 pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
-    const CASES: [(&str, f64); 8] = [
+    const POSITIVE: [(&str, f64); 8] = [
         ("2#1.0", 1.0),
         ("2#1.1", 1.5),
         ("2#0.1", 0.5),
@@ -408,7 +408,17 @@ pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
         ("2#1.0#e1", 2.0),
         ("2#1.0#e2", 4.0),
     ];
-    let (text, value) = noprop::sample_choice(ctx, &CASES);
+    // Negative exponents are a separate decoder branch (`#e-N`).
+    const NEGATIVE: [(&str, f64); 4] = [
+        ("2#1.0#e-1", 0.5),
+        ("2#1.0#e-2", 0.25),
+        ("2#1.1#e-1", 0.75),
+        ("16#1.0#e-1", 0.0625),
+    ];
+    let (text, value) = match noprop::sample_weighted_index(ctx, &[2, 1]) {
+        0 => noprop::sample_choice(ctx, &POSITIVE),
+        _ => noprop::sample_choice(ctx, &NEGATIVE),
+    };
     (text.to_owned(), value)
 }
 

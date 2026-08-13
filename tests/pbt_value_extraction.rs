@@ -52,7 +52,7 @@ fn sample_case(ctx: &mut noprop::TestCaseContext) -> (String, Expected) {
             2, // radix integer
             2, // overflow integer
             2, // decimal float
-            1, // radix float
+            2, // radix float
             2, // keyword
             2, // symbol
             2, // regular string
@@ -153,6 +153,7 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
     let integer_none = Counter::default();
     let saw_triple = Counter::default();
     let saw_radix_float = Counter::default();
+    let saw_neg_radix_exp = Counter::default();
     let saw_exponent_float = Counter::default();
     let saw_empty_comment = Counter::default();
     let saw_caret = Counter::default();
@@ -187,6 +188,9 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
                 if text.contains('#') {
                     saw_radix_float.hit();
                 }
+                if text.contains("#e-") {
+                    saw_neg_radix_exp.hit();
+                }
                 if text.contains('e') || text.contains('E') {
                     saw_exponent_float.hit();
                 }
@@ -201,6 +205,7 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
             }
             (Expected::Keyword(exp), TokenValue::Keyword(v)) => {
                 assert_eq!(v, exp, "keyword value for {text:?}");
+                assert_eq!(token.text(&text), v.as_str(), "keyword as_str for {text:?}");
                 variants.hit("keyword");
             }
             (
@@ -231,6 +236,7 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
             }
             (Expected::Symbol(exp), TokenValue::Symbol(v)) => {
                 assert_eq!(v, exp, "symbol value for {text:?}");
+                assert_eq!(token.text(&text), v.as_str(), "symbol as_str for {text:?}");
                 variants.hit("symbol");
             }
             (Expected::Variable(exp), TokenValue::Variable(v)) => {
@@ -269,6 +275,10 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
     assert!(integer_none.get() > 0, "no Integer(None) case\n{runner}");
     assert!(saw_triple.get() > 0, "no triple-quoted string\n{runner}");
     assert!(saw_radix_float.get() > 0, "no radix float\n{runner}");
+    assert!(
+        saw_neg_radix_exp.get() > 0,
+        "no negative-exponent radix float\n{runner}"
+    );
     assert!(saw_exponent_float.get() > 0, "no exponent float\n{runner}");
     assert!(saw_empty_comment.get() > 0, "no empty comment\n{runner}");
     assert!(saw_caret.get() > 0, "no caret escape\n{runner}");

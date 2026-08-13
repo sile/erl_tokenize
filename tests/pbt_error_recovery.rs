@@ -20,7 +20,7 @@ use pbt_harness::{
 /// Bias the generator toward well-known anomaly triggers so the
 /// recovery path is exercised in most cases.
 fn sample_anomaly_source(ctx: &mut noprop::TestCaseContext) -> String {
-    match noprop::sample_weighted_index(ctx, &[2, 2, 2, 2, 2, 2, 2, 2, 3]) {
+    match noprop::sample_weighted_index(ctx, &[2, 2, 2, 2, 2, 2, 2, 2, 2, 3]) {
         0 => {
             let mut s = String::from("'");
             let len = noprop::sample_usize_in(ctx, 0..=8);
@@ -69,7 +69,8 @@ fn sample_anomaly_source(ctx: &mut noprop::TestCaseContext) -> String {
         5 => noprop::sample_choice(
             ctx,
             &[
-                "12_", "12__3", "10#", "37#0", "1#0", "12_.3", "12.3_", "1.0e", "1.0e+",
+                "12_", "12__3", "10#", "37#0", "1#0", "12_.3", "12.3_", "1.0e", "1.0e+", "37#0.0",
+                "1#0.0", "2#1.0#", "2#1.0#x", "2#1.0#e", "2#1.0#e-",
             ],
         )
         .to_string(),
@@ -81,6 +82,20 @@ fn sample_anomaly_source(ctx: &mut noprop::TestCaseContext) -> String {
             let invalid = noprop::sample_choice(ctx, &["@", "`", "\\"]);
             wrap_invalid(ctx, invalid)
         }
+        8 => noprop::sample_choice(
+            ctx,
+            &[
+                // Non-whitespace between the opening quotes and the first LF.
+                "\"\"\"foo\n\"\"\"",
+                // Opening line OK, never closed.
+                "\"\"\"\nfoo",
+                // Indented closer, a body line shorter than the indent.
+                "\"\"\"\n  foo\n bar\n  \"\"\"",
+                // Indented closer, a blank body line.
+                "\"\"\"\n  \n  \"\"\"",
+            ],
+        )
+        .to_string(),
         _ => sample_text(ctx),
     }
 }
