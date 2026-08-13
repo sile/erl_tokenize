@@ -183,9 +183,19 @@ pub enum TokenValue<'a> {
     /// Comment body without the leading `%`.
     Comment(&'a str),
     /// Decoded floating-point value.
+    ///
+    /// Always finite: the scanner rejects a literal whose decoded value
+    /// would be `±f64::INFINITY` (matching `erl_scan`'s `illegal float`
+    /// error), and Erlang syntax admits no NaN literal. Underflow to
+    /// `0.0` is accepted.
     Float(f64),
-    /// Decoded integer value, or `None` when it exceeds `i64::MAX`.
-    Integer(Option<i64>),
+    /// Decoded integer value, or `None` when it exceeds `u64::MAX`.
+    ///
+    /// Erlang integer literals are always non-negative (`-10` is the
+    /// unary `-` operator applied to `10`), so `u64` matches the
+    /// language's token domain and doubles the representable range
+    /// versus `i64`.
+    Integer(Option<u64>),
     /// Reserved word.
     Keyword(Keyword),
     /// Sigil string parts.
