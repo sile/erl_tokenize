@@ -8,14 +8,16 @@
 
 use std::borrow::Cow;
 
-use erl_tokenize::{Position, TokenKind, TokenValue, scan_token};
+use erl_tokenize::{Keyword, Position, Symbol, TokenKind, TokenValue, scan_token};
 
+#[expect(dead_code, reason = "shared helpers; this binary uses only a subset")]
 mod pbt_harness;
 use pbt_harness::{
     CASES, Counter, LabelSet, SEED_ENV, sample_bare_atom, sample_char_literal, sample_comment,
-    sample_decimal_float, sample_decimal_integer, sample_keyword, sample_quoted_atom,
-    sample_radix_integer, sample_regular_string, sample_sigil_string, sample_symbol,
-    sample_variable, sample_whitespace_sequence,
+    sample_decimal_float, sample_decimal_integer, sample_keyword, sample_one_whitespace_token,
+    sample_overflow_integer, sample_quoted_atom, sample_radix_float, sample_radix_integer,
+    sample_regular_string, sample_sigil_string, sample_symbol, sample_triple_quoted_string,
+    sample_unicode_atom, sample_variable,
 };
 
 /// Expected value for one case. Kept flat so a mismatch reports clearly.
@@ -25,159 +27,118 @@ enum Expected {
     Comment(String),
     Float(f64),
     Integer(Option<i64>),
-    Keyword(erl_tokenize::Keyword),
+    Keyword(Keyword),
     SigilString {
         prefix: String,
         content: String,
         suffix: String,
     },
     String(String),
-    Symbol(erl_tokenize::Symbol),
+    Symbol(Symbol),
     Variable(String),
     Whitespace(String),
 }
 
 fn sample_case(ctx: &mut noprop::TestCaseContext) -> (String, Expected) {
-    match noprop::sample_usize_in(ctx, 0..12) {
+    match noprop::sample_weighted_index(
+        ctx,
+        &[
+            2, // bare atom
+            1, // unicode atom
+            2, // quoted atom
+            2, // char
+            2, // comment
+            2, // decimal integer
+            2, // radix integer
+            2, // overflow integer
+            2, // decimal float
+            1, // radix float
+            2, // keyword
+            2, // symbol
+            2, // regular string
+            2, // triple-quoted string
+            2, // variable
+            2, // sigil
+            2, // whitespace
+        ],
+    ) {
         0 => {
             let s = sample_bare_atom(ctx);
             (s.clone(), Expected::Atom(s))
         }
         1 => {
+            let s = sample_unicode_atom(ctx);
+            (s.clone(), Expected::Atom(s))
+        }
+        2 => {
             let (text, decoded) = sample_quoted_atom(ctx);
             (text, Expected::Atom(decoded))
         }
-        2 => {
+        3 => {
             let (text, c) = sample_char_literal(ctx);
             (text, Expected::Char(c))
         }
-        3 => {
+        4 => {
             let text = sample_comment(ctx);
             let value = text[1..].to_owned();
             (text, Expected::Comment(value))
         }
-        4 => {
+        5 => {
             let (text, v) = sample_decimal_integer(ctx);
             (text, Expected::Integer(Some(v)))
         }
-        5 => {
+        6 => {
             let (text, v) = sample_radix_integer(ctx);
             (text, Expected::Integer(Some(v)))
         }
-        6 => {
-            // Integer overflow: append digits past i64::MAX.
-            let text = "9223372036854775808".to_owned();
+        7 => {
+            let text = sample_overflow_integer(ctx);
             (text, Expected::Integer(None))
         }
-        7 => {
+        8 => {
             let (text, v) = sample_decimal_float(ctx);
             (text, Expected::Float(v))
         }
-        8 => {
+        9 => {
+            let (text, v) = sample_radix_float(ctx);
+            (text, Expected::Float(v))
+        }
+        10 => {
             let (text, k) = sample_keyword(ctx);
             (text.to_owned(), Expected::Keyword(k))
         }
-        9 => {
-            let text = sample_symbol(ctx);
-            let s = match text {
-                "[" => erl_tokenize::Symbol::OpenSquare,
-                "]" => erl_tokenize::Symbol::CloseSquare,
-                "(" => erl_tokenize::Symbol::OpenParen,
-                ")" => erl_tokenize::Symbol::CloseParen,
-                "{" => erl_tokenize::Symbol::OpenBrace,
-                "}" => erl_tokenize::Symbol::CloseBrace,
-                "#" => erl_tokenize::Symbol::Sharp,
-                "/" => erl_tokenize::Symbol::Slash,
-                "." => erl_tokenize::Symbol::Dot,
-                ".." => erl_tokenize::Symbol::DoubleDot,
-                "..." => erl_tokenize::Symbol::TripleDot,
-                "," => erl_tokenize::Symbol::Comma,
-                ":" => erl_tokenize::Symbol::Colon,
-                "::" => erl_tokenize::Symbol::DoubleColon,
-                ";" => erl_tokenize::Symbol::Semicolon,
-                "=" => erl_tokenize::Symbol::Match,
-                ":=" => erl_tokenize::Symbol::MapMatch,
-                "|" => erl_tokenize::Symbol::VerticalBar,
-                "||" => erl_tokenize::Symbol::DoubleVerticalBar,
-                "?" => erl_tokenize::Symbol::Question,
-                "??" => erl_tokenize::Symbol::DoubleQuestion,
-                "?=" => erl_tokenize::Symbol::MaybeMatch,
-                "!" => erl_tokenize::Symbol::Bang,
-                "-" => erl_tokenize::Symbol::Hyphen,
-                "--" => erl_tokenize::Symbol::MinusMinus,
-                "+" => erl_tokenize::Symbol::Plus,
-                "++" => erl_tokenize::Symbol::PlusPlus,
-                "*" => erl_tokenize::Symbol::Multiply,
-                "->" => erl_tokenize::Symbol::RightArrow,
-                "<-" => erl_tokenize::Symbol::LeftArrow,
-                "=>" => erl_tokenize::Symbol::DoubleRightArrow,
-                "<=" => erl_tokenize::Symbol::DoubleLeftArrow,
-                ">>" => erl_tokenize::Symbol::DoubleRightAngle,
-                "<<" => erl_tokenize::Symbol::DoubleLeftAngle,
-                "==" => erl_tokenize::Symbol::Eq,
-                "=:=" => erl_tokenize::Symbol::ExactEq,
-                "/=" => erl_tokenize::Symbol::NotEq,
-                "=/=" => erl_tokenize::Symbol::ExactNotEq,
-                ">" => erl_tokenize::Symbol::Greater,
-                ">=" => erl_tokenize::Symbol::GreaterEq,
-                "<" => erl_tokenize::Symbol::Less,
-                "=<" => erl_tokenize::Symbol::LessEq,
-                "&&" => erl_tokenize::Symbol::DoubleAmpersand,
-                "<:-" => erl_tokenize::Symbol::StrictLeftArrow,
-                "<:=" => erl_tokenize::Symbol::StrictDoubleLeftArrow,
-                _ => unreachable!(),
-            };
+        11 => {
+            let (text, s) = sample_symbol(ctx);
             (text.to_owned(), Expected::Symbol(s))
         }
-        10 => {
+        12 => {
             let (text, decoded) = sample_regular_string(ctx);
             (text, Expected::String(decoded))
         }
+        13 => {
+            let (text, decoded) = sample_triple_quoted_string(ctx);
+            (text, Expected::String(decoded))
+        }
+        14 => {
+            let s = sample_variable(ctx);
+            (s.clone(), Expected::Variable(s))
+        }
+        15 => {
+            let (text, prefix, content, suffix) = sample_sigil_string(ctx);
+            (
+                text,
+                Expected::SigilString {
+                    prefix,
+                    content,
+                    suffix,
+                },
+            )
+        }
         _ => {
-            if noprop::sample_bool(ctx) {
-                let s = sample_variable(ctx);
-                (s.clone(), Expected::Variable(s))
-            } else if noprop::sample_bool(ctx) {
-                let (text, prefix, content, suffix) = sample_sigil_string(ctx);
-                (
-                    text,
-                    Expected::SigilString {
-                        prefix,
-                        content,
-                        suffix,
-                    },
-                )
-            } else {
-                let s = sample_whitespace_sequence(ctx);
-                if s.is_empty() {
-                    // Whitespace must be non-empty; fall back to a single space.
-                    (" ".to_owned(), Expected::Whitespace(" ".to_owned()))
-                } else {
-                    // Only the first aggregated whitespace token is
-                    // tested; truncate the expected value accordingly.
-                    let head_len = first_ws_token_len(&s);
-                    let head = s[..head_len].to_owned();
-                    (s, Expected::Whitespace(head))
-                }
-            }
+            let s = sample_one_whitespace_token(ctx);
+            (s.clone(), Expected::Whitespace(s))
         }
     }
-}
-
-/// Compute the length of the first aggregated whitespace token per the
-/// `erl_scan return_white_spaces` rules.
-fn first_ws_token_len(s: &str) -> usize {
-    let mut chars = s.char_indices();
-    let (_, head) = chars.next().expect("non-empty whitespace");
-    let mut end = head.len_utf8();
-    for (_, c) in chars {
-        if matches!(c, ' ' | '\t' | '\r' | '\u{a0}') {
-            end += c.len_utf8();
-        } else {
-            break;
-        }
-    }
-    end
 }
 
 #[test]
@@ -190,11 +151,19 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
     let owned = Counter::default();
     let integer_some = Counter::default();
     let integer_none = Counter::default();
+    let saw_triple = Counter::default();
+    let saw_radix_float = Counter::default();
+    let saw_exponent_float = Counter::default();
+    let saw_empty_comment = Counter::default();
+    let saw_caret = Counter::default();
 
     runner.run(CASES, |ctx| {
         let (text, expected) = sample_case(ctx);
         let token = scan_token(&text, Position::new())?.expect("generator produced empty source");
         let value = token.value(&text);
+        if text.contains("\\^") {
+            saw_caret.hit();
+        }
         match (&expected, &value) {
             (Expected::Atom(exp), TokenValue::Atom(v)) => {
                 assert_eq!(v.as_ref(), exp, "atom value for {text:?}");
@@ -208,10 +177,19 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
             (Expected::Comment(exp), TokenValue::Comment(s)) => {
                 assert_eq!(s, exp, "comment value for {text:?}");
                 variants.hit("comment");
+                if exp.is_empty() {
+                    saw_empty_comment.hit();
+                }
             }
             (Expected::Float(exp), TokenValue::Float(v)) => {
                 assert_eq!(v, exp, "float value for {text:?}");
                 variants.hit("float");
+                if text.contains('#') {
+                    saw_radix_float.hit();
+                }
+                if text.contains('e') || text.contains('E') {
+                    saw_exponent_float.hit();
+                }
             }
             (Expected::Integer(exp), TokenValue::Integer(v)) => {
                 assert_eq!(v, exp, "integer value for {text:?}");
@@ -247,6 +225,9 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
                 assert_eq!(v.as_ref(), exp, "string value for {text:?}");
                 variants.hit("string");
                 cow_hit(&borrowed, &owned, matches!(v, Cow::Borrowed(_)));
+                if text.starts_with("\"\"\"") {
+                    saw_triple.hit();
+                }
             }
             (Expected::Symbol(exp), TokenValue::Symbol(v)) => {
                 assert_eq!(v, exp, "symbol value for {text:?}");
@@ -266,8 +247,6 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
         Ok(())
     })?;
 
-    // Coverage: every variant reached; both Cow forms exercised; integer
-    // Some and None both seen.
     assert_eq!(runner.stats().rejected_cases, 0, "no rejects\n{runner}");
     for name in [
         "atom",
@@ -288,6 +267,11 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
     assert!(owned.get() > 0, "no owned Cow case\n{runner}");
     assert!(integer_some.get() > 0, "no Integer(Some) case\n{runner}");
     assert!(integer_none.get() > 0, "no Integer(None) case\n{runner}");
+    assert!(saw_triple.get() > 0, "no triple-quoted string\n{runner}");
+    assert!(saw_radix_float.get() > 0, "no radix float\n{runner}");
+    assert!(saw_exponent_float.get() > 0, "no exponent float\n{runner}");
+    assert!(saw_empty_comment.get() > 0, "no empty comment\n{runner}");
+    assert!(saw_caret.get() > 0, "no caret escape\n{runner}");
     Ok(())
 }
 

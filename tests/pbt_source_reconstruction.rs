@@ -7,12 +7,10 @@
 
 use erl_tokenize::{Position, TokenKind, scan_token};
 
+#[expect(dead_code, reason = "shared helpers; this binary uses only a subset")]
 mod pbt_harness;
 use pbt_harness::{
-    CASES, Counter, LabelSet, SEED_ENV, insert_separator, sample_bare_atom, sample_char_literal,
-    sample_comment, sample_decimal_float, sample_decimal_integer, sample_keyword,
-    sample_quoted_atom, sample_radix_integer, sample_regular_string, sample_sigil_string,
-    sample_symbol, sample_variable,
+    CASES, Counter, LabelSet, SEED_ENV, join_tokens, sample_token_count, sample_valid_token_text,
 };
 
 #[test]
@@ -22,55 +20,24 @@ fn source_reconstruction_and_monotonic_progress() -> noprop::TestResult {
     let kinds = LabelSet::default();
     let multi_token_cases = Counter::default();
     let empty_cases = Counter::default();
+    let saw_triple = Counter::default();
+    let saw_unicode_atom = Counter::default();
 
     runner.run(CASES, |ctx| {
-        // Number of tokens: 0 / 1 / up to 8, with the boundaries biased.
-        let n = noprop::sample_with_boundaries(
-            ctx,
-            &[0usize, 1, 8],
-            noprop::Ratio::one_nth(5),
-            |ctx| noprop::sample_usize_in(ctx, 0..=8),
-        );
-
+        let n = sample_token_count(ctx);
         let mut pieces: Vec<String> = Vec::with_capacity(n);
         for _ in 0..n {
-            let kind = noprop::sample_usize_in(ctx, 0..11);
-            let text = match kind {
-                0 => sample_bare_atom(ctx),
-                1 => sample_quoted_atom(ctx).0,
-                2 => sample_char_literal(ctx).0,
-                3 => sample_comment(ctx),
-                4 => sample_decimal_integer(ctx).0,
-                5 => sample_radix_integer(ctx).0,
-                6 => sample_decimal_float(ctx).0,
-                7 => sample_keyword(ctx).0.to_owned(),
-                8 => sample_symbol(ctx).to_owned(),
-                9 => sample_regular_string(ctx).0,
-                _ => {
-                    if noprop::sample_bool(ctx) {
-                        sample_variable(ctx)
-                    } else {
-                        sample_sigil_string(ctx).0
-                    }
-                }
-            };
-            pieces.push(text);
+            pieces.push(sample_valid_token_text(ctx));
         }
-
-        // Join with mandatory separators (whitespace or LF for comments).
-        let mut src = String::new();
-        let mut prev: Option<&str> = None;
-        for text in &pieces {
-            if let Some(prev_text) = prev {
-                src.push(insert_separator(ctx, prev_text));
-            }
-            src.push_str(text);
-            prev = Some(text);
-        }
+        let src = join_tokens(ctx, &pieces);
 
         if src.is_empty() {
             empty_cases.hit();
-            assert_eq!(scan_token(&src, Position::new())?, None);
+            assert_eq!(
+                scan_token(&src, Position::new())?,
+                None,
+                "empty source produced a token"
+            );
             return Ok(());
         }
 
@@ -81,8 +48,11 @@ fn source_reconstruction_and_monotonic_progress() -> noprop::TestResult {
         let step_ceiling = src.chars().count() * 2 + 8;
         while let Some(token) = scan_token(&src, pos)? {
             let text = token.text(&src);
-            assert!(!text.is_empty(), "empty token text");
-            assert!(token.end().offset() > prev_offset, "offset did not advance");
+            assert!(!text.is_empty(), "empty token text in {src:?}");
+            assert!(
+                token.end().offset() > prev_offset,
+                "offset did not advance in {src:?}"
+            );
             concat.push_str(text);
             prev_offset = token.end().offset();
             pos = token.end();
@@ -104,16 +74,21 @@ fn source_reconstruction_and_monotonic_progress() -> noprop::TestResult {
                 TokenKind::Variable => "variable",
                 TokenKind::Whitespace => "whitespace",
             });
+            if token.kind() == TokenKind::String && text.starts_with("\"\"\"") {
+                saw_triple.hit();
+            }
+            if token.kind() == TokenKind::Atom && text.chars().any(|c| c.len_utf8() > 1) {
+                saw_unicode_atom.hit();
+            }
         }
-        assert_eq!(concat, src, "concat mismatch");
-        assert_eq!(pos.offset(), src.len(), "did not reach EOF");
+        assert_eq!(concat, src, "concat mismatch for {src:?}");
+        assert_eq!(pos.offset(), src.len(), "did not reach EOF for {src:?}");
         if token_count >= 2 {
             multi_token_cases.hit();
         }
         Ok(())
     })?;
 
-    // Coverage gates.
     assert_eq!(
         runner.stats().rejected_cases,
         0,
@@ -126,6 +101,14 @@ fn source_reconstruction_and_monotonic_progress() -> noprop::TestResult {
     assert!(
         multi_token_cases.get() > 0,
         "no multi-token case exercised\n{runner}"
+    );
+    assert!(
+        saw_triple.get() > 0,
+        "no triple-quoted string was scanned\n{runner}"
+    );
+    assert!(
+        saw_unicode_atom.get() > 0,
+        "no Unicode bare atom was scanned\n{runner}"
     );
     for expected in [
         "atom",

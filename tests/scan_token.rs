@@ -548,6 +548,15 @@ fn string_triple_quoted_empty() {
 }
 
 #[test]
+fn string_triple_quoted_empty_indented() {
+    let src = "\"\"\"\n  \"\"\"";
+    match first_value(src) {
+        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, ""),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
 fn string_adjacent_literals_reject() {
     assert!(scan_token(r#""foo""bar""#, pos()).is_err());
 }

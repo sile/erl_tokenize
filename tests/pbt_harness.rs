@@ -1,19 +1,15 @@
 //! Shared generators and helpers for the `pbt_*` property-based tests.
 //!
 //! Cargo compiles every `tests/*.rs` as its own integration-test binary,
-//! and each binary sees this module as internal (included via
-//! `mod pbt_harness;`). The `dead_code` lint therefore fires per binary
-//! on any helper that binary does not happen to use, even when other
-//! binaries do use it. `#[expect(dead_code)]` would require the item to
-//! be dead in that specific binary, which cannot be declared uniformly.
-//! The blanket allow below is the standard Rust idiom for such shared
-//! test-helper modules.
-#![allow(dead_code)]
+//! so each binary only uses a subset of these helpers. Silence `dead_code`
+//! on the `mod pbt_harness;` declaration in each consuming file, not here:
+//! a crate-level `expect` is unfulfilled when this file is itself a
+//! test target (its `pub` items are the crate's public API).
 
 use std::cell::Cell;
 use std::collections::BTreeSet;
 
-use erl_tokenize::Keyword;
+use erl_tokenize::{Keyword, Symbol};
 
 /// Environment variable used by `noprop::seed_from_env_or_time` to
 /// reproduce a failing case.
@@ -59,14 +55,59 @@ pub const KEYWORDS: [(&str, Keyword); 29] = [
 ];
 
 /// All Erlang punctuation symbols in canonical text form.
-pub const SYMBOLS: [&str; 45] = [
-    "[", "]", "(", ")", "{", "}", "#", "/", ".", "..", "...", ",", ":", "::", ";", "=", ":=", "|",
-    "||", "?", "??", "?=", "!", "-", "--", "+", "++", "*", "->", "<-", "=>", "<=", ">>", "<<",
-    "==", "=:=", "/=", "=/=", ">", ">=", "<", "=<", "&&", "<:-", "<:=",
+pub const SYMBOLS: [(&str, Symbol); 45] = [
+    ("[", Symbol::OpenSquare),
+    ("]", Symbol::CloseSquare),
+    ("(", Symbol::OpenParen),
+    (")", Symbol::CloseParen),
+    ("{", Symbol::OpenBrace),
+    ("}", Symbol::CloseBrace),
+    ("#", Symbol::Sharp),
+    ("/", Symbol::Slash),
+    (".", Symbol::Dot),
+    ("..", Symbol::DoubleDot),
+    ("...", Symbol::TripleDot),
+    (",", Symbol::Comma),
+    (":", Symbol::Colon),
+    ("::", Symbol::DoubleColon),
+    (";", Symbol::Semicolon),
+    ("=", Symbol::Match),
+    (":=", Symbol::MapMatch),
+    ("|", Symbol::VerticalBar),
+    ("||", Symbol::DoubleVerticalBar),
+    ("?", Symbol::Question),
+    ("??", Symbol::DoubleQuestion),
+    ("?=", Symbol::MaybeMatch),
+    ("!", Symbol::Bang),
+    ("-", Symbol::Hyphen),
+    ("--", Symbol::MinusMinus),
+    ("+", Symbol::Plus),
+    ("++", Symbol::PlusPlus),
+    ("*", Symbol::Multiply),
+    ("->", Symbol::RightArrow),
+    ("<-", Symbol::LeftArrow),
+    ("=>", Symbol::DoubleRightArrow),
+    ("<=", Symbol::DoubleLeftArrow),
+    (">>", Symbol::DoubleRightAngle),
+    ("<<", Symbol::DoubleLeftAngle),
+    ("==", Symbol::Eq),
+    ("=:=", Symbol::ExactEq),
+    ("/=", Symbol::NotEq),
+    ("=/=", Symbol::ExactNotEq),
+    (">", Symbol::Greater),
+    (">=", Symbol::GreaterEq),
+    ("<", Symbol::Less),
+    ("=<", Symbol::LessEq),
+    ("&&", Symbol::DoubleAmpersand),
+    ("<:-", Symbol::StrictLeftArrow),
+    ("<:=", Symbol::StrictDoubleLeftArrow),
 ];
 
 /// Whitespace characters recognised by the tokenizer.
 pub const WS_CHARS: [char; 5] = [' ', '\t', '\r', '\n', '\u{a0}'];
+
+/// Non-LF whitespace characters (the aggregatable half of a token).
+pub const HORIZONTAL_WS: [char; 4] = [' ', '\t', '\r', '\u{a0}'];
 
 // ============================================================
 // Generators
@@ -78,14 +119,21 @@ pub fn sample_len(ctx: &mut noprop::TestCaseContext) -> usize {
         ctx,
         &[0usize, 1, MAX_LEN],
         noprop::Ratio::one_nth(5),
-        |ctx| noprop::sample_usize_in(ctx, 0..=MAX_LEN),
+        |ctx| noprop::sample_usize_in(ctx, 1..MAX_LEN),
     )
+}
+
+/// Sample a token-sequence length with empty / singleton / max biased.
+pub fn sample_token_count(ctx: &mut noprop::TestCaseContext) -> usize {
+    noprop::sample_with_boundaries(ctx, &[0usize, 1, 8], noprop::Ratio::one_nth(5), |ctx| {
+        noprop::sample_usize_in(ctx, 0..=8)
+    })
 }
 
 /// Sample an arbitrary text mixing escape-relevant specials, printable
 /// ASCII, and arbitrary Unicode. This intentionally reaches invalid
 /// inputs; property tests that need valid-by-construction sources use
-/// the per-kind generators below.
+/// [`sample_valid_token_text`].
 pub fn sample_text(ctx: &mut noprop::TestCaseContext) -> String {
     const SPECIALS: [char; 12] = [
         '"', '\'', '\\', '\n', '\t', '\r', '\0', '\u{1}', '\u{7f}', '\u{80}', '\u{a0}', '\u{2028}',
@@ -93,7 +141,7 @@ pub fn sample_text(ctx: &mut noprop::TestCaseContext) -> String {
     let len = sample_len(ctx);
     let mut s = String::with_capacity(len);
     for _ in 0..len {
-        match noprop::sample_usize_in(ctx, 0..3) {
+        match noprop::sample_weighted_index(ctx, &[1, 1, 1]) {
             0 => s.push(noprop::sample_choice(ctx, &SPECIALS)),
             1 => s.push(noprop::sample_ascii_printable_char(ctx)),
             _ => s.push(noprop::sample_char(ctx)),
@@ -120,6 +168,19 @@ pub fn sample_bare_atom(ctx: &mut noprop::TestCaseContext) -> String {
     s
 }
 
+/// Sample a bare atom whose head is a non-ASCII lowercase letter.
+pub fn sample_unicode_atom(ctx: &mut noprop::TestCaseContext) -> String {
+    const HEAD: [char; 4] = ['é', 'ä', 'ñ', 'ω'];
+    const TAIL: [char; 4] = ['a', 'z', '0', '_'];
+    let len = noprop::sample_usize_in(ctx, 0..=4);
+    let mut s = String::new();
+    s.push(noprop::sample_choice(ctx, &HEAD));
+    for _ in 0..len {
+        s.push(noprop::sample_choice(ctx, &TAIL));
+    }
+    s
+}
+
 /// Sample a quoted atom (`'foo bar'`, `'a\nb'`). May include escapes.
 ///
 /// Returns `(text, decoded_value)` — `text` is the full quoted literal
@@ -129,27 +190,18 @@ pub fn sample_quoted_atom(ctx: &mut noprop::TestCaseContext) -> (String, String)
     (format!("'{inner}'"), decoded)
 }
 
-/// Sample a body that would appear inside `'...'` or `"..."`, avoiding
-/// the given terminator character. Returns (raw_text_between_quotes,
-/// decoded_content).
+/// Sample a body that would appear inside `'...'` or `"..."`.
+/// Returns `(raw_text_between_quotes, decoded_content)`.
 pub fn sample_quoted_body(ctx: &mut noprop::TestCaseContext, terminator: char) -> (String, String) {
-    // Small alphabet plus optional escape emissions.
     const PLAIN: [char; 10] = ['a', 'b', 'c', 'd', 'e', ' ', 'X', '0', '_', '/'];
     let len = noprop::sample_usize_in(ctx, 0..=8);
     let mut raw = String::new();
     let mut decoded = String::new();
     for _ in 0..len {
-        // 4-in-5 plain char, 1-in-5 escape.
-        match noprop::sample_usize_in(ctx, 0..5) {
+        match noprop::sample_weighted_index(ctx, &[4, 1]) {
             0 => {
-                let (escape_src, escape_val) = sample_escape(ctx, terminator);
-                raw.push_str(&escape_src);
-                decoded.push(escape_val);
-            }
-            _ => {
                 let c = noprop::sample_choice(ctx, &PLAIN);
                 if c == terminator || c == '\\' {
-                    // Escape it to keep the body valid-by-construction.
                     raw.push('\\');
                     raw.push(c);
                     decoded.push(c);
@@ -158,14 +210,18 @@ pub fn sample_quoted_body(ctx: &mut noprop::TestCaseContext, terminator: char) -
                     decoded.push(c);
                 }
             }
+            _ => {
+                let (escape_src, escape_val) = sample_escape(ctx, terminator);
+                raw.push_str(&escape_src);
+                decoded.push(escape_val);
+            }
         }
     }
     (raw, decoded)
 }
 
-/// Sample a valid escape sequence. Returns (source_text, decoded_char).
-pub fn sample_escape(ctx: &mut noprop::TestCaseContext, _terminator: char) -> (String, char) {
-    // Named escapes carry no ambiguity across terminators.
+/// Sample a valid escape sequence. Returns `(source_text, decoded_char)`.
+pub fn sample_escape(ctx: &mut noprop::TestCaseContext, terminator: char) -> (String, char) {
     const NAMED: [(char, char); 9] = [
         ('b', 8 as char),
         ('d', 127 as char),
@@ -177,13 +233,12 @@ pub fn sample_escape(ctx: &mut noprop::TestCaseContext, _terminator: char) -> (S
         ('t', '\t'),
         ('v', 11 as char),
     ];
-    match noprop::sample_usize_in(ctx, 0..4) {
+    match noprop::sample_weighted_index(ctx, &[3, 2, 2, 2, 2, 3]) {
         0 => {
             let (letter, value) = noprop::sample_choice(ctx, &NAMED);
             (format!("\\{letter}"), value)
         }
         1 => {
-            // Fixed-width hex escape: \xNN.
             let hi = noprop::sample_usize_in(ctx, 0..16);
             let lo = noprop::sample_usize_in(ctx, 0..16);
             let code = (hi * 16 + lo) as u32;
@@ -191,46 +246,91 @@ pub fn sample_escape(ctx: &mut noprop::TestCaseContext, _terminator: char) -> (S
             (src, char::from_u32(code).expect("byte in Unicode range"))
         }
         2 => {
-            // Braced hex escape: \x{...}.
-            let code = loop {
-                let candidate = noprop::sample_u32(ctx) & 0x10_FFFF;
-                if let Some(c) = char::from_u32(candidate) {
-                    break c;
-                }
-            };
-            (format!("\\x{{{:X}}}", code as u32), code)
+            let c = noprop::sample_char(ctx);
+            (format!("\\x{{{:X}}}", c as u32), c)
         }
-        _ => {
-            // Octal escape: always three digits (zero-padded) so that a
-            // following plain digit cannot be re-absorbed by the
-            // scanner's up-to-3-digits octal rule.
+        3 => {
             let n = noprop::sample_usize_in(ctx, 0..=0o377);
-            (format!("\\{n:03o}"), char::from_u32(n as u32).unwrap())
+            (
+                format!("\\{n:03o}"),
+                char::from_u32(n as u32).expect("octal 0..=255 is a valid scalar"),
+            )
+        }
+        4 => sample_caret_escape(ctx),
+        _ => {
+            let term_weight = u32::from(matches!(terminator, '\'' | '"'));
+            match noprop::sample_weighted_index(ctx, &[term_weight, 2, 1]) {
+                0 => (format!("\\{terminator}"), terminator),
+                1 => ("\\\\".to_owned(), '\\'),
+                _ => {
+                    let c = noprop::sample_choice(ctx, &['$', '#', '%', ' ']);
+                    (format!("\\{c}"), c)
+                }
+            }
         }
     }
 }
 
-/// Sample a character literal like `$a` or `$\n`. Returns
-/// (text, decoded_char).
-pub fn sample_char_literal(ctx: &mut noprop::TestCaseContext) -> (String, char) {
-    if noprop::sample_bool(ctx) {
-        let (src, c) = sample_escape(ctx, '\0');
-        (format!("${src}"), c)
+fn sample_caret_escape(ctx: &mut noprop::TestCaseContext) -> (String, char) {
+    const CARET_SPECIAL: [char; 7] = ['@', '[', '\\', ']', '^', '_', '?'];
+    let c = if noprop::sample_bool(ctx) {
+        noprop::sample_choice(ctx, &CARET_SPECIAL)
     } else {
-        // Any single non-`\` character.
-        let plain = noprop::sample_choice(ctx, &['a', 'Z', '0', ' ', '#', '?', '@']);
-        (format!("${plain}"), plain)
+        let off = noprop::sample_usize_in(ctx, 0..26);
+        if noprop::sample_bool(ctx) {
+            char::from(b'a' + off as u8)
+        } else {
+            char::from(b'A' + off as u8)
+        }
+    };
+    let value = if c == '?' {
+        127 as char
+    } else {
+        (c as u32 % 32) as u8 as char
+    };
+    (format!("\\^{c}"), value)
+}
+
+/// Sample a character literal like `$a` or `$\n`. Returns
+/// `(text, decoded_char)`.
+pub fn sample_char_literal(ctx: &mut noprop::TestCaseContext) -> (String, char) {
+    match noprop::sample_weighted_index(ctx, &[2, 2, 2]) {
+        0 => {
+            let (src, c) = sample_escape(ctx, '\0');
+            (format!("${src}"), c)
+        }
+        1 => {
+            let plain = noprop::sample_choice(ctx, &['a', 'Z', '0', ' ', '#', '?', '@', '$']);
+            (format!("${plain}"), plain)
+        }
+        _ => {
+            let (src, c) = sample_caret_escape(ctx);
+            (format!("${src}"), c)
+        }
     }
 }
 
 /// Sample a comment token text like `%foo`. Never contains LF.
 pub fn sample_comment(ctx: &mut noprop::TestCaseContext) -> String {
-    let len = noprop::sample_usize_in(ctx, 0..=16);
-    let mut s = String::from("%");
-    for _ in 0..len {
-        s.push(noprop::sample_ascii_printable_char(ctx));
+    match noprop::sample_weighted_index(ctx, &[2, 1, 2]) {
+        0 => "%".to_owned(),
+        1 => {
+            let len = noprop::sample_usize_in(ctx, 0..=8);
+            let mut s = String::from("%%");
+            for _ in 0..len {
+                s.push(noprop::sample_ascii_printable_char(ctx));
+            }
+            s
+        }
+        _ => {
+            let len = noprop::sample_usize_in(ctx, 0..=16);
+            let mut s = String::from("%");
+            for _ in 0..len {
+                s.push(noprop::sample_ascii_printable_char(ctx));
+            }
+            s
+        }
     }
-    s
 }
 
 /// Sample a decimal integer literal in the i64 range. Returns
@@ -259,22 +359,57 @@ pub fn sample_radix_integer(ctx: &mut noprop::TestCaseContext) -> (String, i64) 
     (format!("{radix}#{digits}"), v)
 }
 
-/// Sample a decimal float in `[0.0, 1e6]`. Returns `(text, value)`.
-///
-/// The text is intentionally the Rust `Display` form so the generator
-/// does not exercise the same fractional decoding as the tokenizer; the
-/// tokenizer's decoded value must simply equal the Rust `Display`
-/// round-trip value.
-pub fn sample_decimal_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
-    // Choose a small integer numerator/denominator to keep the printed
-    // form short and exactly representable across a round-trip.
-    const FIXED: [f64; 8] = [0.0, 0.5, 1.25, 1.0, 100.5, 2.5, 3.75, 1234.5];
-    let v = noprop::sample_choice(ctx, &FIXED);
-    let mut text = format!("{v}");
-    if !text.contains('.') {
-        text.push_str(".0");
+/// Sample an integer literal whose value exceeds `i64::MAX`.
+pub fn sample_overflow_integer(ctx: &mut noprop::TestCaseContext) -> String {
+    let extra = noprop::sample_usize_in(ctx, 0..=999) as u128;
+    let n = i64::MAX as u128 + 1 + extra;
+    match noprop::sample_weighted_index(ctx, &[2, 1]) {
+        0 => n.to_string(),
+        _ => format!("16#{n:x}"),
     }
-    (text, v)
+}
+
+/// Sample a decimal float. Returns `(text, value)`.
+///
+/// The pairs are written independently of the tokenizer's decoder: the
+/// expected `f64` is a Rust literal, not `text.parse()`.
+pub fn sample_decimal_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
+    const CASES: [(&str, f64); 16] = [
+        ("0.0", 0.0),
+        ("0.5", 0.5),
+        ("1.0", 1.0),
+        ("1.25", 1.25),
+        ("2.5", 2.5),
+        ("3.75", 3.75),
+        ("100.5", 100.5),
+        ("1234.5", 1234.5),
+        ("1.0e2", 100.0),
+        ("1.25e2", 125.0),
+        ("1.0e+2", 100.0),
+        ("2.5e-1", 0.25),
+        ("1.0E3", 1000.0),
+        ("5.0e-1", 0.5),
+        ("8.0e0", 8.0),
+        ("4.0e+1", 40.0),
+    ];
+    let (text, value) = noprop::sample_choice(ctx, &CASES);
+    (text.to_owned(), value)
+}
+
+/// Sample a radix-prefixed float. Returns `(text, value)`.
+pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
+    const CASES: [(&str, f64); 8] = [
+        ("2#1.0", 1.0),
+        ("2#1.1", 1.5),
+        ("2#0.1", 0.5),
+        ("2#0.01", 0.25),
+        ("16#1.0", 1.0),
+        ("16#1.8", 1.5),
+        ("2#1.0#e1", 2.0),
+        ("2#1.0#e2", 4.0),
+    ];
+    let (text, value) = noprop::sample_choice(ctx, &CASES);
+    (text.to_owned(), value)
 }
 
 /// Sample a keyword text.
@@ -282,8 +417,8 @@ pub fn sample_keyword(ctx: &mut noprop::TestCaseContext) -> (&'static str, Keywo
     noprop::sample_choice(ctx, &KEYWORDS)
 }
 
-/// Sample a symbol text.
-pub fn sample_symbol(ctx: &mut noprop::TestCaseContext) -> &'static str {
+/// Sample a symbol text and its enum value.
+pub fn sample_symbol(ctx: &mut noprop::TestCaseContext) -> (&'static str, Symbol) {
     noprop::sample_choice(ctx, &SYMBOLS)
 }
 
@@ -306,14 +441,46 @@ pub fn sample_regular_string(ctx: &mut noprop::TestCaseContext) -> (String, Stri
     (format!("\"{inner}\""), decoded)
 }
 
+/// Sample a triple-quoted string. Returns `(text, decoded_value)`.
+///
+/// Content avoids `"` so the closer cannot appear in a body line.
+/// Indent 0 borrows; indent > 0 requires stripping and is owned.
+pub fn sample_triple_quoted_string(ctx: &mut noprop::TestCaseContext) -> (String, String) {
+    const CONTENT: [char; 6] = ['a', 'b', 'c', 'x', 'y', ' '];
+    let indent =
+        noprop::sample_with_boundaries(ctx, &[0usize, 1, 4], noprop::Ratio::one_nth(4), |ctx| {
+            noprop::sample_usize_in(ctx, 0..=4)
+        });
+    let n_lines =
+        noprop::sample_with_boundaries(ctx, &[0usize, 1, 4], noprop::Ratio::one_nth(4), |ctx| {
+            noprop::sample_usize_in(ctx, 0..=4)
+        });
+    let pad = " ".repeat(indent);
+    let mut decoded_lines = Vec::with_capacity(n_lines);
+    let mut text = String::from("\"\"\"\n");
+    for _ in 0..n_lines {
+        // Indented form rejects a body line that is shorter than `indent`
+        // (it has no content character at column `indent`).
+        let min_len = usize::from(indent > 0);
+        let len = noprop::sample_usize_in(ctx, min_len..=6);
+        let mut line = String::new();
+        for _ in 0..len {
+            line.push(noprop::sample_choice(ctx, &CONTENT));
+        }
+        text.push_str(&pad);
+        text.push_str(&line);
+        text.push('\n');
+        decoded_lines.push(line);
+    }
+    text.push_str(&pad);
+    text.push_str("\"\"\"");
+    (text, decoded_lines.join("\n"))
+}
+
 /// Sample a sigil string literal. Returns
 /// `(text, prefix, decoded_content, suffix)`.
 pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String, String, String) {
-    // Delimiters and their content-safe alphabets. For content we avoid
-    // both delimiter characters and backslash entirely so no escaping
-    // logic is exercised in the value oracle (escape coverage is done
-    // separately by the atom / string generators).
-    const DELIMS: [(char, char); 10] = [
+    const DELIMS: [(char, char); 9] = [
         ('(', ')'),
         ('[', ']'),
         ('{', '}'),
@@ -323,53 +490,209 @@ pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String
         ('\'', '\''),
         ('`', '`'),
         ('#', '#'),
-        ('"', '"'),
     ];
     const AFFIX: [char; 6] = ['a', 'b', 'x', '_', '1', 'Q'];
-    const CONTENT: [char; 8] = ['a', 'b', 'c', 'd', 'e', 'x', 'y', 'z'];
 
-    let (open, close) = noprop::sample_choice(ctx, &DELIMS);
     let prefix_len = noprop::sample_usize_in(ctx, 0..=3);
     let suffix_len = noprop::sample_usize_in(ctx, 0..=3);
-    let content_len = noprop::sample_usize_in(ctx, 0..=8);
-
     let mut prefix = String::new();
     for _ in 0..prefix_len {
         prefix.push(noprop::sample_choice(ctx, &AFFIX));
-    }
-    let mut content = String::new();
-    for _ in 0..content_len {
-        content.push(noprop::sample_choice(ctx, &CONTENT));
     }
     let mut suffix = String::new();
     for _ in 0..suffix_len {
         suffix.push(noprop::sample_choice(ctx, &AFFIX));
     }
 
-    let text = format!("~{prefix}{open}{content}{close}{suffix}");
-    (text, prefix, content, suffix)
-}
-
-/// Sample a whitespace sequence using a weighted mix of ASCII/NBSP
-/// whitespace characters.
-pub fn sample_whitespace_sequence(ctx: &mut noprop::TestCaseContext) -> String {
-    let len =
-        noprop::sample_with_boundaries(ctx, &[0usize, 1, 16], noprop::Ratio::one_nth(5), |ctx| {
-            noprop::sample_usize_in(ctx, 0..=16)
-        });
-    let mut s = String::new();
-    for _ in 0..len {
-        // Weighted: LF is rarer than horizontal whitespace so a token
-        // typically pulls in trailing non-LF whitespace.
-        match noprop::sample_usize_in(ctx, 0..10) {
-            0..=3 => s.push(' '),
-            4..=6 => s.push('\t'),
-            7 => s.push('\r'),
-            8 => s.push('\n'),
-            _ => s.push('\u{a0}'),
+    match noprop::sample_weighted_index(ctx, &[3, 2, 1]) {
+        0 => {
+            let (open, close) = noprop::sample_choice(ctx, &DELIMS);
+            let (inner, decoded) = sample_quoted_body(ctx, close);
+            let text = format!("~{prefix}{open}{inner}{close}{suffix}");
+            (text, prefix, decoded, suffix)
+        }
+        1 => {
+            let (string_text, decoded) = sample_regular_string(ctx);
+            let text = format!("~{prefix}{string_text}{suffix}");
+            (text, prefix, decoded, suffix)
+        }
+        _ => {
+            let (triple, decoded) = sample_triple_quoted_string(ctx);
+            let text = format!("~{prefix}{triple}{suffix}");
+            (text, prefix, decoded, suffix)
         }
     }
-    s
+}
+
+/// Sample a whitespace-only source, including empty / CRLF / consecutive
+/// LF / NBSP as explicit branches so coverage gates are not luck-based.
+pub fn sample_whitespace_sequence(ctx: &mut noprop::TestCaseContext) -> String {
+    sample_whitespace_sequence_ex(ctx, true)
+}
+
+/// Sample a non-empty whitespace-only source.
+pub fn sample_nonempty_whitespace_sequence(ctx: &mut noprop::TestCaseContext) -> String {
+    sample_whitespace_sequence_ex(ctx, false)
+}
+
+/// Sample a single aggregated whitespace token (the whole string is one
+/// token, so the value oracle is the string itself).
+pub fn sample_one_whitespace_token(ctx: &mut noprop::TestCaseContext) -> String {
+    match noprop::sample_weighted_index(ctx, &[3, 2, 1]) {
+        0 => {
+            let len = noprop::sample_with_boundaries(
+                ctx,
+                &[1usize, 16],
+                noprop::Ratio::one_nth(5),
+                |ctx| noprop::sample_usize_in(ctx, 1..=16),
+            );
+            let mut s = String::new();
+            for _ in 0..len {
+                s.push(noprop::sample_choice(ctx, &HORIZONTAL_WS));
+            }
+            s
+        }
+        1 => {
+            let len = noprop::sample_usize_in(ctx, 0..=8);
+            let mut s = String::from("\n");
+            for _ in 0..len {
+                s.push(noprop::sample_choice(ctx, &HORIZONTAL_WS));
+            }
+            s
+        }
+        _ => noprop::sample_choice(ctx, &['\u{a0}', '\r', '\t']).to_string(),
+    }
+}
+
+fn sample_whitespace_sequence_ex(ctx: &mut noprop::TestCaseContext, allow_empty: bool) -> String {
+    let empty_w = u32::from(allow_empty);
+    match noprop::sample_weighted_index(ctx, &[empty_w, 1, 2, 2, 2, 2, 1, 4]) {
+        0 => String::new(),
+        1 => noprop::sample_choice(ctx, &WS_CHARS).to_string(),
+        2 => {
+            let mut s = String::new();
+            if noprop::sample_bool(ctx) {
+                s.push(noprop::sample_choice(ctx, &HORIZONTAL_WS));
+            }
+            s.push_str("\r\n");
+            if noprop::sample_bool(ctx) {
+                s.push(noprop::sample_choice(ctx, &HORIZONTAL_WS));
+            }
+            s
+        }
+        3 => {
+            let mut s = String::from("\n\n");
+            if noprop::sample_bool(ctx) {
+                s.push(noprop::sample_choice(ctx, &HORIZONTAL_WS));
+            }
+            s
+        }
+        4 => {
+            let mut s = String::from("\u{a0}");
+            let extra = noprop::sample_usize_in(ctx, 0..=4);
+            for _ in 0..extra {
+                s.push(noprop::sample_choice(ctx, &HORIZONTAL_WS));
+            }
+            s
+        }
+        5 => {
+            let mut s = String::from("\n");
+            let extra = noprop::sample_usize_in(ctx, 0..=4);
+            for _ in 0..extra {
+                s.push(noprop::sample_choice(ctx, &HORIZONTAL_WS));
+            }
+            s
+        }
+        6 => {
+            let mut s = String::new();
+            for _ in 0..16 {
+                s.push(noprop::sample_choice(ctx, &WS_CHARS));
+            }
+            s
+        }
+        _ => {
+            let len = if allow_empty {
+                noprop::sample_with_boundaries(
+                    ctx,
+                    &[0usize, 1, 16],
+                    noprop::Ratio::one_nth(5),
+                    |ctx| noprop::sample_usize_in(ctx, 0..=16),
+                )
+            } else {
+                noprop::sample_with_boundaries(
+                    ctx,
+                    &[1usize, 16],
+                    noprop::Ratio::one_nth(5),
+                    |ctx| noprop::sample_usize_in(ctx, 1..=16),
+                )
+            };
+            let mut s = String::new();
+            for _ in 0..len {
+                match noprop::sample_weighted_index(ctx, &[4, 3, 1, 1, 1]) {
+                    0 => s.push(' '),
+                    1 => s.push('\t'),
+                    2 => s.push('\r'),
+                    3 => s.push('\n'),
+                    _ => s.push('\u{a0}'),
+                }
+            }
+            s
+        }
+    }
+}
+
+/// Sample one valid-by-construction token's source text.
+pub fn sample_valid_token_text(ctx: &mut noprop::TestCaseContext) -> String {
+    match noprop::sample_weighted_index(
+        ctx,
+        &[
+            3, // bare atom
+            1, // unicode atom
+            2, // quoted atom
+            2, // char
+            2, // comment
+            2, // decimal integer
+            2, // radix integer
+            2, // decimal float
+            1, // radix float
+            2, // keyword
+            2, // symbol
+            2, // regular string
+            1, // triple-quoted string
+            2, // variable
+            2, // sigil
+        ],
+    ) {
+        0 => sample_bare_atom(ctx),
+        1 => sample_unicode_atom(ctx),
+        2 => sample_quoted_atom(ctx).0,
+        3 => sample_char_literal(ctx).0,
+        4 => sample_comment(ctx),
+        5 => sample_decimal_integer(ctx).0,
+        6 => sample_radix_integer(ctx).0,
+        7 => sample_decimal_float(ctx).0,
+        8 => sample_radix_float(ctx).0,
+        9 => sample_keyword(ctx).0.to_owned(),
+        10 => sample_symbol(ctx).0.to_owned(),
+        11 => sample_regular_string(ctx).0,
+        12 => sample_triple_quoted_string(ctx).0,
+        13 => sample_variable(ctx),
+        _ => sample_sigil_string(ctx).0,
+    }
+}
+
+/// Join token texts with valid-by-construction separators.
+pub fn join_tokens(ctx: &mut noprop::TestCaseContext, pieces: &[String]) -> String {
+    let mut src = String::new();
+    let mut prev: Option<&str> = None;
+    for text in pieces {
+        if let Some(p) = prev {
+            src.push_str(&insert_separator(ctx, p));
+        }
+        src.push_str(text);
+        prev = Some(text);
+    }
+    src
 }
 
 // ============================================================
@@ -489,12 +812,16 @@ impl LabelSet {
 /// Insert a whitespace separator between two token texts.
 ///
 /// A previous comment must be followed by LF (comments do not include
-/// their terminating newline). Otherwise any of `WS_CHARS` is safe: the
-/// oracle only needs the concatenation of scanned token texts to equal
-/// the source, and whitespace runs simply aggregate.
-pub fn insert_separator(ctx: &mut noprop::TestCaseContext, prev: &str) -> char {
+/// their terminating newline). Otherwise a non-empty whitespace run is
+/// inserted so aggregated whitespace between tokens is in the support.
+pub fn insert_separator(ctx: &mut noprop::TestCaseContext, prev: &str) -> String {
     if prev.starts_with('%') {
-        return '\n';
+        let mut s = String::from("\n");
+        if noprop::sample_ratio(ctx, noprop::Ratio::one_nth(3)) {
+            s.push_str(&sample_nonempty_whitespace_sequence(ctx));
+        }
+        s
+    } else {
+        sample_nonempty_whitespace_sequence(ctx)
     }
-    noprop::sample_choice(ctx, &WS_CHARS)
 }

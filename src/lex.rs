@@ -374,10 +374,12 @@ fn scan_triple_quoted(source: &str, pos: Position) -> Result<usize> {
         return Err(Error::no_closing_quotation(pos));
     }
 
-    // Even when the indented closing line is omitted (indent == 0), the
-    // body is well-formed; the decoding step handles the empty case.
+    // An indented closer with no body lines has `end_line_start ==
+    // start_line_end`; `saturating_sub` keeps the range well-formed
+    // (decode_triple_quoted uses the same formula).
     if indent > 0 {
-        for line in source[start_line_end..end_line_start - 1].lines() {
+        let body_end = end_line_start.saturating_sub(1).max(start_line_end);
+        for line in source[start_line_end..body_end].lines() {
             if line == "\n" {
                 continue;
             }

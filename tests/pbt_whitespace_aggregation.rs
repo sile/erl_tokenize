@@ -8,6 +8,7 @@
 
 use erl_tokenize::{Position, TokenKind, scan_token};
 
+#[expect(dead_code, reason = "shared helpers; this binary uses only a subset")]
 mod pbt_harness;
 use pbt_harness::{CASES, Counter, SEED_ENV, sample_whitespace_sequence, step_position};
 
@@ -16,6 +17,8 @@ fn whitespace_aggregation_invariants() -> noprop::TestResult {
     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
     let mut runner = noprop::Runner::new(seed);
 
+    let empty_cases = Counter::default();
+    let nonempty_cases = Counter::default();
     let saw_leading_lf = Counter::default();
     let saw_consecutive_lf = Counter::default();
     let saw_cr_lf = Counter::default();
@@ -23,6 +26,11 @@ fn whitespace_aggregation_invariants() -> noprop::TestResult {
 
     runner.run(CASES, |ctx| {
         let src = sample_whitespace_sequence(ctx);
+        if src.is_empty() {
+            empty_cases.hit();
+        } else {
+            nonempty_cases.hit();
+        }
         if src.contains('\u{a0}') {
             saw_nbsp.hit();
         }
@@ -34,39 +42,41 @@ fn whitespace_aggregation_invariants() -> noprop::TestResult {
         let mut pos = Position::new();
         let mut concat = String::with_capacity(src.len());
         while let Some(token) = scan_token(&src, pos)? {
-            assert_eq!(token.kind(), TokenKind::Whitespace, "non-whitespace token");
+            assert_eq!(
+                token.kind(),
+                TokenKind::Whitespace,
+                "non-whitespace token in {src:?}"
+            );
             let text = token.text(&src);
             let lfs = text.matches('\n').count();
-            assert!(lfs <= 1, "token has {lfs} LFs: {text:?}");
+            assert!(lfs <= 1, "token has {lfs} LFs: {text:?} in {src:?}");
             if lfs == 1 {
-                assert!(text.starts_with('\n'), "LF not at start: {text:?}");
+                assert!(
+                    text.starts_with('\n'),
+                    "LF not at start: {text:?} in {src:?}"
+                );
                 saw_leading_lf.hit();
             }
             concat.push_str(text);
             tokens.push((token.start().offset(), token.end().offset()));
             pos = token.end();
         }
-        assert_eq!(concat, src, "concat mismatch");
-        assert_eq!(pos.offset(), src.len(), "did not reach EOF");
+        assert_eq!(concat, src, "concat mismatch for {src:?}");
+        assert_eq!(pos.offset(), src.len(), "did not reach EOF for {src:?}");
 
-        // Independent (offset, line, column) model must agree with the
-        // last token's end.
         let expected = step_position((0, 1, 1), &src);
-        assert_eq!(pos.offset(), expected.0, "model offset");
-        assert_eq!(pos.line(), expected.1, "model line");
-        assert_eq!(pos.column(), expected.2, "model column");
+        assert_eq!(pos.offset(), expected.0, "model offset for {src:?}");
+        assert_eq!(pos.line(), expected.1, "model line for {src:?}");
+        assert_eq!(pos.column(), expected.2, "model column for {src:?}");
 
-        // Adjacent whitespace tokens must not be mergeable: the second
-        // must start with LF (else it would have been aggregated into
-        // the first).
         for pair in tokens.windows(2) {
             let (_, first_end) = pair[0];
             let (second_start, _) = pair[1];
-            assert_eq!(first_end, second_start, "gap between tokens");
+            assert_eq!(first_end, second_start, "gap between tokens in {src:?}");
             let second_text = &src[second_start..pair[1].1];
             assert!(
                 second_text.starts_with('\n'),
-                "adjacent whitespace tokens would merge: {second_text:?}"
+                "adjacent whitespace tokens would merge: {second_text:?} in {src:?}"
             );
         }
         if tokens.windows(2).any(|pair| {
@@ -81,6 +91,8 @@ fn whitespace_aggregation_invariants() -> noprop::TestResult {
     })?;
 
     assert_eq!(runner.stats().rejected_cases, 0, "no rejects\n{runner}");
+    assert!(empty_cases.get() > 0, "no empty source\n{runner}");
+    assert!(nonempty_cases.get() > 0, "no nonempty source\n{runner}");
     assert!(saw_leading_lf.get() > 0, "no leading LF token\n{runner}");
     assert!(
         saw_consecutive_lf.get() > 0,
