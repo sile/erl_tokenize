@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 
 use crate::lex::{self, ScanKind};
@@ -122,6 +123,89 @@ impl Token {
             .get(self.start.offset()..self.end.offset())
             .expect("token range must lie on UTF-8 boundaries of the original source")
     }
+
+    /// Decode this token's value from `source`.
+    ///
+    /// The returned [`TokenValue`] borrows from `source` whenever
+    /// possible: bare atoms, single-line quoted atoms and strings whose
+    /// content has no escape sequences, sigil-string prefixes and
+    /// suffixes, comments, variables, whitespace, and triple-quoted
+    /// strings whose closing line has no indentation. Content that
+    /// requires escape decoding or indentation stripping is returned as
+    /// `Cow::Owned`. `Token::value` never caches; each call re-decodes.
+    ///
+    /// # Panics
+    ///
+    /// Panics for the same reasons as [`text`](Self::text): `source` must
+    /// be the same string that was passed to [`scan_token`].
+    pub fn value<'a>(self, source: &'a str) -> TokenValue<'a> {
+        let text = self.text(source);
+        match self.kind {
+            TokenKind::Atom => TokenValue::Atom(lex::decode_atom(text)),
+            TokenKind::Char => TokenValue::Char(lex::decode_char(text)),
+            TokenKind::Comment => TokenValue::Comment(lex::decode_comment(text)),
+            TokenKind::Float => TokenValue::Float(lex::decode_float(text)),
+            TokenKind::Integer => TokenValue::Integer(lex::decode_integer(text)),
+            TokenKind::Keyword(k) => TokenValue::Keyword(k),
+            TokenKind::SigilString => {
+                let (prefix, content, suffix) = lex::decode_sigil(text);
+                TokenValue::SigilString {
+                    prefix,
+                    content,
+                    suffix,
+                }
+            }
+            TokenKind::String => TokenValue::String(lex::decode_string(text)),
+            TokenKind::Symbol(s) => TokenValue::Symbol(s),
+            TokenKind::Variable => TokenValue::Variable(text),
+            TokenKind::Whitespace => TokenValue::Whitespace(text),
+        }
+    }
+}
+
+/// Decoded value of a [`Token`], borrowing from the source where
+/// possible.
+///
+/// Produced by [`Token::value`]. Variants that only need to reference
+/// the source (comment body, variable name, whitespace text, sigil-string
+/// prefix and suffix) hold a `&str`; variants that may require escape or
+/// indentation decoding hold a `Cow<'a, str>`.
+///
+/// `TokenValue` does not implement `Eq` because [`f64`] does not; use
+/// value-specific comparisons for `Float`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TokenValue<'a> {
+    /// Atom value (borrowed for bare atoms and escape-free quoted atoms).
+    Atom(Cow<'a, str>),
+    /// Decoded character value.
+    Char(char),
+    /// Comment body without the leading `%`.
+    Comment(&'a str),
+    /// Decoded floating-point value.
+    Float(f64),
+    /// Decoded integer value, or `None` when it exceeds `i64::MAX`.
+    Integer(Option<i64>),
+    /// Reserved word.
+    Keyword(Keyword),
+    /// Sigil string parts.
+    SigilString {
+        /// Prefix identifier between `~` and the opening delimiter.
+        prefix: &'a str,
+        /// Content between the opening and closing delimiters. Borrowed
+        /// when no escape decoding or indentation stripping is required.
+        content: Cow<'a, str>,
+        /// Suffix identifier after the closing delimiter.
+        suffix: &'a str,
+    },
+    /// Decoded string value (borrowed when no escape decoding or
+    /// indentation stripping is required).
+    String(Cow<'a, str>),
+    /// Punctuation or operator symbol.
+    Symbol(Symbol),
+    /// Variable identifier text.
+    Variable(&'a str),
+    /// Whitespace token text.
+    Whitespace(&'a str),
 }
 
 /// Scan a single token from `source` starting at `position`.

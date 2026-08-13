@@ -27,7 +27,7 @@
 #![warn(missing_docs)]
 pub use crate::error::Error;
 pub use crate::position::{Position, PositionRange};
-pub use crate::token::{Token, TokenKind, scan_token};
+pub use crate::token::{Token, TokenKind, TokenValue, scan_token};
 pub use crate::tokenizer::Tokenizer;
 pub use crate::values::{Keyword, Symbol, Whitespace};
 

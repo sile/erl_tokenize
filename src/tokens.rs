@@ -72,9 +72,8 @@ impl AtomToken {
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let scanned = crate::lex::scan_atom(text, pos)?;
         let slice = &text[..scanned.len];
-        let value = if let Some(inner) = slice.strip_prefix('\'') {
-            let (v, _) = util::parse_quotation(pos, inner, '\'')?;
-            Some(v.into_owned())
+        let value = if slice.starts_with('\'') {
+            Some(crate::lex::decode_atom(slice).into_owned())
         } else {
             None
         };
@@ -201,17 +200,8 @@ impl CharToken {
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let scanned = crate::lex::scan_char(text, pos)?;
         let slice = &text[..scanned.len];
-        let mut chars = slice.char_indices();
-        let _ = chars.next();
-        let (_, c) = chars.next().expect("scanner validated payload");
-        let value = if c == '\\' {
-            let mut chars = chars.peekable();
-            util::parse_escaped_char(pos, &mut chars)?
-        } else {
-            c
-        };
         Ok(CharToken {
-            value,
+            value: crate::lex::decode_char(slice),
             text: slice.to_owned(),
             pos,
         })
@@ -445,63 +435,11 @@ impl FloatToken {
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let scanned = crate::lex::scan_float(text, pos)?;
         let slice = &text[..scanned.len];
-        let value = if let Some(hash) = slice.find('#') {
-            Self::decode_radix(slice, hash)
-        } else {
-            util::strip_underscores(slice)
-                .parse::<f64>()
-                .expect("scanner validated decimal float")
-        };
         Ok(FloatToken {
-            value,
+            value: crate::lex::decode_float(slice),
             text: slice.to_owned(),
             pos,
         })
-    }
-
-    fn decode_radix(slice: &str, hash: usize) -> f64 {
-        let radix: u32 = util::strip_underscores(&slice[..hash])
-            .parse()
-            .expect("scanner validated radix");
-        let rest = &slice[hash + 1..];
-        let dot = rest.find('.').expect("scanner validated dot");
-        let int_part = &rest[..dot];
-        let after_dot = &rest[dot + 1..];
-        let (frac_part, exp_opt) = if let Some(second_hash) = after_dot.find('#') {
-            (
-                &after_dot[..second_hash],
-                Some(&after_dot[second_hash + 2..]),
-            )
-        } else {
-            (after_dot, None)
-        };
-
-        let mut value = 0.0_f64;
-        for c in int_part.chars() {
-            if c == '_' {
-                continue;
-            }
-            let d = c.to_digit(radix).expect("scanner validated integer digit");
-            value = value * radix as f64 + d as f64;
-        }
-        let mut j = 1_i32;
-        for c in frac_part.chars() {
-            if c == '_' {
-                continue;
-            }
-            let d = c
-                .to_digit(radix)
-                .expect("scanner validated fractional digit");
-            value += d as f64 / (radix as f64).powi(j);
-            j += 1;
-        }
-        if let Some(exp_str) = exp_opt {
-            let exp: i32 = util::strip_underscores(exp_str)
-                .parse()
-                .expect("scanner validated exponent");
-            value *= (radix as f64).powi(exp);
-        }
-        value
     }
 
     /// Returns the value of this token.
@@ -618,22 +556,8 @@ impl IntegerToken {
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let scanned = crate::lex::scan_integer(text, pos)?;
         let slice = &text[..scanned.len];
-        let (radix, digits_slice) = if let Some(hash) = slice.find('#') {
-            let radix: u32 = util::strip_underscores(&slice[..hash])
-                .parse()
-                .expect("scanner validated radix");
-            (radix, &slice[hash + 1..])
-        } else {
-            (10u32, slice)
-        };
-        let cleaned = util::strip_underscores(digits_slice);
-        let value = if radix == 10 {
-            cleaned.parse::<i64>().ok()
-        } else {
-            i64::from_str_radix(&cleaned, radix).ok()
-        };
         Ok(IntegerToken {
-            value,
+            value: crate::lex::decode_integer(slice),
             text: slice.to_owned(),
             pos,
         })
@@ -875,39 +799,11 @@ impl SigilStringToken {
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let scanned = crate::lex::scan_sigil_string(text, pos)?;
         let slice = &text[..scanned.len];
-        let mut offset = 1;
-        for c in slice[offset..].chars() {
-            if !util::is_atom_non_head_char(c) {
-                break;
-            }
-            offset += c.len_utf8();
-        }
-        let prefix = slice[1..offset].to_owned();
-        let open_delimiter = slice[offset..].chars().next().expect("scanner validated");
-        let (content, content_end) = if open_delimiter == '"' {
-            let t = StringToken::from_text(&slice[offset..], pos.step_by_width(offset))?;
-            let end = offset + t.text().len();
-            (t.value().to_owned(), end)
-        } else {
-            let close_delimiter = match open_delimiter {
-                '(' => ')',
-                '[' => ']',
-                '{' => '}',
-                '<' => '>',
-                other => other,
-            };
-            let (v, end) = util::parse_quotation(
-                pos.step_by_width(offset + 1),
-                &slice[offset + 1..],
-                close_delimiter,
-            )?;
-            (v.into_owned(), offset + 1 + end + 1)
-        };
-        let suffix = slice[content_end..].to_owned();
+        let (prefix, content, suffix) = crate::lex::decode_sigil(slice);
         Ok(Self {
-            prefix,
-            content,
-            suffix,
+            prefix: prefix.to_owned(),
+            content: content.into_owned(),
+            suffix: suffix.to_owned(),
             text: slice.to_owned(),
             pos,
         })
@@ -992,12 +888,14 @@ impl StringToken {
     pub fn from_text(text: &str, pos: Position) -> Result<Self> {
         let scanned = crate::lex::scan_string(text, pos)?;
         let slice = &text[..scanned.len];
+        let decoded = crate::lex::decode_string(slice);
+        // Triple-quoted content is not a `text[1..len-1]` slice, so always
+        // store an owned value there; regular strings only need to store
+        // when the content changed via escape decoding.
         let value = if slice.starts_with(r#"""""#) {
-            let (v, _) = Self::parse_triple_quoted(slice, pos)?;
-            Some(v.into_owned())
+            Some(decoded.into_owned())
         } else {
-            let (v, _) = util::parse_quotation(pos, &slice[1..], '"')?;
-            match v {
+            match decoded {
                 Cow::Borrowed(_) => None,
                 Cow::Owned(s) => Some(s),
             }
@@ -1007,97 +905,6 @@ impl StringToken {
             text: slice.to_owned(),
             pos,
         })
-    }
-
-    fn parse_triple_quoted(text: &str, pos: Position) -> Result<(Cow<'_, str>, usize)> {
-        let mut quote_count = 0;
-        let mut chars = text.chars().peekable();
-        let mut start_line_end = 0;
-
-        while let Some(c) = chars.peek().copied() {
-            if c == '"' {
-                quote_count += 1;
-                start_line_end += chars.next().expect("unreachable").len_utf8();
-            } else {
-                break;
-            }
-        }
-
-        let mut start_line_end_found = false;
-        for c in chars {
-            start_line_end += c.len_utf8();
-            if c == '\n' {
-                start_line_end_found = true;
-                break;
-            } else if !c.is_ascii_whitespace() {
-                return Err(Error::invalid_string_token(pos));
-            }
-        }
-        if !start_line_end_found {
-            return Err(Error::no_closing_quotation(pos));
-        }
-
-        let mut indent = 0;
-        let mut maybe_end_line = true;
-        let mut remaining_quote_count = quote_count;
-        let mut end_line_start = start_line_end;
-        let mut end_line_end = start_line_end;
-        for c in text[start_line_end..].chars() {
-            end_line_end += c.len_utf8();
-            if c == '\n' {
-                indent = 0;
-                maybe_end_line = true;
-                remaining_quote_count = quote_count;
-                end_line_start = end_line_end;
-            } else if c.is_ascii_whitespace() {
-                indent += 1;
-            } else if maybe_end_line && c == '"' {
-                remaining_quote_count -= 1;
-                if remaining_quote_count == 0 {
-                    break;
-                }
-            } else {
-                maybe_end_line = false;
-            }
-        }
-        if remaining_quote_count != 0 {
-            return Err(Error::no_closing_quotation(pos));
-        }
-
-        if indent == 0 {
-            return Ok((
-                Cow::Owned(
-                    text[start_line_end..(end_line_start - 1).max(start_line_end)].to_owned(),
-                ),
-                end_line_end,
-            ));
-        }
-
-        let mut value = String::new();
-        for line in text[start_line_end..end_line_start - 1].lines() {
-            if line == "\n" {
-                value.push('\n');
-                continue;
-            }
-
-            let mut valid_line = false;
-            for (i, c) in line.chars().enumerate() {
-                if i < indent {
-                    if c.is_ascii_whitespace() {
-                        continue;
-                    } else {
-                        return Err(Error::invalid_string_token(pos));
-                    }
-                }
-                value.push(c);
-                valid_line = true;
-            }
-            if !valid_line {
-                return Err(Error::invalid_string_token(pos));
-            }
-        }
-
-        Ok((Cow::Owned(value), end_line_end))
     }
 
     /// Returns the value of this token.

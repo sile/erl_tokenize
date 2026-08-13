@@ -16,6 +16,8 @@
 //! its entry points through this module so that no other place in the
 //! crate re-implements the same lexical rules.
 
+use std::borrow::Cow;
+
 use crate::util;
 use crate::values::{Keyword, Symbol, Whitespace};
 use crate::{Error, Position, Result};
@@ -122,19 +124,39 @@ fn scan_one_impl(source: &str, pos: Position) -> Result<Scanned> {
 /// Look ahead past digits and underscores to check whether an ASCII-digit
 /// run introduces a float or an integer.
 ///
-/// Mirrors the historical `Token::from_text` heuristic: `<digits>.<digit>`
-/// is a float, anything else (including `<digits>#...` and `<digits>.`
-/// followed by a non-digit) is left to the integer scanner.
+/// Recognises both `<digits>.<digit>` (decimal float) and
+/// `<radix>#<radix-digits>.<radix-digit>` (radix float); anything else
+/// (including `<digits>.` followed by a non-digit and `<digits>#<digits>`
+/// with no dot) is left to the integer scanner.
 fn looks_like_float(source: &str) -> bool {
-    if let Some(i) = source.find(|c: char| !(c.is_ascii_digit() || c == '_')) {
-        source.as_bytes()[i] == b'.'
-            && source
-                .as_bytes()
-                .get(i + 1)
-                .is_some_and(|c| (*c as char).is_ascii_digit())
-    } else {
-        false
+    let bytes = source.as_bytes();
+    // Skip the initial digit / underscore run.
+    let mut i = 0;
+    while let Some(&b) = bytes.get(i) {
+        if b.is_ascii_digit() || b == b'_' {
+            i += 1;
+        } else {
+            break;
+        }
     }
+    // Decimal float: `<digits>.<digit>`.
+    if bytes.get(i) == Some(&b'.') {
+        return bytes.get(i + 1).is_some_and(|c| c.is_ascii_digit());
+    }
+    // Radix float: `<digits>#<radix-digits>.<radix-digit>`.
+    if bytes.get(i) == Some(&b'#') {
+        let mut j = i + 1;
+        while let Some(&b) = bytes.get(j) {
+            if b.is_ascii_alphanumeric() || b == b'_' {
+                j += 1;
+            } else {
+                break;
+            }
+        }
+        return bytes.get(j) == Some(&b'.')
+            && bytes.get(j + 1).is_some_and(|c| c.is_ascii_alphanumeric());
+    }
+    false
 }
 
 /// Validate an atom token at the start of `source` and return its length.
@@ -749,4 +771,265 @@ fn read_exp_digit_run(source: &str, start: usize, pos: Position) -> Result<usize
         return Err(Error::invalid_float_token(pos));
     }
     Ok(idx)
+}
+
+// =============================================================================
+// Value decoders
+//
+// These helpers take a text slice that the scanners above have already
+// validated and produce the decoded value that `Token::value(source)` (and,
+// during the migration, `tokens::*Token::from_text`) hands to callers.
+//
+// Decoding is intentionally kept in this module so scanning and value
+// extraction share the same tables of escape characters, sigil delimiter
+// pairs, digit-separator handling, and triple-quoted indentation rules.
+// =============================================================================
+
+/// Decode an atom token's value from its validated text.
+///
+/// Bare atoms borrow the text directly. Quoted atoms drop the outer
+/// quotes; the content is borrowed when no escape sequences appear and
+/// owned when escape decoding is required.
+pub(crate) fn decode_atom(text: &str) -> Cow<'_, str> {
+    if let Some(after_open) = text.strip_prefix('\'') {
+        // `after_open` still contains the closing quote; parse_quotation
+        // walks up to it while decoding escapes.
+        let (v, _) = util::parse_quotation(Position::new(), after_open, '\'')
+            .expect("scanner validated atom quotation");
+        v
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
+/// Decode a character token's value (`$X` or `$\...`) from validated text.
+pub(crate) fn decode_char(text: &str) -> char {
+    let after_dollar = &text[1..];
+    let mut chars = after_dollar.char_indices().peekable();
+    let (_, first) = chars.next().expect("scanner validated char payload");
+    if first == '\\' {
+        util::parse_escaped_char(Position::new(), &mut chars).expect("scanner validated escape")
+    } else {
+        first
+    }
+}
+
+/// Decode a comment token's value (the text after the leading `%`).
+pub(crate) fn decode_comment(text: &str) -> &str {
+    &text[1..]
+}
+
+/// Decode an integer token's value from its validated text.
+///
+/// Returns `Some(value)` when the value fits in `i64`, and `None` when it
+/// overflows (checked, never wrapped).
+pub(crate) fn decode_integer(text: &str) -> Option<i64> {
+    let (radix, digits_slice) = if let Some(hash) = text.find('#') {
+        let radix: u32 = util::strip_underscores(&text[..hash])
+            .parse()
+            .expect("scanner validated radix");
+        (radix, &text[hash + 1..])
+    } else {
+        (10u32, text)
+    };
+    let cleaned = util::strip_underscores(digits_slice);
+    if radix == 10 {
+        cleaned.parse::<i64>().ok()
+    } else {
+        i64::from_str_radix(&cleaned, radix).ok()
+    }
+}
+
+/// Decode a float token's value from its validated text (either decimal
+/// or radix-prefixed).
+pub(crate) fn decode_float(text: &str) -> f64 {
+    if let Some(hash) = text.find('#') {
+        decode_radix_float(text, hash)
+    } else {
+        util::strip_underscores(text)
+            .parse::<f64>()
+            .expect("scanner validated decimal float")
+    }
+}
+
+fn decode_radix_float(slice: &str, hash: usize) -> f64 {
+    let radix: u32 = util::strip_underscores(&slice[..hash])
+        .parse()
+        .expect("scanner validated radix");
+    let rest = &slice[hash + 1..];
+    let dot = rest.find('.').expect("scanner validated dot");
+    let int_part = &rest[..dot];
+    let after_dot = &rest[dot + 1..];
+    let (frac_part, exp_opt) = if let Some(second_hash) = after_dot.find('#') {
+        (
+            &after_dot[..second_hash],
+            // Skip both `#` and the mandatory `e`.
+            Some(&after_dot[second_hash + 2..]),
+        )
+    } else {
+        (after_dot, None)
+    };
+
+    let mut value = 0.0_f64;
+    for c in int_part.chars() {
+        if c == '_' {
+            continue;
+        }
+        let d = c.to_digit(radix).expect("scanner validated integer digit");
+        value = value * radix as f64 + d as f64;
+    }
+    let mut j = 1_i32;
+    for c in frac_part.chars() {
+        if c == '_' {
+            continue;
+        }
+        let d = c
+            .to_digit(radix)
+            .expect("scanner validated fractional digit");
+        value += d as f64 / (radix as f64).powi(j);
+        j += 1;
+    }
+    if let Some(exp_str) = exp_opt {
+        let exp: i32 = util::strip_underscores(exp_str)
+            .parse()
+            .expect("scanner validated exponent");
+        value *= (radix as f64).powi(exp);
+    }
+    value
+}
+
+/// Decode a string token's value from its validated text.
+///
+/// Handles both the regular `"..."` form (borrowed when the content has
+/// no escape sequences) and the triple-quoted `"""..."""` form (borrowed
+/// when no indentation stripping is required).
+pub(crate) fn decode_string(text: &str) -> Cow<'_, str> {
+    if text.starts_with(r#"""""#) {
+        decode_triple_quoted(text)
+    } else {
+        let after_open = &text[1..];
+        let (v, _) = util::parse_quotation(Position::new(), after_open, '"')
+            .expect("scanner validated string quotation");
+        v
+    }
+}
+
+/// Decode a triple-quoted string's body from validated text.
+///
+/// Borrowed when the closing line has no indentation (the body is a
+/// contiguous slice of the source); owned when indentation must be
+/// stripped from each content line.
+fn decode_triple_quoted(text: &str) -> Cow<'_, str> {
+    // Count the opening quote run.
+    let mut quote_count = 0usize;
+    let mut idx = 0usize;
+    for c in text.chars() {
+        if c == '"' {
+            quote_count += 1;
+            idx += c.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    // Skip anything (whitespace) up to and including the first LF; the
+    // scanner already verified only ASCII whitespace precedes it.
+    let start_line_end = text[idx..]
+        .find('\n')
+        .map(|i| idx + i + 1)
+        .expect("scanner validated opening newline");
+
+    // Walk the body to find the closing indentation line.
+    let mut indent = 0usize;
+    let mut maybe_end_line = true;
+    let mut remaining = quote_count;
+    let mut end_line_start = start_line_end;
+    let mut end_line_end = start_line_end;
+    for c in text[start_line_end..].chars() {
+        end_line_end += c.len_utf8();
+        if c == '\n' {
+            indent = 0;
+            maybe_end_line = true;
+            remaining = quote_count;
+            end_line_start = end_line_end;
+        } else if c.is_ascii_whitespace() {
+            indent += 1;
+        } else if maybe_end_line && c == '"' {
+            remaining -= 1;
+            if remaining == 0 {
+                break;
+            }
+        } else {
+            maybe_end_line = false;
+        }
+    }
+
+    let body_end = end_line_start.saturating_sub(1).max(start_line_end);
+    let body = &text[start_line_end..body_end];
+    if indent == 0 {
+        return Cow::Borrowed(body);
+    }
+    let mut value = String::with_capacity(body.len());
+    let mut first = true;
+    for line in body.split('\n') {
+        if !first {
+            value.push('\n');
+        }
+        first = false;
+        for (i, c) in line.chars().enumerate() {
+            if i < indent {
+                continue;
+            }
+            value.push(c);
+        }
+    }
+    Cow::Owned(value)
+}
+
+/// Split a sigil string's validated text into its `~<prefix><open>content
+/// <close><suffix>` pieces.
+///
+/// `prefix` and `suffix` always borrow from `text`; `content` borrows when
+/// no escape sequences or triple-quoted indentation appear inside it.
+pub(crate) fn decode_sigil(text: &str) -> (&str, Cow<'_, str>, &str) {
+    let mut prefix_end = 1; // skip leading `~`
+    for c in text[prefix_end..].chars() {
+        if !util::is_atom_non_head_char(c) {
+            break;
+        }
+        prefix_end += c.len_utf8();
+    }
+    let prefix = &text[1..prefix_end];
+    let open = text[prefix_end..]
+        .chars()
+        .next()
+        .expect("scanner validated sigil delimiter");
+    let (content, content_end) = if open == '"' {
+        // The content is itself a full (regular or triple-quoted) string.
+        let sub = &text[prefix_end..];
+        let scanned = scan_string(sub, Position::new()).expect("scanner validated sigil string");
+        (decode_string(&sub[..scanned.len]), prefix_end + scanned.len)
+    } else {
+        let close = match open {
+            '(' => ')',
+            '[' => ']',
+            '{' => '}',
+            '<' => '>',
+            other => other,
+        };
+        let content_start = prefix_end + 1;
+        let content_len = util::find_quotation_end(Position::new(), &text[content_start..], close)
+            .expect("scanner validated sigil close");
+        let inner = &text[content_start..content_start + content_len];
+        let value = if inner.contains('\\') {
+            let (v, _) = util::parse_quotation(Position::new(), &text[content_start..], close)
+                .expect("scanner validated sigil close");
+            v
+        } else {
+            Cow::Borrowed(inner)
+        };
+        (value, content_start + content_len + 1)
+    };
+    let suffix = &text[content_end..];
+    (prefix, content, suffix)
 }
