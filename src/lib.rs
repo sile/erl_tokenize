@@ -36,6 +36,7 @@ pub mod values;
 
 mod error;
 mod hidden_token;
+mod lex;
 mod lexer;
 mod lexical_token;
 mod position;

@@ -1,10 +1,11 @@
 use std::fmt;
 
+use crate::lex::{self, ScanKind};
 use crate::tokens::{
     AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken, SigilStringToken,
     StringToken, SymbolToken, VariableToken, WhitespaceToken,
 };
-use crate::{Error, HiddenToken, LexicalToken, Position, PositionRange};
+use crate::{HiddenToken, LexicalToken, Position, PositionRange};
 
 /// Token.
 #[allow(missing_docs)]
@@ -42,49 +43,19 @@ impl Token {
     /// assert_eq!(token.as_symbol_token().map(|t| t.value()), Some(Symbol::OpenSquare));
     /// ```
     pub fn from_text(text: &str, pos: Position) -> crate::Result<Self> {
-        let head = text
-            .chars()
-            .next()
-            .ok_or_else(|| Error::missing_token(pos.clone()))?;
-        match head {
-            ' ' | '\t' | '\r' | '\n' | '\u{A0}' => {
-                WhitespaceToken::from_text(text, pos).map(Token::from)
-            }
-            'A'..='Z' | '_' => VariableToken::from_text(text, pos).map(Token::from),
-            '0'..='9' => {
-                let maybe_float =
-                    if let Some(i) = text.find(|c: char| !(c.is_ascii_digit() || c == '_')) {
-                        text.as_bytes()[i] == b'.'
-                            && text
-                                .as_bytes()
-                                .get(i + 1)
-                                .is_some_and(|c| (*c as char).is_ascii_digit())
-                    } else {
-                        false
-                    };
-                if maybe_float {
-                    FloatToken::from_text(text, pos).map(Token::from)
-                } else {
-                    IntegerToken::from_text(text, pos).map(Token::from)
-                }
-            }
-            '$' => CharToken::from_text(text, pos).map(Token::from),
-            '"' => StringToken::from_text(text, pos).map(Token::from),
-            '\'' => AtomToken::from_text(text, pos).map(Token::from),
-            '%' => CommentToken::from_text(text, pos).map(Token::from),
-            '~' => SigilStringToken::from_text(text, pos).map(Token::from),
-            _ => {
-                if head.is_alphabetic() {
-                    let atom = AtomToken::from_text(text, pos.clone())?;
-                    if let Ok(keyword) = KeywordToken::from_text(atom.text(), pos) {
-                        Ok(Token::from(keyword))
-                    } else {
-                        Ok(Token::from(atom))
-                    }
-                } else {
-                    SymbolToken::from_text(text, pos).map(Token::from)
-                }
-            }
+        let scanned = lex::scan_one(text, pos.clone())?;
+        match scanned.kind {
+            ScanKind::Atom => AtomToken::from_text(text, pos).map(Token::from),
+            ScanKind::Char => CharToken::from_text(text, pos).map(Token::from),
+            ScanKind::Comment => CommentToken::from_text(text, pos).map(Token::from),
+            ScanKind::Float => FloatToken::from_text(text, pos).map(Token::from),
+            ScanKind::Integer => IntegerToken::from_text(text, pos).map(Token::from),
+            ScanKind::Keyword(_) => KeywordToken::from_text(text, pos).map(Token::from),
+            ScanKind::SigilString => SigilStringToken::from_text(text, pos).map(Token::from),
+            ScanKind::String => StringToken::from_text(text, pos).map(Token::from),
+            ScanKind::Symbol(_) => SymbolToken::from_text(text, pos).map(Token::from),
+            ScanKind::Variable => VariableToken::from_text(text, pos).map(Token::from),
+            ScanKind::Whitespace(_) => WhitespaceToken::from_text(text, pos).map(Token::from),
         }
     }
 
