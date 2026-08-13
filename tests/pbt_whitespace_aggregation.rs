@@ -1,4 +1,4 @@
-//! Property 4: whitespace aggregation invariants.
+//! Whitespace aggregation invariants.
 //!
 //! For any generated whitespace-only source, every scanned whitespace
 //! token has at most one LF at its start, the concatenation of the

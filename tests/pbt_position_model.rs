@@ -1,4 +1,4 @@
-//! Property 2: position transition model.
+//! Position transition model.
 //!
 //! Maintain an independent `(offset, line, column)` model in the test
 //! and assert `Token::start()` / `Token::end()` match at every step.

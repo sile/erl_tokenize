@@ -1,4 +1,4 @@
-//! Property 1: source reconstruction and monotonic progress.
+//! Source reconstruction and monotonic progress.
 //!
 //! For a valid-by-construction multi-token source, the concatenation of
 //! every scanned `Token::text(source)` must equal the source, offsets

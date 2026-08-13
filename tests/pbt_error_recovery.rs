@@ -1,4 +1,4 @@
-//! Property 3: error recovery and termination.
+//! Error recovery and termination.
 //!
 //! For arbitrary UTF-8 inputs — biased toward anomaly-triggering
 //! branches — the scan loop that uses `Token::end()` on success and

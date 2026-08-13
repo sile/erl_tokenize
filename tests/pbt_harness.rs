@@ -1,8 +1,13 @@
 //! Shared generators and helpers for the `pbt_*` property-based tests.
 //!
-//! Each property test binary reuses only a subset of these helpers, so
-//! dead-code warnings are silenced for the whole module.
-
+//! Cargo compiles every `tests/*.rs` as its own integration-test binary,
+//! and each binary sees this module as internal (included via
+//! `mod pbt_harness;`). The `dead_code` lint therefore fires per binary
+//! on any helper that binary does not happen to use, even when other
+//! binaries do use it. `#[expect(dead_code)]` would require the item to
+//! be dead in that specific binary, which cannot be declared uniformly.
+//! The blanket allow below is the standard Rust idiom for such shared
+//! test-helper modules.
 #![allow(dead_code)]
 
 use std::cell::Cell;

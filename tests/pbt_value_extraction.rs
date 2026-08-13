@@ -1,4 +1,4 @@
-//! Property 5: lazy value extraction oracle.
+//! Lazy value extraction oracle.
 //!
 //! Generate `(expected value, valid token text)` pairs for every
 //! `TokenValue` variant. Scan the text and assert
