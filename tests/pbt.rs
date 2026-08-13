@@ -1,40 +1,23 @@
 //! Property-based tests using noprop.
 //!
-//! All tests are seeded from `ERL_TOKENIZE_PBT_SEED` when set; otherwise a
-//! fresh time-derived seed is used so every run explores new inputs. A
-//! failing case prints its seed (hex) and case index; re-run with
+//! All tests are seeded from `ERL_TOKENIZE_PBT_SEED` when set; otherwise
+//! a fresh time-derived seed is used so every run explores new inputs.
+//! A failing case prints its seed (hex) and case index; re-run with
 //! `ERL_TOKENIZE_PBT_SEED=<seed>` to reproduce it.
+//!
+//! Coverage here is a floor: the aim is to detect regressions in the
+//! prefix invariant of `scan_token` and in the position bookkeeping of
+//! error recovery. Broader property and fuzz coverage lives elsewhere.
 
 use std::cell::Cell;
 
-use erl_tokenize::tokens::{
-    AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, StringToken,
-};
-use erl_tokenize::{Position, Tokenizer, scan_token};
+use erl_tokenize::{Position, scan_token};
 
 const CASES: usize = 256;
 const MAX_LEN: usize = 64;
 const SEED_ENV: &str = "ERL_TOKENIZE_PBT_SEED";
 
-const KEYWORDS: [&str; 29] = [
-    "after", "and", "andalso", "band", "begin", "bnot", "bor", "bsl", "bsr", "bxor", "case",
-    "catch", "cond", "div", "end", "fun", "if", "let", "not", "of", "or", "orelse", "receive",
-    "rem", "try", "when", "xor", "maybe", "else",
-];
-
-const SYMBOLS: [&str; 45] = [
-    "[", "]", "(", ")", "{", "}", "#", "/", ".", "..", "...", ",", ":", "::", ";", "=", ":=", "|",
-    "||", "?", "??", "?=", "!", "-", "--", "+", "++", "*", "->", "<-", "=>", "<=", ">>", "<<",
-    "==", "=:=", "/=", "=/=", ">", ">=", "<", "=<", "&&", "<:-", "<:=",
-];
-
-const WS_CHARS: [char; 5] = [' ', '\t', '\r', '\n', '\u{a0}'];
-
-// ============================================================
-// Generators
-// ============================================================
-
-/// Samples a text length with 0 / 1 / MAX_LEN boundaries biased.
+/// Sample a text length biased to the 0 / 1 / MAX_LEN boundaries.
 fn sample_len(ctx: &mut noprop::TestCaseContext) -> usize {
     noprop::sample_with_boundaries(
         ctx,
@@ -44,8 +27,8 @@ fn sample_len(ctx: &mut noprop::TestCaseContext) -> usize {
     )
 }
 
-/// Samples an arbitrary text, mixing escape-relevant special chars,
-/// printable ASCII, and arbitrary Unicode.
+/// Sample an arbitrary text, mixing escape-relevant specials, printable
+/// ASCII, and arbitrary Unicode.
 fn sample_text(ctx: &mut noprop::TestCaseContext) -> String {
     const SPECIALS: [char; 12] = [
         '"', '\'', '\\', '\n', '\t', '\r', '\0', '\u{1}', '\u{7f}', '\u{80}', '\u{a0}', '\u{2028}',
@@ -62,526 +45,52 @@ fn sample_text(ctx: &mut noprop::TestCaseContext) -> String {
     s
 }
 
-/// Samples a non-negative `i64`.
-///
-/// Negative values are excluded because Erlang has no negative literal:
-/// `-10` is the `-` operator applied to `10`, so no token type can
-/// represent a negative value as a single token.
-fn sample_non_negative_i64(ctx: &mut noprop::TestCaseContext) -> i64 {
-    noprop::sample_with_boundaries(
-        ctx,
-        &[0u64, 1, i64::MAX as u64],
-        noprop::Ratio::one_nth(5),
-        |ctx| noprop::sample_u64(ctx) & i64::MAX as u64,
-    ) as i64
-}
-
-/// Samples a non-negative finite `f64`.
-///
-/// Negative values are excluded because Erlang has no negative literal:
-/// `-1.5` is the `-` operator applied to `1.5`, so no token type can
-/// represent a negative value as a single token (same as integers).
-/// Non-finite values are excluded because `FloatToken::from_value` cannot
-/// represent them in a parseable form.
-///
-/// `sample_f64_in` only yields integer-valued samples over the huge
-/// `f64::MAX` range, so fractional boundaries are included explicitly to
-/// cover the fractional text path of `from_value`.
-fn sample_non_negative_f64(ctx: &mut noprop::TestCaseContext) -> f64 {
-    noprop::sample_with_boundaries(
-        ctx,
-        &[0.0f64, 1.0, 0.5, 1.23, 100.0, 1e21, f64::MAX],
-        noprop::Ratio::one_nth(5),
-        |ctx| noprop::sample_f64_in(ctx, 0.0, f64::MAX),
-    )
-}
-
-/// Samples a valid variable name (e.g. `Foo`, `_bar2`).
-fn sample_variable_text(ctx: &mut noprop::TestCaseContext) -> String {
-    const TAIL: [char; 6] = ['a', 'Z', '0', '_', '@', 'x'];
-    let len =
-        noprop::sample_with_boundaries(ctx, &[0usize, 1, 8], noprop::Ratio::one_nth(5), |ctx| {
-            noprop::sample_usize_in(ctx, 0..=8)
-        });
-    let mut s = String::new();
-    s.push(noprop::sample_choice(ctx, &['A', 'Z', '_', 'X', 'F']));
-    for _ in 0..len {
-        s.push(noprop::sample_choice(ctx, &TAIL));
-    }
-    s
-}
-
-/// Samples a comment token text (starts with `%`, no newline).
-fn sample_comment_text(ctx: &mut noprop::TestCaseContext) -> String {
-    let len =
-        noprop::sample_with_boundaries(ctx, &[0usize, 1, 16], noprop::Ratio::one_nth(5), |ctx| {
-            noprop::sample_usize_in(ctx, 0..=16)
-        });
-    let mut s = String::from("%");
-    for _ in 0..len {
-        s.push(noprop::sample_ascii_printable_char(ctx));
-    }
-    s
-}
-
-/// Samples a sigil string token text (e.g. `~b"foo"`, `~a(bc)d`).
-fn sample_sigil_text(ctx: &mut noprop::TestCaseContext) -> String {
-    const DELIMS: [(char, char); 10] = [
-        ('(', ')'),
-        ('[', ']'),
-        ('{', '}'),
-        ('<', '>'),
-        ('/', '/'),
-        ('|', '|'),
-        ('\'', '\''),
-        ('`', '`'),
-        ('#', '#'),
-        ('"', '"'),
-    ];
-    // Prefix / suffix chars must be valid atom non-head chars; content must
-    // never contain the delimiters or a backslash so the parse always ends.
-    const AFFIX: [char; 7] = ['a', 'b', 'x', '_', '1', '@', 'Q'];
-    const CONTENT: [char; 26] = [
-        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
-        's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-    ];
-    let (open, close) = noprop::sample_choice(ctx, &DELIMS);
-    let prefix_len = noprop::sample_usize_in(ctx, 0..=3);
-    let suffix_len = noprop::sample_usize_in(ctx, 0..=3);
-    let content_len =
-        noprop::sample_with_boundaries(ctx, &[0usize, 1, 16], noprop::Ratio::one_nth(5), |ctx| {
-            noprop::sample_usize_in(ctx, 0..=16)
-        });
-    let mut s = String::from("~");
-    for _ in 0..prefix_len {
-        s.push(noprop::sample_choice(ctx, &AFFIX));
-    }
-    s.push(open);
-    for _ in 0..content_len {
-        s.push(noprop::sample_choice(ctx, &CONTENT));
-    }
-    s.push(close);
-    for _ in 0..suffix_len {
-        s.push(noprop::sample_choice(ctx, &AFFIX));
-    }
-    s
-}
-
-/// Samples a valid-by-construction token text.
-///
-/// Returns `(text, is_comment)`: comments must always be followed by a
-/// newline when embedded in a token sequence, and a token whose text ends
-/// with `"` must not be directly followed by a token starting with `"`.
-fn sample_token_text(ctx: &mut noprop::TestCaseContext) -> (String, bool) {
-    match noprop::sample_weighted_index(ctx, &[4, 3, 3, 2, 2, 4, 2, 3, 3, 1, 2]) {
-        0 => (
-            AtomToken::from_value(&sample_text(ctx), Position::new())
-                .text()
-                .to_owned(),
-            false,
-        ),
-        1 => (
-            StringToken::from_value(&sample_text(ctx), Position::new())
-                .text()
-                .to_owned(),
-            false,
-        ),
-        2 => (
-            IntegerToken::from_value(sample_non_negative_i64(ctx), Position::new())
-                .text()
-                .to_owned(),
-            false,
-        ),
-        3 => (
-            FloatToken::from_value(sample_non_negative_f64(ctx), Position::new())
-                .text()
-                .to_owned(),
-            false,
-        ),
-        4 => (
-            CharToken::from_value(noprop::sample_char(ctx), Position::new())
-                .text()
-                .to_owned(),
-            false,
-        ),
-        5 => (noprop::sample_choice(ctx, &SYMBOLS).to_owned(), false),
-        6 => (noprop::sample_choice(ctx, &KEYWORDS).to_owned(), false),
-        7 => (sample_variable_text(ctx), false),
-        8 => (noprop::sample_choice(ctx, &WS_CHARS).to_string(), false),
-        9 => (sample_comment_text(ctx), true),
-        _ => (sample_sigil_text(ctx), false),
-    }
-}
-
-// ============================================================
-// Position model
-// ============================================================
-
-/// Advances a (offset, line, column) model by a token text.
+/// Advance the (offset, line, column) model by `text`, using the same
+/// LF-driven line/column rules as `Position`.
 fn step_position(
     mut offset: usize,
     mut line: usize,
     mut column: usize,
     text: &str,
 ) -> (usize, usize, usize) {
-    offset += text.len();
-    if let Some(i) = text.rfind('\n') {
-        line += text[..=i].matches('\n').count();
-        column = text.len() - i;
-    } else {
-        column += text.len();
+    let mut rest = text;
+    while let Some(i) = rest.find('\n') {
+        offset += i + 1;
+        line += 1;
+        column = 1;
+        rest = &rest[i + 1..];
     }
+    offset += rest.len();
+    column += rest.len();
     (offset, line, column)
 }
 
-/// Advances a (offset, line, column) model by one character.
+/// Advance by a single character, respecting LF.
 fn step_char(
     mut offset: usize,
     mut line: usize,
     mut column: usize,
     c: char,
 ) -> (usize, usize, usize) {
-    offset += c.len_utf8();
+    let n = c.len_utf8();
+    offset += n;
     if c == '\n' {
         line += 1;
         column = 1;
     } else {
-        column += c.len_utf8();
+        column += n;
     }
     (offset, line, column)
 }
 
 // ============================================================
-// from_value -> from_text roundtrip properties
+// Prefix invariant
 // ============================================================
 
+/// For any text, the first successful token's text must be a prefix of
+/// that text.
 #[test]
-fn string_from_value_roundtrip() -> noprop::TestResult {
-    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-    let escape_cases = Cell::new(0usize);
-    // The two fix-critical paths of `from_value` are exercised only when
-    // the value contains a NUL (rewritten to `\x{0}`) or a non-printable
-    // Unicode char (rewritten to `\x{...}`). Track each explicitly so a
-    // generator drift that silently drops coverage of either path is
-    // caught by the PBT itself.
-    let had_null = Cell::new(0usize);
-    let had_null_before_octal_digit = Cell::new(0usize);
-    let had_unicode_escape = Cell::new(0usize);
-    let mut runner = noprop::Runner::new(seed);
-
-    runner.run(CASES, |ctx| {
-        let value = sample_text(ctx);
-        let expected_text = StringToken::from_value(&value, Position::new())
-            .text()
-            .to_owned();
-        if expected_text.contains('\\') {
-            escape_cases.set(escape_cases.get() + 1);
-        }
-        if value.contains('\0') {
-            had_null.set(had_null.get() + 1);
-        }
-        let mut prev_was_null = false;
-        for c in value.chars() {
-            if prev_was_null && matches!(c, '0'..='7') {
-                had_null_before_octal_digit.set(had_null_before_octal_digit.get() + 1);
-                break;
-            }
-            prev_was_null = c == '\0';
-        }
-        // A `\x{...}` other than `\x{0}` means an `\u{...}` -> `\x{...}`
-        // rewrite happened (NUL always becomes `\x{0}` and is tracked by
-        // `had_null` above).
-        if expected_text
-            .match_indices("\\x{")
-            .any(|(i, _)| !expected_text[i + 3..].starts_with("0}"))
-        {
-            had_unicode_escape.set(had_unicode_escape.get() + 1);
-        }
-        let parsed = StringToken::from_text(&expected_text, Position::new())
-            .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
-        assert_eq!(
-            parsed.value(),
-            value,
-            "value mismatch for {expected_text:?}"
-        );
-        assert_eq!(
-            parsed.text(),
-            expected_text,
-            "text mismatch for value {value:?}"
-        );
-        Ok(())
-    })?;
-
-    assert!(
-        escape_cases.get() > 0,
-        "no case exercised an escaped string\n{runner}"
-    );
-    assert!(
-        had_null.get() > 0,
-        "no case exercised the NUL rewrite path\n{runner}"
-    );
-    assert!(
-        had_null_before_octal_digit.get() > 0,
-        "no case exercised the NUL-before-octal-digit merge path\n{runner}"
-    );
-    assert!(
-        had_unicode_escape.get() > 0,
-        "no case exercised the `\\u{{...}}` -> `\\x{{...}}` rewrite path\n{runner}"
-    );
-    Ok(())
-}
-
-#[test]
-fn atom_from_value_roundtrip() -> noprop::TestResult {
-    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-    let escape_cases = Cell::new(0usize);
-    // The two fix-critical paths of `from_value` are exercised only when
-    // the value contains a NUL (rewritten to `\x{0}`) or a non-printable
-    // Unicode char (rewritten to `\x{...}`). Track each explicitly so a
-    // generator drift that silently drops coverage of either path is
-    // caught by the PBT itself.
-    let had_null = Cell::new(0usize);
-    let had_unicode_escape = Cell::new(0usize);
-    let mut runner = noprop::Runner::new(seed);
-
-    runner.run(CASES, |ctx| {
-        let value = sample_text(ctx);
-        let expected_text = AtomToken::from_value(&value, Position::new())
-            .text()
-            .to_owned();
-        if expected_text.contains('\\') {
-            escape_cases.set(escape_cases.get() + 1);
-        }
-        if value.contains('\0') {
-            had_null.set(had_null.get() + 1);
-        }
-        // A `\x{...}` other than `\x{0}` means an `\u{...}` -> `\x{...}`
-        // rewrite happened (NUL always becomes `\x{0}` and is tracked by
-        // `had_null` above).
-        if expected_text
-            .match_indices("\\x{")
-            .any(|(i, _)| !expected_text[i + 3..].starts_with("0}"))
-        {
-            had_unicode_escape.set(had_unicode_escape.get() + 1);
-        }
-        let parsed = AtomToken::from_text(&expected_text, Position::new())
-            .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
-        assert_eq!(
-            parsed.value(),
-            value,
-            "value mismatch for {expected_text:?}"
-        );
-        assert_eq!(
-            parsed.text(),
-            expected_text,
-            "text mismatch for value {value:?}"
-        );
-        Ok(())
-    })?;
-
-    assert!(
-        escape_cases.get() > 0,
-        "no case exercised an escaped atom\n{runner}"
-    );
-    assert!(
-        had_null.get() > 0,
-        "no case exercised the NUL rewrite path\n{runner}"
-    );
-    assert!(
-        had_unicode_escape.get() > 0,
-        "no case exercised the `\\u{{...}}` -> `\\x{{...}}` rewrite path\n{runner}"
-    );
-    Ok(())
-}
-
-#[test]
-fn char_from_value_roundtrip() -> noprop::TestResult {
-    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-    let escape_cases = Cell::new(0usize);
-    // Same fix-critical paths as the string and atom tests: a NUL value is
-    // rewritten to `\x{0}`, and a non-printable Unicode char is rewritten
-    // to `\x{...}`.
-    let had_null = Cell::new(0usize);
-    let had_unicode_escape = Cell::new(0usize);
-    let mut runner = noprop::Runner::new(seed);
-
-    runner.run(CASES, |ctx| {
-        // Uniform `sample_char` almost never hits escape-relevant chars
-        // (special cases are ~10^-6 of all scalars), so mix them in
-        // explicitly.
-        let value = match noprop::sample_usize_in(ctx, 0..3) {
-            0 => noprop::sample_choice(
-                ctx,
-                &[
-                    '\\', '\n', '\0', '\u{1}', '\u{7f}', '"', '\'', '$', '\t', '\r',
-                ],
-            ),
-            1 => noprop::sample_ascii_printable_char(ctx),
-            _ => noprop::sample_char(ctx),
-        };
-        let expected_text = CharToken::from_value(value, Position::new())
-            .text()
-            .to_owned();
-        if expected_text.contains('\\') {
-            escape_cases.set(escape_cases.get() + 1);
-        }
-        if value == '\0' {
-            had_null.set(had_null.get() + 1);
-        } else if expected_text.contains("\\x{") {
-            had_unicode_escape.set(had_unicode_escape.get() + 1);
-        }
-        let parsed = CharToken::from_text(&expected_text, Position::new())
-            .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
-        assert_eq!(
-            parsed.value(),
-            value,
-            "value mismatch for {expected_text:?}"
-        );
-        assert_eq!(
-            parsed.text(),
-            expected_text,
-            "text mismatch for value {value:?}"
-        );
-        Ok(())
-    })?;
-
-    assert!(
-        escape_cases.get() > 0,
-        "no case exercised an escaped char literal\n{runner}"
-    );
-    assert!(
-        had_null.get() > 0,
-        "no case exercised the NUL rewrite path\n{runner}"
-    );
-    assert!(
-        had_unicode_escape.get() > 0,
-        "no case exercised the `\\u{{...}}` -> `\\x{{...}}` rewrite path\n{runner}"
-    );
-    Ok(())
-}
-
-#[test]
-fn comment_from_value_roundtrip() -> noprop::TestResult {
-    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-    let nonempty_cases = Cell::new(0usize);
-    let mut runner = noprop::Runner::new(seed);
-
-    runner.run(CASES, |ctx| {
-        let len = sample_len(ctx);
-        let mut value = String::new();
-        for _ in 0..len {
-            value.push(noprop::sample_ascii_printable_char(ctx));
-        }
-        if !value.is_empty() {
-            nonempty_cases.set(nonempty_cases.get() + 1);
-        }
-        let expected_text = CommentToken::from_value(&value, Position::new())
-            .map_err(|e| format!("from_value({value:?}) failed: {e}"))?
-            .text()
-            .to_owned();
-        let parsed = CommentToken::from_text(&expected_text, Position::new())
-            .map_err(|e| format!("cannot parse {expected_text:?}: {e}"))?;
-        assert_eq!(
-            parsed.value(),
-            value,
-            "value mismatch for {expected_text:?}"
-        );
-        assert_eq!(
-            parsed.text(),
-            expected_text,
-            "text mismatch for value {value:?}"
-        );
-        Ok(())
-    })?;
-
-    assert!(
-        nonempty_cases.get() > 0,
-        "no case exercised a non-empty comment\n{runner}"
-    );
-    Ok(())
-}
-
-#[test]
-fn integer_from_value_roundtrip() -> noprop::TestResult {
-    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-    let large_cases = Cell::new(0usize);
-    let mut runner = noprop::Runner::new(seed);
-
-    runner.run(CASES, |ctx| {
-        let value = sample_non_negative_i64(ctx);
-        if value > 9 {
-            large_cases.set(large_cases.get() + 1);
-        }
-        let expected_text = IntegerToken::from_value(value, Position::new())
-            .text()
-            .to_owned();
-        let parsed = IntegerToken::from_text(&expected_text, Position::new())
-            .map_err(|e| format!("cannot parse {expected_text:?}: {e}"))?;
-        assert_eq!(
-            parsed.value(),
-            Some(value),
-            "value mismatch for {expected_text:?}"
-        );
-        assert_eq!(parsed.text(), expected_text);
-        Ok(())
-    })?;
-
-    assert!(
-        large_cases.get() > 0,
-        "no case exercised a multi-digit integer\n{runner}"
-    );
-    Ok(())
-}
-
-#[test]
-fn float_from_value_roundtrip() -> noprop::TestResult {
-    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-    let integer_cases = Cell::new(0usize);
-    let fraction_cases = Cell::new(0usize);
-    let mut runner = noprop::Runner::new(seed);
-
-    runner.run(CASES, |ctx| {
-        let value = sample_non_negative_f64(ctx);
-        let expected_text = FloatToken::from_value(value, Position::new())
-            .text()
-            .to_owned();
-        if value.fract() == 0.0 {
-            integer_cases.set(integer_cases.get() + 1);
-        } else {
-            fraction_cases.set(fraction_cases.get() + 1);
-        }
-        let parsed = FloatToken::from_text(&expected_text, Position::new())
-            .map_err(|e| format!("cannot parse {expected_text:?} (from value {value:?}): {e}"))?;
-        assert_eq!(
-            parsed.value(),
-            value,
-            "value mismatch for {expected_text:?}"
-        );
-        assert_eq!(
-            parsed.text(),
-            expected_text,
-            "text mismatch for value {value:?}"
-        );
-        Ok(())
-    })?;
-
-    assert!(
-        integer_cases.get() > 0,
-        "no case exercised the fractional-part append path\n{runner}"
-    );
-    assert!(
-        fraction_cases.get() > 0,
-        "no case exercised a fractional text\n{runner}"
-    );
-    Ok(())
-}
-
-// ============================================================
-// Tokenizer structural invariants
-// ============================================================
-
-#[test]
-fn token_from_text_prefix_invariant() -> noprop::TestResult {
+fn scan_token_prefix_invariant() -> noprop::TestResult {
     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
     let mut runner = noprop::Runner::new(seed);
 
@@ -589,11 +98,8 @@ fn token_from_text_prefix_invariant() -> noprop::TestResult {
         let text = sample_text(ctx);
         if let Ok(Some(token)) = scan_token(&text, Position::new()) {
             let t = token.text(&text);
-            assert!(!t.is_empty(), "token with empty text for {text:?}");
-            assert!(
-                text.starts_with(t),
-                "token text {t:?} is not a prefix of {text:?}"
-            );
+            assert!(!t.is_empty(), "empty token text for {text:?}");
+            assert!(text.starts_with(t), "{t:?} not a prefix of {text:?}");
         }
         Ok(())
     })?;
@@ -601,16 +107,20 @@ fn token_from_text_prefix_invariant() -> noprop::TestResult {
     Ok(())
 }
 
-/// A differential position test: maintains a (offset, line, column) model of
-/// the input and checks it against `Tokenizer::next_position()` after every
-/// step. Recovery uses `Error::resume_position` (via `Tokenizer::next()`)
-/// so a bad token still advances by exactly one Unicode scalar value.
+// ============================================================
+// Position model with error recovery
+// ============================================================
+
+/// Drive `scan_token` from `Position::new()` to EOF, using
+/// `Error::resume_position` to advance past bad tokens; assert the
+/// resulting positions match a separately maintained (offset, line,
+/// column) model at every step.
 ///
-/// This catches position bookkeeping bugs (e.g. the char-boundary panic of
-/// erlls issue 5) as well as token texts that are not prefixes of the
-/// remaining input.
+/// This catches boundary-bookkeeping bugs (e.g. landing in the middle of
+/// a multi-byte character) and any token text that fails to be a prefix
+/// of the remaining input.
 #[test]
-fn tokenizer_position_model() -> noprop::TestResult {
+fn scan_token_position_model_with_recovery() -> noprop::TestResult {
     let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
     let ok_cases = Cell::new(0usize);
     let error_cases = Cell::new(0usize);
@@ -618,52 +128,50 @@ fn tokenizer_position_model() -> noprop::TestResult {
 
     runner.run(CASES, |ctx| {
         let text = sample_text(ctx);
-        let mut tokenizer = Tokenizer::new(text.as_str());
+        let src = text.as_str();
+        let mut pos = Position::new();
         let mut offset = 0usize;
         let mut line = 1usize;
         let mut column = 1usize;
         let mut saw_ok = false;
-        let mut saw_error = false;
+        let mut saw_err = false;
 
         loop {
-            // The position must be read before `next()`: the iterator
-            // advances the tokenizer past the token it returns.
-            let start = tokenizer.next_position();
-            assert_eq!(start.offset(), offset, "offset mismatch");
-            assert_eq!(start.line(), line, "line mismatch");
-            assert_eq!(start.column(), column, "column mismatch");
-            let result = tokenizer.next();
-            match result {
-                None => break,
-                Some(Ok(token)) => {
+            assert_eq!(pos.offset(), offset, "offset mismatch");
+            assert_eq!(pos.line(), line, "line mismatch");
+            assert_eq!(pos.column(), column, "column mismatch");
+            match scan_token(src, pos) {
+                Ok(None) => break,
+                Ok(Some(token)) => {
                     saw_ok = true;
-                    let t = token.text(text.as_str());
-                    let rest = text.get(offset..).expect("offset must be a char boundary");
+                    let t = token.text(src);
+                    let rest = &src[offset..];
                     assert!(
                         rest.starts_with(t),
                         "token text {t:?} is not a prefix of {rest:?}"
                     );
                     (offset, line, column) = step_position(offset, line, column, t);
-                    let after = tokenizer.next_position();
-                    assert_eq!(after.offset(), offset, "end offset mismatch");
-                    assert_eq!(after.line(), line, "end line mismatch");
-                    assert_eq!(after.column(), column, "end column mismatch");
+                    pos = token.end();
+                    assert_eq!(pos.offset(), offset, "end offset mismatch");
+                    assert_eq!(pos.line(), line, "end line mismatch");
+                    assert_eq!(pos.column(), column, "end column mismatch");
                 }
-                Some(Err(_)) => {
-                    saw_error = true;
-                    let c = text[offset..]
+                Err(err) => {
+                    saw_err = true;
+                    let c = src[offset..]
                         .chars()
                         .next()
                         .expect("error at a non-EOF position");
                     (offset, line, column) = step_char(offset, line, column, c);
+                    pos = err.resume_position();
                 }
             }
         }
-        assert_eq!(offset, text.len(), "tokenizer stopped before EOF");
+        assert_eq!(offset, src.len(), "scan stopped before EOF");
         if saw_ok {
             ok_cases.set(ok_cases.get() + 1);
         }
-        if saw_error {
+        if saw_err {
             error_cases.set(error_cases.get() + 1);
         }
         Ok(())
@@ -673,90 +181,6 @@ fn tokenizer_position_model() -> noprop::TestResult {
     assert!(
         error_cases.get() > 0,
         "no case exercised the error recovery path\n{runner}"
-    );
-    Ok(())
-}
-
-/// A valid-by-construction multi-token input must tokenize without error and
-/// the concatenation of the token texts must equal the input.
-#[test]
-fn tokenizer_concat_invariant() -> noprop::TestResult {
-    let seed = noprop::seed_from_env_or_time(SEED_ENV)?;
-    let multi_token_cases = Cell::new(0usize);
-    let comment_cases = Cell::new(0usize);
-    let mut runner = noprop::Runner::new(seed);
-
-    runner.run(CASES, |ctx| {
-        let count = noprop::sample_with_boundaries(
-            ctx,
-            &[0usize, 1, 8],
-            noprop::Ratio::one_nth(5),
-            |ctx| noprop::sample_usize_in(ctx, 0..=8),
-        );
-        let mut tokens = Vec::new();
-        for _ in 0..count {
-            tokens.push(sample_token_text(ctx));
-        }
-
-        // Join token texts with separators, avoiding the only error
-        // triggers of the tokenizer: a comment must be followed by a
-        // newline, a token ending with `"` must not be followed by one
-        // starting with `"` (adjacent string literals), and a token ending
-        // with a digit must not be followed by one starting with `_`
-        // (`123_` is an invalid integer prefix), `#` (`1#` is parsed as a
-        // bad radix marker), or `e`/`E` (a float ending in `N.0` absorbs
-        // the `e` of a following `end` / `else` as an exponent).
-        let mut input = String::new();
-        let mut prev: Option<(&str, bool)> = None;
-        for (text, is_comment) in &tokens {
-            if let Some((prev_text, prev_comment)) = prev {
-                let prev_ends_with_digit =
-                    prev_text.chars().last().is_some_and(|c| c.is_ascii_digit());
-                if prev_comment {
-                    input.push('\n');
-                } else if (prev_text.ends_with('"') && text.starts_with('"'))
-                    || (prev_ends_with_digit
-                        && (text.starts_with('_')
-                            || text.starts_with('#')
-                            || text.starts_with('e')
-                            || text.starts_with('E')))
-                {
-                    input.push(' ');
-                } else if noprop::sample_bool(ctx) {
-                    input.push(noprop::sample_choice(ctx, &WS_CHARS));
-                }
-            }
-            input.push_str(text);
-            prev = Some((text, *is_comment));
-        }
-
-        let parsed = Tokenizer::new(input.as_str())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("unexpected error at {:?}: {e}", e.position()))?;
-        let concat: String = parsed.iter().map(|t| t.text(input.as_str())).collect();
-        assert_eq!(concat, input, "token text concatenation mismatch");
-
-        if parsed.len() >= 2 {
-            multi_token_cases.set(multi_token_cases.get() + 1);
-        }
-        if tokens.iter().any(|(_, is_comment)| *is_comment) {
-            comment_cases.set(comment_cases.get() + 1);
-        }
-        Ok(())
-    })?;
-
-    assert_eq!(
-        runner.stats().rejected_cases,
-        0,
-        "generators must be valid-by-construction\n{runner}"
-    );
-    assert!(
-        multi_token_cases.get() > 0,
-        "no case produced multiple tokens\n{runner}"
-    );
-    assert!(
-        comment_cases.get() > 0,
-        "no case included a comment token\n{runner}"
     );
     Ok(())
 }

@@ -44,15 +44,6 @@ pub enum Error {
         resume: Position,
     },
 
-    /// The token has the shape of an atom but does not match any Erlang
-    /// reserved word.
-    UnknownKeyword {
-        /// Position of the atom.
-        position: Position,
-        /// Position at which the caller should resume scanning.
-        resume: Position,
-    },
-
     /// The scanner failed to parse an atom token.
     InvalidAtomToken {
         /// Position of the offending input.
@@ -142,7 +133,6 @@ impl Error {
             | Self::InvalidEscapedChar { position, .. }
             | Self::AdjacentStringLiterals { position, .. }
             | Self::MissingToken { position, .. }
-            | Self::UnknownKeyword { position, .. }
             | Self::InvalidAtomToken { position, .. }
             | Self::InvalidCharToken { position, .. }
             | Self::InvalidCommentToken { position, .. }
@@ -170,7 +160,6 @@ impl Error {
             | Self::InvalidEscapedChar { resume, .. }
             | Self::AdjacentStringLiterals { resume, .. }
             | Self::MissingToken { resume, .. }
-            | Self::UnknownKeyword { resume, .. }
             | Self::InvalidAtomToken { resume, .. }
             | Self::InvalidCharToken { resume, .. }
             | Self::InvalidCommentToken { resume, .. }
@@ -195,7 +184,6 @@ impl Error {
             | Self::InvalidEscapedChar { resume, .. }
             | Self::AdjacentStringLiterals { resume, .. }
             | Self::MissingToken { resume, .. }
-            | Self::UnknownKeyword { resume, .. }
             | Self::InvalidAtomToken { resume, .. }
             | Self::InvalidCharToken { resume, .. }
             | Self::InvalidCommentToken { resume, .. }
@@ -234,13 +222,6 @@ impl Error {
 
     pub(crate) fn missing_token(position: Position) -> Self {
         Self::MissingToken {
-            position,
-            resume: position,
-        }
-    }
-
-    pub(crate) fn unknown_keyword(position: Position) -> Self {
-        Self::UnknownKeyword {
             position,
             resume: position,
         }
@@ -334,7 +315,6 @@ impl std::fmt::Display for Error {
             Error::MissingToken { .. } => {
                 write!(f, "a token was expected, but not found ({position})")
             }
-            Error::UnknownKeyword { .. } => write!(f, "unknown keyword ({position})"),
             Error::InvalidAtomToken { .. } => write!(f, "cannot parse an atom token ({position})"),
             Error::InvalidCharToken { .. } => {
                 write!(f, "cannot parse a character token ({position})")

@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::time::{Duration, Instant};
 
-use erl_tokenize::Tokenizer;
+use erl_tokenize::{Position, scan_token};
 
 fn main() -> noargs::Result<()> {
     let mut args = noargs::raw_args();
@@ -29,13 +29,13 @@ fn main() -> noargs::Result<()> {
 
     let start_time = Instant::now();
     let mut count = 0;
-    let tokenizer = Tokenizer::new(&src);
-    for result in tokenizer {
-        let token = result?;
+    let mut pos = Position::new();
+    while let Some(token) = scan_token(&src, pos)? {
         if !silent {
             println!("[{}] {:?}", token.start(), token.text(&src));
         }
         count += 1;
+        pos = token.end();
     }
     println!("TOKEN COUNT: {count}");
     println!(

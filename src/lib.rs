@@ -1,5 +1,12 @@
 //! Erlang source code tokenizer.
 //!
+//! The public entry point is the free function [`scan_token`]:
+//! given the whole source string and the current [`Position`], it returns
+//! the next [`Token`] or [`None`] when the end of the source is reached.
+//! On failure, the returned [`Error`] carries a diagnostic position and a
+//! resume position that can be passed straight back into [`scan_token`]
+//! so a bad token never spins in place.
+//!
 //! # Examples
 //!
 //! Tokenize the Erlang code `io:format("Hello").`:
@@ -25,21 +32,21 @@
 //! [erl_scan]: http://erlang.org/doc/man/erl_scan.html
 //! [Data Types]: http://erlang.org/doc/reference_manual/data_types.html
 #![warn(missing_docs)]
-pub use crate::error::Error;
-pub use crate::position::{Position, PositionRange};
-pub use crate::token::{Token, TokenKind, TokenValue, scan_token};
-pub use crate::tokenizer::Tokenizer;
-pub use crate::values::{Keyword, Symbol, Whitespace};
+#![forbid(unsafe_code)]
 
-pub mod tokens;
-pub mod values;
+pub use crate::error::Error;
+pub use crate::keyword::Keyword;
+pub use crate::position::Position;
+pub use crate::symbol::Symbol;
+pub use crate::token::{Token, TokenKind, TokenValue, scan_token};
 
 mod error;
+mod keyword;
 mod lex;
 mod position;
+mod symbol;
 mod token;
-mod tokenizer;
 mod util;
 
-/// This crate specific `Result` type.
+/// This crate's `Result` type.
 pub type Result<T> = ::std::result::Result<T, Error>;

@@ -1,9 +1,10 @@
-use crate::{Error, Position, Result};
 use std::borrow::Cow;
 use std::char;
 use std::iter::Peekable;
 
-pub fn is_atom_head_char(c: char) -> bool {
+use crate::{Error, Position, Result};
+
+pub(crate) fn is_atom_head_char(c: char) -> bool {
     if let 'a'..='z' = c {
         true
     } else {
@@ -11,27 +12,27 @@ pub fn is_atom_head_char(c: char) -> bool {
     }
 }
 
-pub fn is_atom_non_head_char(c: char) -> bool {
+pub(crate) fn is_atom_non_head_char(c: char) -> bool {
     match c {
         '@' | '_' | '0'..='9' => true,
         _ => c.is_alphabetic(),
     }
 }
 
-pub fn is_variable_head_char(c: char) -> bool {
+pub(crate) fn is_variable_head_char(c: char) -> bool {
     matches!(c, 'A'..='Z' | '_')
 }
 
-pub fn is_variable_non_head_char(c: char) -> bool {
+pub(crate) fn is_variable_non_head_char(c: char) -> bool {
     matches!(c, 'a'..='z' | 'A'..='Z' | '@' | '_' | '0'..='9')
 }
 
 /// Walk a quoted region and return the byte index of the closing
 /// terminator, validating any escape sequences along the way.
 ///
-/// The scanner in [`crate::lex`] uses this to determine token boundaries
-/// without allocating; [`parse_quotation`] uses it to locate the
-/// terminator before decoding.
+/// [`crate::lex`] uses this to determine token boundaries without
+/// allocating; [`parse_quotation`] uses it to locate the terminator
+/// before decoding the content.
 pub(crate) fn find_quotation_end(pos: Position, input: &str, terminator: char) -> Result<usize> {
     let mut chars = input.char_indices().peekable();
     while let Some((i, c)) = chars.next() {
@@ -44,13 +45,15 @@ pub(crate) fn find_quotation_end(pos: Position, input: &str, terminator: char) -
     Err(Error::no_closing_quotation(pos))
 }
 
-pub fn parse_quotation(
+/// Locate the terminator and decode the quoted content into a `Cow`,
+/// borrowing when no escape sequences are present.
+pub(crate) fn parse_quotation(
     pos: Position,
     input: &str,
     terminator: char,
 ) -> Result<(Cow<'_, str>, usize)> {
     let end = find_quotation_end(pos, input, terminator)?;
-    let inner = unsafe { input.get_unchecked(0..end) };
+    let inner = &input[..end];
     if inner.contains('\\') {
         let decoded = decode_quotation_content(pos, inner);
         Ok((Cow::Owned(decoded), end))
@@ -59,10 +62,10 @@ pub fn parse_quotation(
     }
 }
 
-/// Decode a quoted region's escaped content into an owned string. Assumes
-/// the input has already been validated by [`find_quotation_end`] (i.e.,
-/// every `\` introduces a well-formed escape sequence and the input does
-/// not contain the terminator character unescaped).
+/// Decode a quoted region's escaped content into an owned string.
+/// Assumes the input has already been validated by
+/// [`find_quotation_end`] (every `\` introduces a well-formed escape
+/// sequence and the input does not contain the unescaped terminator).
 fn decode_quotation_content(pos: Position, input: &str) -> String {
     let mut buf = String::with_capacity(input.len());
     let mut chars = input.char_indices().peekable();
@@ -79,7 +82,7 @@ fn decode_quotation_content(pos: Position, input: &str) -> String {
 }
 
 // https://www.erlang.org/doc/system/data_types.html#escape-sequences
-pub fn parse_escaped_char<I>(pos: Position, chars: &mut Peekable<I>) -> Result<char>
+pub(crate) fn parse_escaped_char<I>(pos: Position, chars: &mut Peekable<I>) -> Result<char>
 where
     I: Iterator<Item = (usize, char)>,
 {
@@ -149,29 +152,6 @@ where
             char::from_u32(n).ok_or_else(error)
         }
         _ => Ok(c),
-    }
-}
-
-/// Appends the Erlang-valid escape sequence for `c` to `buf`.
-///
-/// The output can be parsed back by [`parse_escaped_char`]. It is based on
-/// `char::escape_debug` with two rewrites:
-///
-/// - `\0` is rewritten to `\x{0}`. A `\0` followed by an octal digit would
-///   merge into a single escape (`\01` parses as one character); the same
-///   merge can also happen across token boundaries in a token stream
-///   (`$\0` followed by `7` rescans as `$\07`), so the unambiguous form is
-///   emitted unconditionally.
-/// - `\u{...}` is rewritten to `\x{...}`, since Erlang has no `\u{...}`
-///   escape.
-pub fn push_escaped_char(buf: &mut String, c: char) {
-    let start = buf.len();
-    buf.extend(c.escape_debug());
-    if &buf[start..] == "\\0" {
-        buf.truncate(start);
-        buf.push_str("\\x{0}");
-    } else if buf[start..].starts_with("\\u{") {
-        buf.replace_range(start..start + 2, "\\x");
     }
 }
 

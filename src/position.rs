@@ -87,21 +87,3 @@ impl std::fmt::Display for Position {
         write!(f, "{}:{}", self.line, self.column)
     }
 }
-
-/// This trait allows to get a (half-open) range where the subject is located.
-pub trait PositionRange {
-    /// Returns the (inclusive) start position of this.
-    fn start_position(&self) -> Position;
-
-    /// Returns the (exclusive) end position of this.
-    fn end_position(&self) -> Position;
-}
-impl<T: PositionRange> PositionRange for Box<T> {
-    fn start_position(&self) -> Position {
-        (**self).start_position()
-    }
-
-    fn end_position(&self) -> Position {
-        (**self).end_position()
-    }
-}

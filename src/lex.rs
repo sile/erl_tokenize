@@ -18,8 +18,9 @@
 
 use std::borrow::Cow;
 
+use crate::keyword::Keyword;
+use crate::symbol::Symbol;
 use crate::util;
-use crate::values::{Keyword, Symbol};
 use crate::{Error, Position, Result};
 
 /// Kind of the token that a scanner recognized at the start of a source
@@ -249,19 +250,6 @@ pub(crate) fn scan_integer(source: &str, pos: Position) -> Result<Scanned> {
         return Err(Error::invalid_integer_token(pos));
     }
     Ok(Scanned::new(ScanKind::Integer, end))
-}
-
-/// Validate a keyword at the start of `source` and return its length.
-///
-/// Delegates the token shape to [`scan_atom`] and then requires the atom
-/// text to match one of the reserved words.
-pub(crate) fn scan_keyword(source: &str, pos: Position) -> Result<Scanned> {
-    let atom = scan_atom(source, pos)?;
-    let text = &source[..atom.len];
-    match keyword_from_text(text) {
-        Some(k) => Ok(Scanned::new(ScanKind::Keyword(k), atom.len)),
-        None => Err(Error::unknown_keyword(pos)),
-    }
 }
 
 /// Match a bare atom text against the reserved-word table.
@@ -591,21 +579,6 @@ pub(crate) fn scan_whitespace(source: &str, pos: Position) -> Result<Scanned> {
         end += c.len_utf8();
     }
     Ok(Scanned::new(ScanKind::Whitespace, end))
-}
-
-/// Consume exactly one whitespace character. Used by the legacy
-/// [`crate::tokens::WhitespaceToken`] entry point, which is single-char
-/// by contract; the aggregated [`scan_whitespace`] powers the new
-/// [`crate::scan_token`] API.
-pub(crate) fn scan_whitespace_single(source: &str, pos: Position) -> Result<Scanned> {
-    let c = source
-        .chars()
-        .next()
-        .ok_or_else(|| Error::invalid_whitespace_token(pos))?;
-    if !is_whitespace_char(c) {
-        return Err(Error::invalid_whitespace_token(pos));
-    }
-    Ok(Scanned::new(ScanKind::Whitespace, c.len_utf8()))
 }
 
 /// Validate a float literal at the start of `source` and return its length.
