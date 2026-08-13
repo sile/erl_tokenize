@@ -2,17 +2,19 @@
 //!
 //! # Examples
 //!
-//! Tokenizes the Erlang code `io:format("Hello").`:
+//! Tokenize the Erlang code `io:format("Hello").`:
 //!
 //! ```
-//! use erl_tokenize::Tokenizer;
+//! use erl_tokenize::{Position, scan_token};
 //!
 //! let src = r#"io:format("Hello")."#;
-//! let tokenizer = Tokenizer::new(src);
-//! let tokens = tokenizer.collect::<Result<Vec<_>, _>>().unwrap();
-//!
-//! assert_eq!(tokens.iter().map(|t| t.text()).collect::<Vec<_>>(),
-//!            ["io", ":", "format", "(", r#""Hello""#, ")", "."]);
+//! let mut pos = Position::new();
+//! let mut texts = Vec::new();
+//! while let Some(token) = scan_token(src, pos).unwrap() {
+//!     texts.push(token.text(src).to_owned());
+//!     pos = token.end();
+//! }
+//! assert_eq!(texts, ["io", ":", "format", "(", r#""Hello""#, ")", "."]);
 //! ```
 //!
 //! # References
@@ -24,21 +26,16 @@
 //! [Data Types]: http://erlang.org/doc/reference_manual/data_types.html
 #![warn(missing_docs)]
 pub use crate::error::Error;
-pub use crate::hidden_token::HiddenToken;
-pub use crate::lexer::Lexer;
-pub use crate::lexical_token::LexicalToken;
 pub use crate::position::{Position, PositionRange};
-pub use crate::token::Token;
+pub use crate::token::{Token, TokenKind, scan_token};
 pub use crate::tokenizer::Tokenizer;
+pub use crate::values::{Keyword, Symbol, Whitespace};
 
 pub mod tokens;
 pub mod values;
 
 mod error;
-mod hidden_token;
 mod lex;
-mod lexer;
-mod lexical_token;
 mod position;
 mod token;
 mod tokenizer;

@@ -1,433 +1,170 @@
 use std::fmt;
 
 use crate::lex::{self, ScanKind};
-use crate::tokens::{
-    AtomToken, CharToken, CommentToken, FloatToken, IntegerToken, KeywordToken, SigilStringToken,
-    StringToken, SymbolToken, VariableToken, WhitespaceToken,
-};
-use crate::{HiddenToken, LexicalToken, Position, PositionRange};
+use crate::values::{Keyword, Symbol};
+use crate::{Position, Result};
 
-/// Token.
-#[allow(missing_docs)]
-#[derive(Debug, Clone)]
-pub enum Token {
-    Atom(AtomToken),
-    Char(CharToken),
-    Comment(CommentToken),
-    Float(FloatToken),
-    Integer(IntegerToken),
-    Keyword(KeywordToken),
-    SigilString(SigilStringToken),
-    String(StringToken),
-    Symbol(SymbolToken),
-    Variable(VariableToken),
-    Whitespace(WhitespaceToken),
+/// Kind of a scanned token.
+///
+/// Keywords and symbols are fully determined by their textual form and
+/// therefore carry the resolved enum value directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TokenKind {
+    /// Erlang atom (bare or single-quoted).
+    Atom,
+    /// Erlang character literal (`$x` or `$\...`).
+    Char,
+    /// Line comment starting with `%`.
+    Comment,
+    /// Floating-point number literal.
+    Float,
+    /// Integer literal (decimal or radix-prefixed).
+    Integer,
+    /// Reserved word (`case`, `end`, …).
+    Keyword(Keyword),
+    /// Sigil string literal (`~"..."`, `~b(...)`, …).
+    SigilString,
+    /// Double-quoted string literal (including triple-quoted form).
+    String,
+    /// Punctuation or operator symbol.
+    Symbol(Symbol),
+    /// Variable identifier (starting with an uppercase letter or `_`).
+    Variable,
+    /// A single whitespace character (space, tab, CR, LF, or NBSP).
+    Whitespace,
 }
+
+impl TokenKind {
+    /// Returns `true` for kinds that are ignored by grammatical analysis
+    /// (currently comments and whitespace).
+    pub const fn is_hidden(self) -> bool {
+        matches!(self, TokenKind::Comment | TokenKind::Whitespace)
+    }
+
+    /// Returns `true` for kinds that carry lexical meaning (the negation
+    /// of [`is_hidden`](Self::is_hidden)).
+    pub const fn is_lexical(self) -> bool {
+        !self.is_hidden()
+    }
+}
+
+impl From<ScanKind> for TokenKind {
+    fn from(kind: ScanKind) -> Self {
+        match kind {
+            ScanKind::Atom => TokenKind::Atom,
+            ScanKind::Char => TokenKind::Char,
+            ScanKind::Comment => TokenKind::Comment,
+            ScanKind::Float => TokenKind::Float,
+            ScanKind::Integer => TokenKind::Integer,
+            ScanKind::Keyword(k) => TokenKind::Keyword(k),
+            ScanKind::SigilString => TokenKind::SigilString,
+            ScanKind::String => TokenKind::String,
+            ScanKind::Symbol(s) => TokenKind::Symbol(s),
+            ScanKind::Variable => TokenKind::Variable,
+            ScanKind::Whitespace(_) => TokenKind::Whitespace,
+        }
+    }
+}
+
+/// A scanned token: kind and half-open position range in the source.
+///
+/// `Token` does not borrow the source and does not own any decoded value.
+/// Call [`text`](Self::text) with the same source that was passed to
+/// [`scan_token`] to retrieve the original substring.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Token {
+    kind: TokenKind,
+    start: Position,
+    end: Position,
+}
+
 impl Token {
-    /// Tries to convert from any prefixes of the text to a token.
+    /// Returns the kind of this token.
+    pub const fn kind(self) -> TokenKind {
+        self.kind
+    }
+
+    /// Returns the (inclusive) start position of this token.
+    pub const fn start(self) -> Position {
+        self.start
+    }
+
+    /// Returns the (exclusive) end position of this token.
+    pub const fn end(self) -> Position {
+        self.end
+    }
+
+    /// Returns `true` when the token is a hidden token (comment or
+    /// whitespace).
+    pub const fn is_hidden(self) -> bool {
+        self.kind.is_hidden()
+    }
+
+    /// Returns `true` when the token carries lexical meaning.
+    pub const fn is_lexical(self) -> bool {
+        self.kind.is_lexical()
+    }
+
+    /// Returns the original substring of `source` that this token
+    /// represents.
     ///
-    /// # Examples
+    /// # Panics
     ///
-    /// ```
-    /// use erl_tokenize::{Token, Position};
-    /// use erl_tokenize::values::Symbol;
+    /// Panics if `source` is shorter than `self.end().offset()` or if
+    /// `self.start().offset()..self.end().offset()` does not correspond to
+    /// valid UTF-8 character boundaries.
     ///
-    /// let pos = Position::new();
-    ///
-    /// // Atom
-    /// let token = Token::from_text("foo", pos.clone()).unwrap();
-    /// assert_eq!(token.as_atom_token().map(|t| t.value()), Some("foo"));
-    ///
-    /// // Symbol
-    /// let token = Token::from_text("[foo]", pos.clone()).unwrap();
-    /// assert_eq!(token.as_symbol_token().map(|t| t.value()), Some(Symbol::OpenSquare));
-    /// ```
-    pub fn from_text(text: &str, pos: Position) -> crate::Result<Self> {
-        let scanned = lex::scan_one(text, pos.clone())?;
-        match scanned.kind {
-            ScanKind::Atom => AtomToken::from_text(text, pos).map(Token::from),
-            ScanKind::Char => CharToken::from_text(text, pos).map(Token::from),
-            ScanKind::Comment => CommentToken::from_text(text, pos).map(Token::from),
-            ScanKind::Float => FloatToken::from_text(text, pos).map(Token::from),
-            ScanKind::Integer => IntegerToken::from_text(text, pos).map(Token::from),
-            ScanKind::Keyword(_) => KeywordToken::from_text(text, pos).map(Token::from),
-            ScanKind::SigilString => SigilStringToken::from_text(text, pos).map(Token::from),
-            ScanKind::String => StringToken::from_text(text, pos).map(Token::from),
-            ScanKind::Symbol(_) => SymbolToken::from_text(text, pos).map(Token::from),
-            ScanKind::Variable => VariableToken::from_text(text, pos).map(Token::from),
-            ScanKind::Whitespace(_) => WhitespaceToken::from_text(text, pos).map(Token::from),
-        }
-    }
-
-    /// Returns the original textual representation of this token.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use erl_tokenize::{Token, Position};
-    ///
-    /// let pos = Position::new();
-    ///
-    /// // Comment
-    /// assert_eq!(Token::from_text("% foo", pos.clone()).unwrap().text(), "% foo");
-    ///
-    /// // Char
-    /// assert_eq!(Token::from_text(r#"$\t"#, pos.clone()).unwrap().text(), r#"$\t"#);
-    /// ```
-    pub fn text(&self) -> &str {
-        match *self {
-            Token::Atom(ref t) => t.text(),
-            Token::Char(ref t) => t.text(),
-            Token::Comment(ref t) => t.text(),
-            Token::Float(ref t) => t.text(),
-            Token::Integer(ref t) => t.text(),
-            Token::Keyword(ref t) => t.text(),
-            Token::SigilString(ref t) => t.text(),
-            Token::String(ref t) => t.text(),
-            Token::Symbol(ref t) => t.text(),
-            Token::Variable(ref t) => t.text(),
-            Token::Whitespace(ref t) => t.text(),
-        }
-    }
-
-    /// Returns `true` if this is a lexical token, otherwise `false`.
-    pub fn is_lexical_token(&self) -> bool {
-        !self.is_hidden_token()
-    }
-
-    /// Returns `true` if this is a hidden token, otherwise `false`.
-    pub fn is_hidden_token(&self) -> bool {
-        matches!(self, Token::Whitespace(_) | Token::Comment(_))
-    }
-
-    /// Tries to convert into `LexicalToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_lexical_token(self) -> Result<LexicalToken, Self> {
-        match self {
-            Token::Atom(t) => Ok(t.into()),
-            Token::Char(t) => Ok(t.into()),
-            Token::Float(t) => Ok(t.into()),
-            Token::Integer(t) => Ok(t.into()),
-            Token::Keyword(t) => Ok(t.into()),
-            Token::String(t) => Ok(t.into()),
-            Token::Symbol(t) => Ok(t.into()),
-            Token::Variable(t) => Ok(t.into()),
-            _ => Err(self),
-        }
-    }
-
-    /// Tries to convert into `HiddenToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_hidden_token(self) -> Result<HiddenToken, Self> {
-        match self {
-            Token::Comment(t) => Ok(t.into()),
-            Token::Whitespace(t) => Ok(t.into()),
-            _ => Err(self),
-        }
-    }
-
-    /// Tries to return the reference to the inner `AtomToken`.
-    pub fn as_atom_token(&self) -> Option<&AtomToken> {
-        if let Token::Atom(ref t) = *self {
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    /// Tries to return the reference to the inner `CharToken`.
-    pub fn as_char_token(&self) -> Option<&CharToken> {
-        if let Token::Char(ref t) = *self {
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    /// Tries to return the reference to the inner `FloatToken`.
-    pub fn as_float_token(&self) -> Option<&FloatToken> {
-        if let Token::Float(ref t) = *self {
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    /// Tries to return the reference to the inner `IntegerToken`.
-    pub fn as_integer_token(&self) -> Option<&IntegerToken> {
-        if let Token::Integer(ref t) = *self {
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    /// Tries to return the reference to the inner `KeywordToken`.
-    pub fn as_keyword_token(&self) -> Option<&KeywordToken> {
-        if let Token::Keyword(ref t) = *self {
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    /// Tries to return the reference to the inner `StringToken`.
-    pub fn as_string_token(&self) -> Option<&StringToken> {
-        if let Token::String(ref t) = *self {
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    /// Tries to return the reference to the inner `SymbolToken`.
-    pub fn as_symbol_token(&self) -> Option<&SymbolToken> {
-        if let Token::Symbol(ref t) = *self {
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    /// Tries to return the reference to the inner `VariableToken`.
-    pub fn as_variable_token(&self) -> Option<&VariableToken> {
-        if let Token::Variable(ref t) = *self {
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    /// Tries to return the reference to the inner `CommentToken`.
-    pub fn as_comment_token(&self) -> Option<&CommentToken> {
-        if let Token::Comment(ref t) = *self {
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    /// Tries to return the reference to the inner `WhitespaceToken`.
-    pub fn as_whitespace_token(&self) -> Option<&WhitespaceToken> {
-        if let Token::Whitespace(ref t) = *self {
-            Some(t)
-        } else {
-            None
-        }
-    }
-
-    /// Tries to return the inner `AtomToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_atom_token(self) -> Result<AtomToken, Self> {
-        if let Token::Atom(t) = self {
-            Ok(t)
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Tries to return the inner `CharToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_char_token(self) -> Result<CharToken, Self> {
-        if let Token::Char(t) = self {
-            Ok(t)
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Tries to return the inner `FloatToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_float_token(self) -> Result<FloatToken, Self> {
-        if let Token::Float(t) = self {
-            Ok(t)
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Tries to return the inner `IntegerToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_integer_token(self) -> Result<IntegerToken, Self> {
-        if let Token::Integer(t) = self {
-            Ok(t)
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Tries to return the inner `KeywordToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_keyword_token(self) -> Result<KeywordToken, Self> {
-        if let Token::Keyword(t) = self {
-            Ok(t)
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Tries to return the inner `StringToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_string_token(self) -> Result<StringToken, Self> {
-        if let Token::String(t) = self {
-            Ok(t)
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Tries to return the inner `SymbolToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_symbol_token(self) -> Result<SymbolToken, Self> {
-        if let Token::Symbol(t) = self {
-            Ok(t)
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Tries to return the inner `VariableToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_variable_token(self) -> Result<VariableToken, Self> {
-        if let Token::Variable(t) = self {
-            Ok(t)
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Tries to return the inner `CommentToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_comment_token(self) -> Result<CommentToken, Self> {
-        if let Token::Comment(t) = self {
-            Ok(t)
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Tries to return the inner `WhitespaceToken`.
-    #[allow(clippy::result_large_err)]
-    pub fn into_whitespace_token(self) -> Result<WhitespaceToken, Self> {
-        if let Token::Whitespace(t) = self {
-            Ok(t)
-        } else {
-            Err(self)
-        }
+    /// Callers are expected to pass the same source that was given to
+    /// [`scan_token`]; passing a different source of the same length is
+    /// undetected and yields nonsensical text.
+    pub fn text(self, source: &str) -> &str {
+        source
+            .get(self.start.offset()..self.end.offset())
+            .expect("token range must lie on UTF-8 boundaries of the original source")
     }
 }
-impl From<AtomToken> for Token {
-    fn from(f: AtomToken) -> Self {
-        Token::Atom(f)
+
+/// Scan a single token from `source` starting at `position`.
+///
+/// - `source` must always be the whole source string used with
+///   [`Position::new`] onward.
+/// - The first call takes `Position::new()`. Successive calls pass
+///   `token.end()` after a successful scan, or `error.resume_position()`
+///   after an error.
+/// - Returns `Ok(None)` when `position.offset() == source.len()`.
+/// - Returns `Ok(Some(token))` when a token is recognised.
+/// - Returns `Err(error)` when the source at `position` is not a valid
+///   token; the error carries a diagnostic position and a resume position.
+///
+/// # Panics
+///
+/// Panics if `position.offset()` is outside `0..=source.len()` or if it
+/// does not lie on a UTF-8 character boundary of `source`. Line and column
+/// consistency across different source strings is not verified.
+pub fn scan_token(source: &str, position: Position) -> Result<Option<Token>> {
+    let offset = position.offset();
+    assert!(
+        offset <= source.len(),
+        "position.offset() ({offset}) exceeds source length ({})",
+        source.len()
+    );
+    if offset == source.len() {
+        return Ok(None);
     }
+    let tail = source
+        .get(offset..)
+        .expect("position.offset() must lie on a UTF-8 boundary of source");
+    let scanned = lex::scan_one(tail, position)?;
+    let end = position.step_by_text(&tail[..scanned.len]);
+    Ok(Some(Token {
+        kind: TokenKind::from(scanned.kind),
+        start: position,
+        end,
+    }))
 }
-impl From<CharToken> for Token {
-    fn from(f: CharToken) -> Self {
-        Token::Char(f)
-    }
-}
-impl From<CommentToken> for Token {
-    fn from(f: CommentToken) -> Self {
-        Token::Comment(f)
-    }
-}
-impl From<FloatToken> for Token {
-    fn from(f: FloatToken) -> Self {
-        Token::Float(f)
-    }
-}
-impl From<IntegerToken> for Token {
-    fn from(f: IntegerToken) -> Self {
-        Token::Integer(f)
-    }
-}
-impl From<KeywordToken> for Token {
-    fn from(f: KeywordToken) -> Self {
-        Token::Keyword(f)
-    }
-}
-impl From<SigilStringToken> for Token {
-    fn from(f: SigilStringToken) -> Self {
-        Token::SigilString(f)
-    }
-}
-impl From<StringToken> for Token {
-    fn from(f: StringToken) -> Self {
-        Token::String(f)
-    }
-}
-impl From<SymbolToken> for Token {
-    fn from(f: SymbolToken) -> Self {
-        Token::Symbol(f)
-    }
-}
-impl From<VariableToken> for Token {
-    fn from(f: VariableToken) -> Self {
-        Token::Variable(f)
-    }
-}
-impl From<WhitespaceToken> for Token {
-    fn from(f: WhitespaceToken) -> Self {
-        Token::Whitespace(f)
-    }
-}
-impl From<HiddenToken> for Token {
-    fn from(f: HiddenToken) -> Self {
-        match f {
-            HiddenToken::Comment(t) => t.into(),
-            HiddenToken::Whitespace(t) => t.into(),
-        }
-    }
-}
-impl From<LexicalToken> for Token {
-    fn from(f: LexicalToken) -> Self {
-        match f {
-            LexicalToken::Atom(t) => t.into(),
-            LexicalToken::Char(t) => t.into(),
-            LexicalToken::Float(t) => t.into(),
-            LexicalToken::Integer(t) => t.into(),
-            LexicalToken::Keyword(t) => t.into(),
-            LexicalToken::SigilString(t) => t.into(),
-            LexicalToken::String(t) => t.into(),
-            LexicalToken::Symbol(t) => t.into(),
-            LexicalToken::Variable(t) => t.into(),
-        }
-    }
-}
-impl PositionRange for Token {
-    fn start_position(&self) -> Position {
-        match *self {
-            Token::Atom(ref t) => t.start_position(),
-            Token::Char(ref t) => t.start_position(),
-            Token::Comment(ref t) => t.start_position(),
-            Token::Float(ref t) => t.start_position(),
-            Token::Integer(ref t) => t.start_position(),
-            Token::Keyword(ref t) => t.start_position(),
-            Token::SigilString(ref t) => t.start_position(),
-            Token::String(ref t) => t.start_position(),
-            Token::Symbol(ref t) => t.start_position(),
-            Token::Variable(ref t) => t.start_position(),
-            Token::Whitespace(ref t) => t.start_position(),
-        }
-    }
-    fn end_position(&self) -> Position {
-        match *self {
-            Token::Atom(ref t) => t.end_position(),
-            Token::Char(ref t) => t.end_position(),
-            Token::Comment(ref t) => t.end_position(),
-            Token::Float(ref t) => t.end_position(),
-            Token::Integer(ref t) => t.end_position(),
-            Token::Keyword(ref t) => t.end_position(),
-            Token::SigilString(ref t) => t.end_position(),
-            Token::String(ref t) => t.end_position(),
-            Token::Symbol(ref t) => t.end_position(),
-            Token::Variable(ref t) => t.end_position(),
-            Token::Whitespace(ref t) => t.end_position(),
-        }
-    }
-}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.text().fmt(f)
+        write!(f, "{:?}@{}..{}", self.kind, self.start, self.end)
     }
 }

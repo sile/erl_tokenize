@@ -36,7 +36,7 @@ pub(crate) fn find_quotation_end(pos: Position, input: &str, terminator: char) -
     let mut chars = input.char_indices().peekable();
     while let Some((i, c)) = chars.next() {
         if c == '\\' {
-            parse_escaped_char(pos.clone() + 1 + i, &mut chars)?;
+            parse_escaped_char(pos.step_by_width(1 + i), &mut chars)?;
         } else if c == terminator {
             return Ok(i);
         }
@@ -49,7 +49,7 @@ pub fn parse_quotation(
     input: &str,
     terminator: char,
 ) -> Result<(Cow<'_, str>, usize)> {
-    let end = find_quotation_end(pos.clone(), input, terminator)?;
+    let end = find_quotation_end(pos, input, terminator)?;
     let inner = unsafe { input.get_unchecked(0..end) };
     if inner.contains('\\') {
         let decoded = decode_quotation_content(pos, inner);
@@ -68,7 +68,7 @@ fn decode_quotation_content(pos: Position, input: &str) -> String {
     let mut chars = input.char_indices().peekable();
     while let Some((i, c)) = chars.next() {
         if c == '\\' {
-            let c = parse_escaped_char(pos.clone() + 1 + i, &mut chars)
+            let c = parse_escaped_char(pos.step_by_width(1 + i), &mut chars)
                 .expect("scanner already validated escape");
             buf.push(c);
         } else {
@@ -83,7 +83,7 @@ pub fn parse_escaped_char<I>(pos: Position, chars: &mut Peekable<I>) -> Result<c
 where
     I: Iterator<Item = (usize, char)>,
 {
-    let error = || Error::invalid_escaped_char(pos.clone());
+    let error = || Error::invalid_escaped_char(pos);
     let (_, c) = chars.next().ok_or_else(error)?;
     match c {
         'b' => Ok(8 as char),   // Back Space
