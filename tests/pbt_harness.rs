@@ -408,14 +408,17 @@ pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
         ("2#1.0#e1", 2.0),
         ("2#1.0#e2", 4.0),
     ];
-    // Negative exponents are a separate decoder branch (`#e-N`).
+    // Negative exponents are a separate decoder branch (`#e-N`). Weight
+    // the two sub-sets evenly (rather than proportional to template
+    // count) so `pbt_value_extraction`'s `saw_neg_radix_exp` coverage
+    // gate fires reliably within `CASES` samples.
     const NEGATIVE: [(&str, f64); 4] = [
         ("2#1.0#e-1", 0.5),
         ("2#1.0#e-2", 0.25),
         ("2#1.1#e-1", 0.75),
         ("16#1.0#e-1", 0.0625),
     ];
-    let (text, value) = match noprop::sample_weighted_index(ctx, &[2, 1]) {
+    let (text, value) = match noprop::sample_weighted_index(ctx, &[1, 1]) {
         0 => noprop::sample_choice(ctx, &POSITIVE),
         _ => noprop::sample_choice(ctx, &NEGATIVE),
     };
