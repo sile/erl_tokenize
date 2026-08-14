@@ -755,32 +755,50 @@ pub fn sample_nonempty_whitespace_sequence(ctx: &mut noprop::TestCaseContext) ->
     sample_whitespace_sequence_ex(ctx, false)
 }
 
-/// Sample a single aggregated whitespace token (the whole string is one
-/// token, so the value oracle is the string itself).
+/// Sample a single aggregated whitespace token (the whole string is
+/// one token per erl_scan's five origin-specific rules — space run,
+/// tab run, CR alone, LF variants, `scan_white_space` unlimited).
 pub fn sample_one_whitespace_token(ctx: &mut noprop::TestCaseContext) -> String {
-    match noprop::sample_weighted_index(ctx, &[3, 2, 1]) {
-        0 => {
-            let len = noprop::sample_with_boundaries(
-                ctx,
-                &[1usize, 16],
-                noprop::Ratio::one_nth(5),
-                |ctx| noprop::sample_usize_in(ctx, 1..=16),
-            );
-            let mut s = String::new();
-            for _ in 0..len {
-                s.push(noprop::sample_choice(ctx, &HORIZONTAL_WS));
-            }
-            s
-        }
-        1 => {
-            let len = noprop::sample_usize_in(ctx, 0..=8);
+    // Origins that route to `scan_white_space` (unlimited non-LF ?WS).
+    // Excludes space / tab / CR / LF / `\f` (each has its own origin
+    // arm or fixed pair with LF), and DEL (not in ?WHITE_SPACE).
+    const OTHER_WS_ORIGINS: [char; 5] = ['\u{0B}', '\u{0C}', '\u{08}', '\u{A0}', '\u{1B}'];
+    // Origins usable right after LF for `scan_nl_white_space`. Excludes
+    // `\f` (which is a fixed `"\n\f"` pair instead).
+    const NL_OTHER_WS_ORIGINS: [char; 4] = ['\u{0B}', '\u{08}', '\u{A0}', '\u{1B}'];
+    // Any non-LF ?WHITE_SPACE — used to extend the unlimited runs.
+    const NON_LF_WS: [char; 8] = [
+        ' ', '\t', '\r', '\u{0B}', '\u{0C}', '\u{08}', '\u{A0}', '\u{1B}',
+    ];
+    match noprop::sample_weighted_index(ctx, &[3, 2, 1, 1, 2, 1, 1, 1, 1, 1]) {
+        0 => " ".repeat(noprop::sample_usize_in(ctx, 1..=16)),
+        1 => "\t".repeat(noprop::sample_usize_in(ctx, 1..=10)),
+        2 => "\r".to_string(),
+        3 => "\n".to_string(),
+        4 => format!("\n{}", " ".repeat(noprop::sample_usize_in(ctx, 0..=16))),
+        5 => format!("\n{}", "\t".repeat(noprop::sample_usize_in(ctx, 0..=10))),
+        6 => "\n\r".to_string(),
+        7 => "\n\u{0C}".to_string(),
+        8 => {
+            let head = noprop::sample_choice(ctx, &NL_OTHER_WS_ORIGINS);
+            let extra = noprop::sample_usize_in(ctx, 0..=4);
             let mut s = String::from("\n");
-            for _ in 0..len {
-                s.push(noprop::sample_choice(ctx, &HORIZONTAL_WS));
+            s.push(head);
+            for _ in 0..extra {
+                s.push(noprop::sample_choice(ctx, &NON_LF_WS));
             }
             s
         }
-        _ => noprop::sample_choice(ctx, &['\u{a0}', '\r', '\t']).to_string(),
+        _ => {
+            let head = noprop::sample_choice(ctx, &OTHER_WS_ORIGINS);
+            let extra = noprop::sample_usize_in(ctx, 0..=4);
+            let mut s = String::new();
+            s.push(head);
+            for _ in 0..extra {
+                s.push(noprop::sample_choice(ctx, &NON_LF_WS));
+            }
+            s
+        }
     }
 }
 

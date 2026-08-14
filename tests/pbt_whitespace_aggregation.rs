@@ -1,10 +1,13 @@
 //! Whitespace aggregation invariants.
 //!
-//! For any generated whitespace-only source, every scanned whitespace
-//! token has at most one LF at its start, the concatenation of the
-//! token texts equals the source, and no two adjacent whitespace tokens
-//! could be re-merged without breaking the `erl_scan return_white_spaces`
-//! rule (LF starts a new token; non-LF whitespace accumulates).
+//! For any generated whitespace-only source, the scanner's token
+//! boundaries must equal the boundaries produced by an independent
+//! model of `erl_scan`'s five origin-specific rules (space run capped
+//! at 16, tab run capped at 10, CR alone, LF variants with `\n\r` /
+//! `\n\f` fixed pairs and space/tab caps of 17/11, and the unlimited
+//! non-LF `scan_white_space` / `scan_nl_white_space` runs). The
+//! concatenation of all token texts must equal the source, and every
+//! token holds at most one LF at its very start.
 
 use erl_tokenize::{Position, TokenKind, scan_token};
 
@@ -64,6 +67,17 @@ fn whitespace_aggregation_invariants() -> noprop::TestResult {
         assert_eq!(concat, src, "concat mismatch for {src:?}");
         assert_eq!(pos.offset(), src.len(), "did not reach EOF for {src:?}");
 
+        // The independent model reproduces erl_scan's five
+        // origin-specific rules. A drift between the scanner and the
+        // model localizes the divergence to a specific boundary rather
+        // than a coarse "concat mismatched" failure.
+        let expected_ends: Vec<usize> = model_whitespace_ends(&src);
+        let actual_ends: Vec<usize> = tokens.iter().map(|(_, end)| *end).collect();
+        assert_eq!(
+            actual_ends, expected_ends,
+            "token boundaries diverged from erl_scan model for {src:?}"
+        );
+
         let expected = step_position((0, 1, 1), &src);
         assert_eq!(pos.offset(), expected.0, "model offset for {src:?}");
         assert_eq!(pos.line().get(), expected.1, "model line for {src:?}");
@@ -73,11 +87,6 @@ fn whitespace_aggregation_invariants() -> noprop::TestResult {
             let (_, first_end) = pair[0];
             let (second_start, _) = pair[1];
             assert_eq!(first_end, second_start, "gap between tokens in {src:?}");
-            let second_text = &src[second_start..pair[1].1];
-            assert!(
-                second_text.starts_with('\n'),
-                "adjacent whitespace tokens would merge: {second_text:?} in {src:?}"
-            );
         }
         if tokens.windows(2).any(|pair| {
             let (_, end) = pair[0];
@@ -101,4 +110,57 @@ fn whitespace_aggregation_invariants() -> noprop::TestResult {
     assert!(saw_cr_lf.get() > 0, "no CRLF case\n{runner}");
     assert!(saw_nbsp.get() > 0, "no NBSP case\n{runner}");
     Ok(())
+}
+
+/// Independent model of `erl_scan`'s origin-specific whitespace
+/// aggregation. Panics if `src` contains a non-`?WHITE_SPACE`
+/// character (the caller is expected to hand in a whitespace-only
+/// source).
+fn model_whitespace_ends(src: &str) -> Vec<usize> {
+    let bytes = src.as_bytes();
+    let mut ends = Vec::new();
+    let mut i = 0;
+    while i < src.len() {
+        let head = src[i..].chars().next().expect("i < src.len()");
+        assert!(is_ws(head), "non-whitespace {head:?} at offset {i}");
+        let end = match head {
+            ' ' => cap_run(bytes, i + 1, i + 16, b' '),
+            '\t' => cap_run(bytes, i + 1, i + 10, b'\t'),
+            '\r' => i + 1,
+            '\n' => match src[i + 1..].chars().next() {
+                Some(' ') => cap_run(bytes, i + 2, i + 17, b' '),
+                Some('\t') => cap_run(bytes, i + 2, i + 11, b'\t'),
+                Some('\r') | Some('\u{0C}') => i + 2,
+                Some(c) if c != '\n' && is_ws(c) => walk_non_lf_ws(src, i + 1),
+                _ => i + 1,
+            },
+            c => walk_non_lf_ws(src, i + c.len_utf8()),
+        };
+        ends.push(end);
+        i = end;
+    }
+    ends
+}
+
+fn cap_run(bytes: &[u8], start: usize, cap: usize, target: u8) -> usize {
+    let mut e = start;
+    while e < cap && bytes.get(e).copied() == Some(target) {
+        e += 1;
+    }
+    e
+}
+
+fn walk_non_lf_ws(src: &str, start: usize) -> usize {
+    let mut e = start;
+    for c in src[start..].chars() {
+        if c == '\n' || !is_ws(c) {
+            break;
+        }
+        e += c.len_utf8();
+    }
+    e
+}
+
+fn is_ws(c: char) -> bool {
+    matches!(c, '\u{0}'..='\u{20}' | '\u{80}'..='\u{A0}')
 }

@@ -1260,20 +1260,53 @@ fn variable_latin1_uppercase_head() {
 
 #[test]
 fn whitespace_aggregation_table() {
-    // Boundary cases: non-LF runs aggregate; LF starts a new token; each
-    // token holds at most one LF and only at the start; CR is not a line
-    // break.
+    // erl_scan's five origin-specific runs (`scan_spcs` / `scan_tabs` /
+    // CR-alone / `scan_newline` family / `scan_white_space`): space
+    // runs stop at a non-space, tab runs stop at a non-tab, CR is a
+    // one-character token, and LF dispatches on the next character
+    // (space / tab / CR / `\f` / other `?WHITE_SPACE` / anything else).
     for (src, expected) in [
-        ("   \t", ["   \t"].as_slice()),
-        (" \t\n", &[" \t", "\n"]),
-        ("\n \t", &["\n \t"]),
+        ("   \t", ["   ", "\t"].as_slice()),
+        (" \t\n", &[" ", "\t", "\n"]),
+        ("\n \t", &["\n ", "\t"]),
         ("\n\n", &["\n", "\n"]),
         ("\n \n\t", &["\n ", "\n\t"]),
         ("\r\n ", &["\r", "\n "]),
+        // NBSP is an "other `?WHITE_SPACE`" origin: `scan_white_space`
+        // accumulates any non-LF `?WHITE_SPACE` (space, tab, …) after it.
         ("\u{A0} \t", &["\u{A0} \t"]),
+        // CR is a single-character token, never part of a run.
+        ("\r\r", &["\r", "\r"]),
+        // `\n\r` and `\n\f` are fixed two-character pairs.
+        ("\n\r\r", &["\n\r", "\r"]),
+        ("\n\x0c\x0c", &["\n\x0c", "\x0c"]),
+        // `\n` + other `?WHITE_SPACE` (`\v`) is `scan_nl_white_space`:
+        // accumulates any non-LF `?WHITE_SPACE` unlimited.
+        ("\n\x0b ", &["\n\x0b "]),
+        // `\f`, `\v`, `\b` are now valid whitespace origins.
+        ("\x0c\x0b\x08", &["\x0c\x0b\x08"]),
     ] {
         assert_eq!(texts(src), *expected, "aggregation for {src:?}");
     }
+}
+
+#[test]
+fn whitespace_length_caps_match_erl_scan() {
+    // `scan_spcs` caps at 16, `scan_tabs` at 10, `scan_nl_spcs` at
+    // 17 (LF + 16 spaces), `scan_nl_tabs` at 11 (LF + 10 tabs).
+    assert_eq!(texts(&" ".repeat(17)), [" ".repeat(16), " ".to_string()]);
+    assert_eq!(texts(&"\t".repeat(11)), ["\t".repeat(10), "\t".to_string()]);
+    assert_eq!(
+        texts(&format!("\n{}", " ".repeat(17))),
+        [format!("\n{}", " ".repeat(16)), " ".to_string()]
+    );
+    assert_eq!(
+        texts(&format!("\n{}", "\t".repeat(11))),
+        [format!("\n{}", "\t".repeat(10)), "\t".to_string()]
+    );
+    // Just at the cap should still be a single token.
+    assert_eq!(texts(&" ".repeat(16)), [" ".repeat(16)]);
+    assert_eq!(texts(&"\t".repeat(10)), ["\t".repeat(10)]);
 }
 
 #[test]
@@ -1294,17 +1327,22 @@ fn whitespace_at_most_one_lf_at_start() {
 
 #[test]
 fn whitespace_boundaries_around_other_tokens() {
-    assert_eq!(texts("foo\t\t bar"), ["foo", "\t\t ", "bar"]);
+    // Space run stops at the tab, tab run stops at the space, then
+    // `bar` starts.
+    assert_eq!(texts("foo\t\t bar"), ["foo", "\t\t", " ", "bar"]);
     assert_eq!(texts("1 . 2"), ["1", " ", ".", " ", "2"]);
 }
 
 #[test]
 fn whitespace_value_borrows_aggregated_text() {
+    // The space run at the head stops at the tab, so the first
+    // whitespace token is just `" "` — still a borrowed slice of the
+    // source.
     let src = " \t \n\t";
     let t = first(src);
     match t.value(src) {
         TokenValue::Whitespace(s) => {
-            assert_eq!(s, " \t ");
+            assert_eq!(s, " ");
             assert_eq!(s.as_ptr(), src.as_ptr());
         }
         other => panic!("{other:?}"),
@@ -1328,7 +1366,9 @@ fn position_after_first_token_advances_column() {
 
 #[test]
 fn position_advances_across_lf_whitespace() {
-    let src = "  \n \tX";
+    // `"  "` (space-only run) → `"\n  "` (LF + 2 spaces, one token
+    // under `scan_nl_spcs`) → `"X"`.
+    let src = "  \n  X";
     let mut p = Position::new();
     let t1 = scan_token(src, p).unwrap().unwrap();
     p = t1.end();
