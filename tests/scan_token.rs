@@ -644,6 +644,13 @@ fn keyword_all_reserved_words() {
     }
 }
 
+#[test]
+fn keyword_display_matches_as_str() {
+    for k in Keyword::ALL {
+        assert_eq!(format!("{k}"), k.as_str(), "Display mismatch for {k:?}");
+    }
+}
+
 // ============================================================
 // Sigil string
 // ============================================================
@@ -1189,6 +1196,13 @@ fn symbol_all() {
         let t = first(src);
         assert_eq!(t.kind(), TokenKind::Symbol(expected), "for {src}");
         assert_eq!(t.text(src), src);
+    }
+}
+
+#[test]
+fn symbol_display_matches_as_str() {
+    for s in Symbol::ALL {
+        assert_eq!(format!("{s}"), s.as_str(), "Display mismatch for {s:?}");
     }
 }
 

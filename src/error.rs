@@ -8,7 +8,7 @@ use crate::Position;
 /// [`kind`](Self::kind) to classify the failure,
 /// [`position`](Self::position) to report where it occurred, and
 /// [`resume_position`](Self::resume_position) to continue scanning.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Error {
     kind: ErrorKind,
     position: Position,
