@@ -21,88 +21,6 @@ pub const CASES: usize = 256;
 /// Upper bound on any single generated text length.
 pub const MAX_LEN: usize = 64;
 
-/// All Erlang reserved words in canonical text form.
-pub const KEYWORDS: [(&str, Keyword); 29] = [
-    ("after", Keyword::After),
-    ("and", Keyword::And),
-    ("andalso", Keyword::Andalso),
-    ("band", Keyword::Band),
-    ("begin", Keyword::Begin),
-    ("bnot", Keyword::Bnot),
-    ("bor", Keyword::Bor),
-    ("bsl", Keyword::Bsl),
-    ("bsr", Keyword::Bsr),
-    ("bxor", Keyword::Bxor),
-    ("case", Keyword::Case),
-    ("catch", Keyword::Catch),
-    ("cond", Keyword::Cond),
-    ("div", Keyword::Div),
-    ("end", Keyword::End),
-    ("fun", Keyword::Fun),
-    ("if", Keyword::If),
-    ("let", Keyword::Let),
-    ("not", Keyword::Not),
-    ("of", Keyword::Of),
-    ("or", Keyword::Or),
-    ("orelse", Keyword::Orelse),
-    ("receive", Keyword::Receive),
-    ("rem", Keyword::Rem),
-    ("try", Keyword::Try),
-    ("when", Keyword::When),
-    ("xor", Keyword::Xor),
-    ("maybe", Keyword::Maybe),
-    ("else", Keyword::Else),
-];
-
-/// All Erlang punctuation symbols in canonical text form.
-pub const SYMBOLS: [(&str, Symbol); 45] = [
-    ("[", Symbol::OpenSquare),
-    ("]", Symbol::CloseSquare),
-    ("(", Symbol::OpenParen),
-    (")", Symbol::CloseParen),
-    ("{", Symbol::OpenBrace),
-    ("}", Symbol::CloseBrace),
-    ("#", Symbol::Sharp),
-    ("#_", Symbol::WildcardRecord),
-    ("/", Symbol::Slash),
-    (".", Symbol::Dot),
-    ("..", Symbol::DoubleDot),
-    ("...", Symbol::TripleDot),
-    (",", Symbol::Comma),
-    (":", Symbol::Colon),
-    ("::", Symbol::DoubleColon),
-    (";", Symbol::Semicolon),
-    ("=", Symbol::Match),
-    (":=", Symbol::MapMatch),
-    ("|", Symbol::VerticalBar),
-    ("||", Symbol::DoubleVerticalBar),
-    ("?", Symbol::Question),
-    ("?=", Symbol::MaybeMatch),
-    ("!", Symbol::Bang),
-    ("-", Symbol::Hyphen),
-    ("--", Symbol::MinusMinus),
-    ("+", Symbol::Plus),
-    ("++", Symbol::PlusPlus),
-    ("*", Symbol::Multiply),
-    ("->", Symbol::RightArrow),
-    ("<-", Symbol::LeftArrow),
-    ("=>", Symbol::DoubleRightArrow),
-    ("<=", Symbol::DoubleLeftArrow),
-    (">>", Symbol::DoubleRightAngle),
-    ("<<", Symbol::DoubleLeftAngle),
-    ("==", Symbol::Eq),
-    ("=:=", Symbol::ExactEq),
-    ("/=", Symbol::NotEq),
-    ("=/=", Symbol::ExactNotEq),
-    (">", Symbol::Greater),
-    (">=", Symbol::GreaterEq),
-    ("<", Symbol::Less),
-    ("=<", Symbol::LessEq),
-    ("&&", Symbol::DoubleAmpersand),
-    ("<:-", Symbol::StrictLeftArrow),
-    ("<:=", Symbol::StrictDoubleLeftArrow),
-];
-
 /// Whitespace characters recognised by the tokenizer.
 pub const WS_CHARS: [char; 5] = [' ', '\t', '\r', '\n', '\u{a0}'];
 
@@ -162,7 +80,7 @@ pub fn sample_bare_atom(ctx: &mut noprop::TestCaseContext) -> String {
     }
     // Reject keywords by simple suffixing so the atom doesn't accidentally
     // become a reserved word.
-    if KEYWORDS.iter().any(|(k, _)| *k == s) {
+    if Keyword::ALL.iter().any(|k| k.as_str() == s) {
         s.push('_');
     }
     s
@@ -458,12 +376,14 @@ pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
 
 /// Sample a keyword text.
 pub fn sample_keyword(ctx: &mut noprop::TestCaseContext) -> (&'static str, Keyword) {
-    noprop::sample_choice(ctx, &KEYWORDS)
+    let k = noprop::sample_choice(ctx, Keyword::ALL);
+    (k.as_str(), k)
 }
 
 /// Sample a symbol text and its enum value.
 pub fn sample_symbol(ctx: &mut noprop::TestCaseContext) -> (&'static str, Symbol) {
-    noprop::sample_choice(ctx, &SYMBOLS)
+    let s = noprop::sample_choice(ctx, Symbol::ALL);
+    (s.as_str(), s)
 }
 
 /// Sample a variable name.
