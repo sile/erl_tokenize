@@ -506,6 +506,97 @@ fn float_radix_exponent_trailing_namechar_splits() {
 }
 
 #[test]
+fn float_radix_matches_erl_scan_bit_exact() {
+    // Non-power-of-2 radixes previously accumulated rounding on a
+    // digit-by-digit basis (`value = value * radix + d`; `value +=
+    // d / radix.powi(j)`), leaving the low bits 1 ULP off from
+    // erl_scan's `N * math:pow(B, Exp-D)`. Match the erl_scan bits
+    // exactly on the three cases observed diverging in practice.
+    for (src, expected_bits) in [
+        ("7#0.1234", 0x3fc8d7cdac9f1494u64),
+        ("5#0.44444444", 0x3feffffaa19c4774u64),
+        ("3#0.1#e-5", 0x3f567980e0bf08c7u64),
+    ] {
+        let TokenValue::Float(v) = first_value(src) else {
+            panic!("expected Float for {src:?}");
+        };
+        assert_eq!(
+            v.to_bits(),
+            expected_bits,
+            "{src}: got {v:.20} ({:#018x}), want {expected_bits:#018x}",
+            v.to_bits(),
+        );
+    }
+}
+
+#[test]
+fn float_radix_trims_trailing_and_leading_zeros() {
+    // erl_scan's `trim_float_zeros` strips trailing zeros of the
+    // fraction and leading zeros of the integer part before computing
+    // `N * math:pow(B, Exp-D)`, so the padded and unpadded forms yield
+    // the same bit pattern. Without the trim, the u128 mantissa
+    // overflows on long padded fractions and the value collapses to
+    // an `InvalidFloatToken` — check both parities.
+    for (padded, canonical) in [
+        ("7#0.12340000000000000000000000000000", "7#0.1234"),
+        ("7#00000000000000000000000000000000000.1234", "7#0.1234"),
+        ("3#000.1#e-5", "3#0.1#e-5"),
+    ] {
+        let TokenValue::Float(a) = first_value(padded) else {
+            panic!("expected Float for padded {padded:?}");
+        };
+        let TokenValue::Float(b) = first_value(canonical) else {
+            panic!("expected Float for canonical {canonical:?}");
+        };
+        assert_eq!(
+            a.to_bits(),
+            b.to_bits(),
+            "{padded} should match {canonical}: got {:#018x} vs {:#018x}",
+            a.to_bits(),
+            b.to_bits(),
+        );
+    }
+}
+
+#[test]
+fn float_radix_ten_matches_decimal_from_str() {
+    // erl_scan's `based_float_end` sends B=10 straight to
+    // `list_to_float`, so `10#0.1234` must be bit-exact identical to
+    // the decimal literal `0.1234`.
+    for (radix_src, decimal_src) in [
+        ("10#0.1234", "0.1234"),
+        ("10#0.12345678901234567", "0.12345678901234567"),
+        ("10#1.5#e3", "1.5e3"),
+        ("10#1.5#E-2", "1.5E-2"),
+        ("10#1.5#e+3", "1.5e+3"),
+    ] {
+        let TokenValue::Float(radix_v) = first_value(radix_src) else {
+            panic!("expected Float for {radix_src:?}");
+        };
+        let TokenValue::Float(decimal_v) = first_value(decimal_src) else {
+            panic!("expected Float for {decimal_src:?}");
+        };
+        assert_eq!(
+            radix_v.to_bits(),
+            decimal_v.to_bits(),
+            "{radix_src} should bit-match {decimal_src}",
+        );
+    }
+}
+
+#[test]
+fn float_radix_mantissa_beyond_u128_does_not_panic() {
+    // erl_scan reads the mantissa as an arbitrary-precision integer;
+    // we cap at `u128`. That divergence is deliberate: all we
+    // guarantee on such inputs is "no panic" — they surface as
+    // `InvalidFloatToken` (via `is_finite()` guard) rather than
+    // being decoded to a possibly-finite f64.
+    let src = format!("2#1{}.0", "1".repeat(200));
+    let err = scan_token(&src, pos()).expect_err("mantissa beyond u128 must error");
+    assert_eq!(err.kind(), ErrorKind::InvalidFloatToken);
+}
+
+#[test]
 fn float_underflow_is_zero() {
     // Matches `erl_scan`: an exponent that underflows collapses to 0.0.
     assert_eq!(first_value("1.0e-400"), TokenValue::Float(0.0));

@@ -398,7 +398,11 @@ pub fn sample_decimal_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) 
 
 /// Sample a radix-prefixed float. Returns `(text, value)`.
 pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
-    const POSITIVE: [(&str, f64); 12] = [
+    // Powers of 2 keep the digit-by-digit accumulation exact, so the
+    // template started with base 2 / 16 only. Non-power radixes and
+    // base 10 both take separate decoder branches and must be sampled
+    // too, so add hand-checked entries for base 3 / 5 / 7 / 10.
+    const POSITIVE: [(&str, f64); 20] = [
         ("2#1.0", 1.0),
         ("2#1.1", 1.5),
         ("2#0.1", 0.5),
@@ -412,16 +416,38 @@ pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
         ("2#0.01#E2", 1.0),
         ("2#1.0#e+1", 2.0),
         ("16#1.0#E+1", 16.0),
+        // Non-power-of-2 radixes. Values picked so the answer is exact
+        // in f64 (`math:pow(B, k)` with k >= 0 stays integral).
+        ("3#10.0", 3.0),
+        ("3#100.0", 9.0),
+        ("3#0.1#e2", 3.0),
+        ("5#10.0", 5.0),
+        ("7#10.0", 7.0),
+        // Radix 10 delegates to `f64::from_str` in the decoder, so
+        // bit-exact matching with the decimal literal is guaranteed.
+        ("10#1.5", 1.5),
+        ("10#100.0", 100.0),
+        ("10#1.5#e3", 1500.0),
     ];
     // Negative exponents are a separate decoder branch (`#e-N`). Weight
     // the two sub-sets evenly (rather than proportional to template
     // count) so `pbt_value_extraction`'s `saw_neg_radix_exp` coverage
     // gate fires reliably within `CASES` samples.
-    const NEGATIVE: [(&str, f64); 4] = [
+    // Non-power radixes rarely yield bit-exact values on negative
+    // exponents (`49 * pow(7, -2)` collapses to 0.9999…9 in libm, for
+    // instance), so use zero-mantissa cases to exercise the decoder
+    // branch without pinning a value the platform's libm might round
+    // differently. `10#…` stays representative because the radix-10
+    // path delegates to `f64::from_str`.
+    const NEGATIVE: [(&str, f64); 8] = [
         ("2#1.0#e-1", 0.5),
         ("2#1.0#e-2", 0.25),
         ("2#1.1#e-1", 0.75),
         ("16#1.0#e-1", 0.0625),
+        ("3#0.0#e-1", 0.0),
+        ("5#0.0#e-1", 0.0),
+        ("7#0.0#e-1", 0.0),
+        ("10#1.5#e-1", 0.15),
     ];
     let (text, value) = match noprop::sample_weighted_index(ctx, &[1, 1]) {
         0 => noprop::sample_choice(ctx, &POSITIVE),

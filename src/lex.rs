@@ -1040,37 +1040,99 @@ fn decode_radix_float(slice: &str, hash: usize) -> f64 {
         (after_dot, None)
     };
 
-    let mut value = 0.0_f64;
-    for c in int_part.chars() {
-        if c == '_' {
-            continue;
-        }
-        let d = c.to_digit(radix).expect("scanner validated integer digit");
-        value = value * radix as f64 + d as f64;
+    // erl_scan's `based_float_end` branches on the base: B=10 hands the
+    // reconstructed decimal to `list_to_float` (equivalent to Rust's
+    // `f64::from_str`), while B != 10 goes through
+    // `N * math:pow(B, Exp - D)`. Mirror that split so both branches
+    // match erl_scan bit-exactly.
+    if radix == 10 {
+        decode_radix_ten(int_part, frac_part, exp_opt)
+    } else {
+        decode_radix_other(int_part, frac_part, exp_opt, radix)
     }
-    let mut j = 1_i32;
-    for c in frac_part.chars() {
-        if c == '_' {
-            continue;
-        }
-        let d = c
-            .to_digit(radix)
-            .expect("scanner validated fractional digit");
-        value += d as f64 / (radix as f64).powi(j);
-        j += 1;
-    }
+}
+
+/// Decode the B=10 branch by rebuilding `<int>.<frac>[e<exp>]` and
+/// deferring to `f64::from_str`, mirroring erl_scan's
+/// `Fcs = Ncs ++ ECs1` (which drops the `#` between the fraction and
+/// the `e` while keeping the `e` itself) then `list_to_float(Fcs)`.
+fn decode_radix_ten(int_part: &str, frac_part: &str, exp_opt: Option<&str>) -> f64 {
+    let mut decimal = String::with_capacity(int_part.len() + 1 + frac_part.len() + 5);
+    decimal.push_str(int_part);
+    decimal.push('.');
+    decimal.push_str(frac_part);
     if let Some(exp_str) = exp_opt {
-        let Ok(exp) = util::strip_underscores(exp_str).parse::<i32>() else {
-            // The exponent overflows `i32`, so the magnitude is beyond the
-            // finite f64 range. Returning infinity lets `scan_float`'s
-            // `is_finite()` guard report `InvalidFloatToken` instead of
-            // panicking on an otherwise-valid input (public API contract:
-            // panic only on caller contract violation).
-            return f64::INFINITY;
-        };
-        value *= (radix as f64).powi(exp);
+        decimal.push('e');
+        decimal.push_str(exp_str);
     }
-    value
+    util::strip_underscores(&decimal)
+        .parse::<f64>()
+        .unwrap_or(f64::INFINITY)
+}
+
+/// Decode the B != 10 branch as `N * pow(B, Exp - D)`, first trimming
+/// the fraction's trailing zeros and the integer's leading zeros the
+/// same way erl_scan's `trim_float_zeros` does (a lone `0` on either
+/// side is preserved, so `0.5` stays `0.5` and `1.0` stays `1.0`).
+fn decode_radix_other(
+    int_part: &str,
+    frac_part: &str,
+    exp_opt: Option<&str>,
+    radix: u32,
+) -> f64 {
+    let int_stripped = util::strip_underscores(int_part);
+    let frac_stripped = util::strip_underscores(frac_part);
+    let int_trimmed = trim_leading_zeros_preserve_one(&int_stripped);
+    let frac_trimmed = trim_trailing_zeros_preserve_one(&frac_stripped);
+    let d = frac_trimmed.len();
+
+    // erl_scan reads N from `list_to_integer(lists:delete($., Ncs1), B)`,
+    // i.e. the trimmed digit run with `.` removed.
+    let mut digits = String::with_capacity(int_trimmed.len() + frac_trimmed.len());
+    digits.push_str(int_trimmed);
+    digits.push_str(frac_trimmed);
+    let Ok(mantissa) = u128::from_str_radix(&digits, radix) else {
+        // Mantissa overflows u128. erl_scan uses arbitrary-precision
+        // integers here, so this is a deliberate divergence: inputs
+        // whose trimmed mantissa exceeds u128 surface as
+        // `InvalidFloatToken` via `scan_float`'s `is_finite()` guard
+        // instead of being decoded to a possibly-finite f64.
+        return f64::INFINITY;
+    };
+
+    let exp_value: i32 = match exp_opt {
+        Some(exp_str) => {
+            let Ok(v) = util::strip_underscores(exp_str).parse::<i32>() else {
+                // Same rationale as the mantissa overflow above.
+                return f64::INFINITY;
+            };
+            v
+        }
+        None => 0,
+    };
+    let Some(scale_exp) = i32::try_from(d)
+        .ok()
+        .and_then(|d| exp_value.checked_sub(d))
+    else {
+        // The trimmed fraction outran `i32::MAX`, or `Exp - D`
+        // underflowed `i32::MIN`. Either way the magnitude collapses
+        // to 0.0.
+        return 0.0;
+    };
+
+    // `powf` mirrors erl_scan's `math:pow` (which routes through libm
+    // `pow`); `powi` uses repeated squaring and can differ by an ULP.
+    mantissa as f64 * (radix as f64).powf(f64::from(scale_exp))
+}
+
+fn trim_leading_zeros_preserve_one(s: &str) -> &str {
+    let trimmed = s.trim_start_matches('0');
+    if trimmed.is_empty() { "0" } else { trimmed }
+}
+
+fn trim_trailing_zeros_preserve_one(s: &str) -> &str {
+    let trimmed = s.trim_end_matches('0');
+    if trimmed.is_empty() { "0" } else { trimmed }
 }
 
 /// Decode a string token's value from its validated text.
