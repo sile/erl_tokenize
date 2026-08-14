@@ -115,18 +115,6 @@ impl Token {
         self.end
     }
 
-    /// Returns `true` when the token is a hidden token (comment or
-    /// whitespace).
-    pub const fn is_hidden(self) -> bool {
-        self.kind.is_hidden()
-    }
-
-    /// Returns `true` when the token carries lexical meaning (the
-    /// negation of [`is_hidden`](Self::is_hidden)).
-    pub const fn is_lexical(self) -> bool {
-        self.kind.is_lexical()
-    }
-
     /// Returns the substring of `source` that this token represents.
     ///
     /// `source` must be the same source string that was passed to the

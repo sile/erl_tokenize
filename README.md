@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 Comments and whitespace are returned as ordinary tokens. Skip them on
-the caller side with `Token::is_lexical`:
+the caller side with `TokenKind::is_lexical`:
 
 ```rust
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut position = erl_tokenize::Position::new();
     let mut lexical = Vec::new();
     while let Some(token) = erl_tokenize::scan_token(src, position)? {
-        if token.is_lexical() {
+        if token.kind().is_lexical() {
             lexical.push(token.text(src));
         }
         position = token.end();

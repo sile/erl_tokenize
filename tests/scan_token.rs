@@ -951,7 +951,7 @@ fn hidden_filter_matches_lexical_only() {
     let src = "foo  \n  bar % tail\n baz";
     let lex: Vec<_> = scan_tokens(src)
         .into_iter()
-        .filter(|t| t.is_lexical())
+        .filter(|t| t.kind().is_lexical())
         .map(|t| t.text(src))
         .collect();
     assert_eq!(lex, ["foo", "bar", "baz"]);

@@ -17,7 +17,7 @@
 //!   from token to token.
 //! - Comments and whitespace are returned as ordinary tokens. Callers
 //!   that only care about grammatical tokens filter them out via
-//!   [`Token::is_lexical`] or [`Token::is_hidden`].
+//!   [`TokenKind::is_lexical`] or [`TokenKind::is_hidden`].
 //! - [`Position`] does not carry a file path. Associating a scanned
 //!   source with its file name or buffer identifier is the caller's
 //!   responsibility.
@@ -48,7 +48,7 @@
 //! let mut position = erl_tokenize::Position::new();
 //! let mut lexical = Vec::new();
 //! while let Some(token) = erl_tokenize::scan_token(src, position)? {
-//!     if token.is_lexical() {
+//!     if token.kind().is_lexical() {
 //!         lexical.push(token.text(src));
 //!     }
 //!     position = token.end();
