@@ -393,6 +393,17 @@ fn float_overflow_is_error() {
             "expected overflow error for {src}"
         );
     }
+    // An exponent that overflows `i32` must not panic; the resulting
+    // non-finite magnitude is rejected like any other float overflow.
+    assert!(
+        scan_token("2#0.0#e10000000000", pos()).is_err(),
+        "expected error (not panic) for exponent beyond i32"
+    );
+    // Boundary exponents at i32::MAX and just past it must not panic and
+    // must return either `Ok` or `Err` (both saturate to non-finite).
+    for src in ["2#1.0#e2147483647", "2#1.0#e2147483648"] {
+        let _ = scan_token(src, pos());
+    }
     // The last representable magnitude scans successfully.
     assert_eq!(
         first_value("1.7e308"),

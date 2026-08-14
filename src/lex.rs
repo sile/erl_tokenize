@@ -1002,9 +1002,14 @@ fn decode_radix_float(slice: &str, hash: usize) -> f64 {
         j += 1;
     }
     if let Some(exp_str) = exp_opt {
-        let exp: i32 = util::strip_underscores(exp_str)
-            .parse()
-            .expect("scanner validated exponent");
+        let Ok(exp) = util::strip_underscores(exp_str).parse::<i32>() else {
+            // The exponent overflows `i32`, so the magnitude is beyond the
+            // finite f64 range. Returning infinity lets `scan_float`'s
+            // `is_finite()` guard report `InvalidFloatToken` instead of
+            // panicking on an otherwise-valid input (public API contract:
+            // panic only on caller contract violation).
+            return f64::INFINITY;
+        };
         value *= (radix as f64).powi(exp);
     }
     value
