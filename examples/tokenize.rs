@@ -44,9 +44,9 @@ fn main() -> noargs::Result<ExitCode> {
             }
             Ok(None) => break,
             Err(error) => {
-                eprintln!("{src_file}:{}: {error}", error.position());
+                eprintln!("{src_file}:{}: {error}", error.position);
                 errors += 1;
-                pos = error.resume_position();
+                pos = error.resume_position;
             }
         }
     }

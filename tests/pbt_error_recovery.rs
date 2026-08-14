@@ -176,7 +176,7 @@ fn scan_loop_terminates_and_advances_on_error() -> noprop::TestResult {
                         .next()
                         .expect("non-EOF at error position");
                     let after = step_char(model, c);
-                    let resume = err.resume_position();
+                    let resume = err.resume_position;
                     assert_eq!(
                         resume.offset(),
                         after.0,
@@ -205,7 +205,7 @@ fn scan_loop_terminates_and_advances_on_error() -> noprop::TestResult {
                     } else {
                         multibyte_err_hits.hit();
                     }
-                    if err.position().offset() > before {
+                    if err.position.offset() > before {
                         inside_token_err_hits.hit();
                     }
                     model = after;

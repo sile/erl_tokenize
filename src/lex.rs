@@ -65,7 +65,10 @@ impl Scanned {
 /// [`crate::scan_token`] passes back to the caller (`pos.step_by_char(first_char)`
 /// on non-empty input, `pos` on empty).
 pub(crate) fn scan_one(source: &str, pos: Position) -> Result<Scanned> {
-    scan_one_impl(source, pos).map_err(|e| e.with_resume(resume_from(source, pos)))
+    scan_one_impl(source, pos).map_err(|mut e| {
+        e.resume_position = resume_from(source, pos);
+        e
+    })
 }
 
 /// Compute the resume position from the scan-start position and the first

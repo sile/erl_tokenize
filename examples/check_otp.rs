@@ -46,7 +46,7 @@ fn main() -> noargs::Result<ExitCode> {
                 Err(e) => {
                     errs += 1;
                     eprintln!("{}: {}", path.display(), e);
-                    pos = e.resume_position();
+                    pos = e.resume_position;
                 }
             }
         }

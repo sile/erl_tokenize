@@ -130,7 +130,7 @@ fn atom_errors_or_dispatch_elsewhere() {
     // the body terminates the atom at the ASCII prefix, so the offending
     // character opens the next token, which then fails.
     assert_eq!(
-        scan_token("μfoo", pos()).unwrap_err().kind(),
+        scan_token("μfoo", pos()).unwrap_err().kind,
         ErrorKind::InvalidAtomToken
     );
     for src in ["fooαbar", "foo中bar"] {
@@ -140,7 +140,7 @@ fn atom_errors_or_dispatch_elsewhere() {
         // ...and the next token (opened by the non-Latin-1 head) fails.
         let p = first(src).end();
         assert_eq!(
-            scan_token(src, p).unwrap_err().kind(),
+            scan_token(src, p).unwrap_err().kind,
             ErrorKind::InvalidAtomToken,
             "for {src:?}"
         );
@@ -363,7 +363,7 @@ fn integer_rejects_trailing_namechar() {
         let e = scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
         // `9_` is caught earlier by the trailing-underscore rule; the
         // rest surface the new namechar check. Both use the same kind.
-        assert_eq!(e.kind(), ErrorKind::InvalidIntegerToken, "for {src:?}");
+        assert_eq!(e.kind, ErrorKind::InvalidIntegerToken, "for {src:?}");
     }
 }
 
@@ -477,7 +477,7 @@ fn float_rejects_dot_then_namechar() {
     // rule surfaces `InvalidFloatToken`.
     for src in ["1.e2", "1.a", "16#ff._", "16#ff.@"] {
         let e = scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
-        assert_eq!(e.kind(), ErrorKind::InvalidFloatToken, "for {src:?}");
+        assert_eq!(e.kind, ErrorKind::InvalidFloatToken, "for {src:?}");
     }
 }
 
@@ -489,7 +489,7 @@ fn float_rejects_trailing_namechar_on_fractional_and_decimal_exponent() {
     // in `erl_scan` — see `float_radix_exponent_trailing_namechar_splits`.
     for src in ["1.5a", "1.5e2a", "16#ff.ffz", "16#ff.ff@"] {
         let e = scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
-        assert_eq!(e.kind(), ErrorKind::InvalidFloatToken, "for {src:?}");
+        assert_eq!(e.kind, ErrorKind::InvalidFloatToken, "for {src:?}");
     }
 }
 
@@ -590,7 +590,7 @@ fn float_radix_mantissa_beyond_u128_does_not_panic() {
     // being decoded to a possibly-finite f64.
     let src = format!("2#1{}.0", "1".repeat(200));
     let err = scan_token(&src, pos()).expect_err("mantissa beyond u128 must error");
-    assert_eq!(err.kind(), ErrorKind::InvalidFloatToken);
+    assert_eq!(err.kind, ErrorKind::InvalidFloatToken);
 }
 
 #[test]
@@ -1117,7 +1117,7 @@ fn string_escape_error_position_tracks_line_breaks() {
     let src = "\"line1\n\\^0\"";
     let err = scan_token(src, pos()).unwrap_err();
     assert_eq!(
-        (err.position().line().get(), err.position().column().get()),
+        (err.position.line().get(), err.position.column().get()),
         (2, 1),
         "for {src:?}"
     );
@@ -1125,7 +1125,7 @@ fn string_escape_error_position_tracks_line_breaks() {
     let src = "\"'\n\n\\^0'\"";
     let err = scan_token(src, pos()).unwrap_err();
     assert_eq!(
-        (err.position().line().get(), err.position().column().get()),
+        (err.position.line().get(), err.position.column().get()),
         (3, 1),
         "for {src:?}"
     );
@@ -1134,7 +1134,7 @@ fn string_escape_error_position_tracks_line_breaks() {
     let src = r#""ab\^0""#;
     let err = scan_token(src, pos()).unwrap_err();
     assert_eq!(
-        (err.position().line().get(), err.position().column().get()),
+        (err.position.line().get(), err.position.column().get()),
         (1, 3),
         "for {src:?}"
     );
@@ -1464,15 +1464,15 @@ fn error_is_copy_and_exposes_positions() {
     fn take_copy<T: Copy>(_: T) {}
     let err = scan_token("\u{2603}", Position::new()).unwrap_err();
     take_copy(err);
-    let _ = err.position();
-    let _ = err.resume_position();
+    let _ = err.position;
+    let _ = err.resume_position;
 }
 
 #[test]
 fn resume_position_advances_one_unicode_scalar() {
     let src = "\u{1F600} rest";
     let err = scan_token(src, Position::new()).unwrap_err();
-    let r = err.resume_position();
+    let r = err.resume_position;
     assert_eq!(r.offset(), '\u{1F600}'.len_utf8());
     assert!(src.is_char_boundary(r.offset()));
     let next = scan_token(src, r).unwrap().unwrap();
@@ -1485,8 +1485,8 @@ fn resume_position_monotonic_on_repeated_errors() {
     let mut p = Position::new();
     for _ in 0..2 {
         let e = scan_token(src, p).unwrap_err();
-        assert!(e.resume_position().offset() > p.offset());
-        p = e.resume_position();
+        assert!(e.resume_position.offset() > p.offset());
+        p = e.resume_position;
     }
     assert_eq!(p.offset(), src.len());
     assert_eq!(scan_token(src, p).unwrap(), None);

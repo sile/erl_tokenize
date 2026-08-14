@@ -4,15 +4,25 @@ use crate::Position;
 ///
 /// Carries the diagnostic position of the offending input and a resume
 /// position that the caller can pass back to
-/// [`scan_token`](crate::scan_token) to continue past it. Use
-/// [`kind`](Self::kind) to classify the failure,
-/// [`position`](Self::position) to report where it occurred, and
-/// [`resume_position`](Self::resume_position) to continue scanning.
+/// [`scan_token`](crate::scan_token) to continue past it. All fields
+/// are public — the caller reads `kind` to classify the failure,
+/// `position` to report where it occurred, and `resume_position` to
+/// continue scanning.
+///
+/// The `resume_position` always lies on a UTF-8 boundary of the same
+/// source, strictly after the position at which the failing token
+/// scan started, and no further than the end of the source. On a
+/// non-empty input this advances by exactly one Unicode scalar value
+/// from the scan-start position, so a caller that loops on errors
+/// with `err.resume_position` never spins in place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Error {
-    kind: ErrorKind,
-    position: Position,
-    resume: Position,
+    /// Classification of the failure.
+    pub kind: ErrorKind,
+    /// Diagnostic position of the offending input.
+    pub position: Position,
+    /// Position at which the caller should resume scanning.
+    pub resume_position: Position,
 }
 
 impl Error {
@@ -20,40 +30,8 @@ impl Error {
         Self {
             kind,
             position,
-            resume: position,
+            resume_position: position,
         }
-    }
-
-    /// Returns the kind of this error.
-    pub const fn kind(self) -> ErrorKind {
-        self.kind
-    }
-
-    /// Returns the diagnostic position of this error.
-    pub const fn position(self) -> Position {
-        self.position
-    }
-
-    /// Returns the position at which the caller should resume scanning.
-    ///
-    /// The resume position always lies on a UTF-8 boundary of the same
-    /// source, strictly after the position at which the failing token
-    /// scan started, and no further than the end of the source. On a
-    /// non-empty input this advances by exactly one Unicode scalar value
-    /// from the scan-start position, so a caller that loops on errors
-    /// with `err.resume_position()` never spins in place.
-    pub const fn resume_position(self) -> Position {
-        self.resume
-    }
-
-    /// Returns a copy of this error with the resume position replaced.
-    ///
-    /// Used by the scanner to attach the scan-start-derived resume
-    /// position to errors reported from deeper helpers (which know only
-    /// the diagnostic position of the offending byte).
-    pub(crate) fn with_resume(mut self, resume: Position) -> Self {
-        self.resume = resume;
-        self
     }
 }
 
