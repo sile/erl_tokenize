@@ -7,7 +7,9 @@
 
 use std::borrow::Cow;
 
-use erl_tokenize::{Keyword, Position, Symbol, Token, TokenKind, TokenValue, scan_token};
+use erl_tokenize::{
+    ErrorKind, Keyword, Position, Symbol, Token, TokenKind, TokenValue, scan_token,
+};
 
 // ============================================================
 // Helpers
@@ -121,6 +123,32 @@ fn atom_errors_or_dispatch_elsewhere() {
     // Non-lowercase alphabetic that is not a variable head (a Chinese
     // ideograph) fails as an atom.
     assert!(scan_token("中", pos()).is_err());
+    // Non Latin-1 alphabetic characters are not accepted in atom head or
+    // body, matching erl_scan's `illegal character`.
+    //
+    // A non-Latin-1 head fails on the first token. A non-Latin-1 letter in
+    // the body terminates the atom at the ASCII prefix, so the offending
+    // character opens the next token, which then fails.
+    assert_eq!(
+        scan_token("μfoo", pos()).unwrap_err().kind(),
+        ErrorKind::InvalidAtomToken
+    );
+    for src in ["fooαbar", "foo中bar"] {
+        // The ASCII prefix scans as a bare atom...
+        assert_eq!(first(src).kind(), TokenKind::Atom);
+        assert_eq!(first(src).text(src), "foo");
+        // ...and the next token (opened by the non-Latin-1 head) fails.
+        let p = first(src).end();
+        assert_eq!(
+            scan_token(src, p).unwrap_err().kind(),
+            ErrorKind::InvalidAtomToken,
+            "for {src:?}"
+        );
+    }
+    // Latin-1 letters are still accepted in atom head and body.
+    assert_eq!(first("äfunc").kind(), TokenKind::Atom);
+    assert_eq!(first("comté").kind(), TokenKind::Atom);
+    assert_eq!(first("ärlig").kind(), TokenKind::Atom);
 }
 
 // ============================================================

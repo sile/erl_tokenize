@@ -170,7 +170,7 @@ pub fn sample_bare_atom(ctx: &mut noprop::TestCaseContext) -> String {
 
 /// Sample a bare atom whose head is a non-ASCII lowercase letter.
 pub fn sample_unicode_atom(ctx: &mut noprop::TestCaseContext) -> String {
-    const HEAD: [char; 4] = ['é', 'ä', 'ñ', 'ω'];
+    const HEAD: [char; 4] = ['é', 'ä', 'ñ', 'ü'];
     const TAIL: [char; 4] = ['a', 'z', '0', '_'];
     let len = noprop::sample_usize_in(ctx, 0..=4);
     let mut s = String::new();

@@ -5,18 +5,18 @@ use std::iter::Peekable;
 use crate::{Error, ErrorKind, Position, Result};
 
 pub(crate) fn is_atom_head_char(c: char) -> bool {
-    if let 'a'..='z' = c {
-        true
-    } else {
-        c.is_lowercase() && c.is_alphabetic()
-    }
+    matches!(c, 'a'..='z' | 'ß'..='ö' | 'ø'..='ÿ')
 }
 
 pub(crate) fn is_atom_non_head_char(c: char) -> bool {
-    match c {
-        '@' | '_' | '0'..='9' => true,
-        _ => c.is_alphabetic(),
-    }
+    matches!(
+        c,
+        'a'..='z' | 'A'..='Z' | '@' | '_' | '0'..='9'
+            | 'À'..='Ö'
+            | 'Ø'..='Þ'
+            | 'ß'..='ö'
+            | 'ø'..='ÿ'
+    )
 }
 
 pub(crate) fn is_variable_head_char(c: char) -> bool {
