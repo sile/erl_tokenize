@@ -72,7 +72,7 @@
 //!         }
 //!         Ok(None) => break,
 //!         Err(error) => {
-//!             position = error.resume_position();
+//!             position = error.resume_position;
 //!         }
 //!     }
 //! }
