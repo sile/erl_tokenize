@@ -1074,12 +1074,7 @@ fn decode_radix_ten(int_part: &str, frac_part: &str, exp_opt: Option<&str>) -> f
 /// the fraction's trailing zeros and the integer's leading zeros the
 /// same way erl_scan's `trim_float_zeros` does (a lone `0` on either
 /// side is preserved, so `0.5` stays `0.5` and `1.0` stays `1.0`).
-fn decode_radix_other(
-    int_part: &str,
-    frac_part: &str,
-    exp_opt: Option<&str>,
-    radix: u32,
-) -> f64 {
+fn decode_radix_other(int_part: &str, frac_part: &str, exp_opt: Option<&str>, radix: u32) -> f64 {
     let int_stripped = util::strip_underscores(int_part);
     let frac_stripped = util::strip_underscores(frac_part);
     let int_trimmed = trim_leading_zeros_preserve_one(&int_stripped);
@@ -1110,10 +1105,7 @@ fn decode_radix_other(
         }
         None => 0,
     };
-    let Some(scale_exp) = i32::try_from(d)
-        .ok()
-        .and_then(|d| exp_value.checked_sub(d))
-    else {
+    let Some(scale_exp) = i32::try_from(d).ok().and_then(|d| exp_value.checked_sub(d)) else {
         // The trimmed fraction outran `i32::MAX`, or `Exp - D`
         // underflowed `i32::MIN`. Either way the magnitude collapses
         // to 0.0.

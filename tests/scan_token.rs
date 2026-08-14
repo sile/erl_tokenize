@@ -360,8 +360,7 @@ fn integer_rejects_trailing_namechar() {
     // `{illegal,integer}`. Without this, we would split `12abc` into
     // `Integer("12")` + `Atom("abc")` and diverge from `erl_scan`.
     for src in ["12abc", "1e2", "16#Fg", "100@200", "9_"] {
-        let e = scan_token(src, pos())
-            .expect_err(&format!("expected error for {src:?}"));
+        let e = scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
         // `9_` is caught earlier by the trailing-underscore rule; the
         // rest surface the new namechar check. Both use the same kind.
         assert_eq!(e.kind(), ErrorKind::InvalidIntegerToken, "for {src:?}");
@@ -477,8 +476,7 @@ fn float_rejects_dot_then_namechar() {
     // via `looks_like_float` so the "dot must be followed by a digit"
     // rule surfaces `InvalidFloatToken`.
     for src in ["1.e2", "1.a", "16#ff._", "16#ff.@"] {
-        let e = scan_token(src, pos())
-            .expect_err(&format!("expected error for {src:?}"));
+        let e = scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
         assert_eq!(e.kind(), ErrorKind::InvalidFloatToken, "for {src:?}");
     }
 }
@@ -490,8 +488,7 @@ fn float_rejects_trailing_namechar_on_fractional_and_decimal_exponent() {
     // `scan_based_exponent` case: that clause is intentionally missing
     // in `erl_scan` — see `float_radix_exponent_trailing_namechar_splits`.
     for src in ["1.5a", "1.5e2a", "16#ff.ffz", "16#ff.ff@"] {
-        let e = scan_token(src, pos())
-            .expect_err(&format!("expected error for {src:?}"));
+        let e = scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
         assert_eq!(e.kind(), ErrorKind::InvalidFloatToken, "for {src:?}");
     }
 }
