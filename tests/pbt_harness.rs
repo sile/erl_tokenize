@@ -398,7 +398,7 @@ pub fn sample_decimal_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) 
 
 /// Sample a radix-prefixed float. Returns `(text, value)`.
 pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
-    const POSITIVE: [(&str, f64); 8] = [
+    const POSITIVE: [(&str, f64); 12] = [
         ("2#1.0", 1.0),
         ("2#1.1", 1.5),
         ("2#0.1", 0.5),
@@ -407,6 +407,11 @@ pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
         ("16#1.8", 1.5),
         ("2#1.0#e1", 2.0),
         ("2#1.0#e2", 4.0),
+        // Uppercase `E` and a `+` sign are accepted in the exponent too.
+        ("2#1.0#E1", 2.0),
+        ("2#0.01#E2", 1.0),
+        ("2#1.0#e+1", 2.0),
+        ("16#1.0#E+1", 16.0),
     ];
     // Negative exponents are a separate decoder branch (`#e-N`). Weight
     // the two sub-sets evenly (rather than proportional to template

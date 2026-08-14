@@ -358,6 +358,9 @@ fn float_radix() {
         ("16#f_f.F_F", 255.99609375),
         ("2#0.10101#e8", 168.0),
         ("1_6#fefe.fefe#e1_6", 1.2041849337671418e24),
+        ("16#a.b#E10", 11751030521856.0),
+        ("2#0.0#e+5", 0.0),
+        ("2#1.0#E-3", 0.125),
     ] {
         assert_eq!(first_value(src), TokenValue::Float(expected), "for {src}");
     }

@@ -767,7 +767,7 @@ fn scan_float_radix(source: &str, pos: Position) -> Result<Scanned> {
     let (frac_end, has_exp) = read_radix_digit_run(source, idx, radix, pos, false)?;
     idx = frac_end;
     if has_exp {
-        if !source[idx..].starts_with('e') {
+        if !source[idx..].starts_with(['e', 'E']) {
             return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
         }
         idx += 1;
@@ -863,7 +863,7 @@ fn read_exp_digit_run(source: &str, start: usize, pos: Position) -> Result<usize
     let mut saw_any = false;
     for (i, c) in source[start..].char_indices() {
         let at = start + i;
-        if i == 0 && c == '-' {
+        if i == 0 && matches!(c, '-' | '+') {
             idx = at + 1;
             saw_any = true;
         } else if c.is_ascii_digit() {
