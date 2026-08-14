@@ -689,6 +689,18 @@ pub fn sample_sigil_triple_quoted_string(
                 decoded.push(c);
             }
         }
+        // If the escape loop ended with a `\^\` (a caret escape whose
+        // target is `\`), the line's byte-level trailing `\` count is
+        // odd. `strip_line_continuation` in the scanner then strips
+        // that trailing `\` as if it were a line continuation, leaving
+        // the caret escape as the incomplete `\^`. Extend the line by
+        // one benign content char so the trailing byte is no longer
+        // `\` and the caret escape stays intact.
+        if !verbatim && line.bytes().rev().take_while(|b| *b == b'\\').count() % 2 == 1 {
+            let c = noprop::sample_choice(ctx, &CONTENT);
+            line.push(c);
+            decoded.push(c);
+        }
         // With probability, append a "line-continuation" trailing `\`
         // to a non-verbatim line. `erl_scan` treats such a `\` as being
         // consumed together with the raw LF that ends the line: the
@@ -696,7 +708,9 @@ pub fn sample_sigil_triple_quoted_string(
         // lines, so the decoded value is unchanged. This only applies
         // when the escapes so far leave an even count of trailing
         // backslashes; otherwise appending another `\` would flip the
-        // meaning of the escape immediately before it.
+        // meaning of the escape immediately before it. (The guard
+        // above has already restored even parity, so this branch runs
+        // unconditionally against the even-count invariant.)
         if !verbatim
             && line.bytes().rev().take_while(|b| *b == b'\\').count() % 2 == 0
             && noprop::sample_weighted_index(ctx, &[3, 1]) == 1
