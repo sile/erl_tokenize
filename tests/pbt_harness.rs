@@ -463,6 +463,8 @@ pub fn sample_regular_string(ctx: &mut noprop::TestCaseContext) -> (String, Stri
 ///
 /// Content avoids `"` so the closer cannot appear in a body line.
 /// Indent 0 borrows; indent > 0 requires stripping and is owned.
+/// Line endings may be LF or CRLF; erl_scan strips the trailing `\r` of
+/// the last content line only, so the decoded value reflects that.
 pub fn sample_triple_quoted_string(ctx: &mut noprop::TestCaseContext) -> (String, String) {
     const CONTENT: [char; 6] = ['a', 'b', 'c', 'x', 'y', ' '];
     let indent =
@@ -485,13 +487,23 @@ pub fn sample_triple_quoted_string(ctx: &mut noprop::TestCaseContext) -> (String
         for _ in 0..len {
             line.push(noprop::sample_choice(ctx, &CONTENT));
         }
+        let crlf = noprop::sample_bool(ctx);
         text.push_str(&pad);
         text.push_str(&line);
-        text.push('\n');
+        if crlf {
+            text.push_str("\r\n");
+            line.push('\r');
+        } else {
+            text.push('\n');
+        }
         decoded_lines.push(line);
     }
     text.push_str(&pad);
     text.push_str("\"\"\"");
+    // erl_scan strips the trailing `\r` of the last content line only.
+    if let Some(last) = decoded_lines.last_mut().filter(|l| l.ends_with('\r')) {
+        last.pop();
+    }
     (text, decoded_lines.join("\n"))
 }
 

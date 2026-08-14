@@ -1062,6 +1062,11 @@ fn decode_triple_quoted(text: &str) -> Cow<'_, str> {
 
     let body_end = end_line_start.saturating_sub(1).max(start_line_end);
     let body = &text[start_line_end..body_end];
+    // A trailing `\r` is the CR of the last content line's CRLF line
+    // ending. erl_scan strips just this one CR from the last content line
+    // (intermediate lines keep theirs), so remove it from the body, which
+    // does not include a trailing LF.
+    let body = body.strip_suffix('\r').unwrap_or(body);
     if indent == 0 {
         return Cow::Borrowed(body);
     }

@@ -748,6 +748,23 @@ fn string_triple_quoted_with_blank_line_indented() {
 }
 
 #[test]
+fn string_triple_quoted_crlf_cases() {
+    for (src, expected) in [
+        ("\"\"\"\n hello\r\n world\r\n \"\"\"", "hello\r\nworld"),
+        ("\"\"\"\n  a\r\n  b\r\n  c\r\n  \"\"\"", "a\r\nb\r\nc"),
+        ("\"\"\"\n  a\n  \r\n  \"\"\"", "a\n"),
+        ("\"\"\"\n \r\n \"\"\"", ""),
+        ("\"\"\"\nabc\r\r\n\"\"\"", "abc\r"),
+    ] {
+        assert_eq!(
+            first_value(src),
+            TokenValue::String(Cow::Borrowed(expected)),
+            "for {src:?}"
+        );
+    }
+}
+
+#[test]
 fn string_adjacent_literals_reject() {
     assert!(scan_token(r#""foo""bar""#, pos()).is_err());
 }
