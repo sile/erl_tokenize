@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::char;
 use std::iter::Peekable;
 
-use crate::{Error, Position, Result};
+use crate::{Error, ErrorKind, Position, Result};
 
 pub(crate) fn is_atom_head_char(c: char) -> bool {
     if let 'a'..='z' = c {
@@ -57,7 +57,7 @@ pub(crate) fn find_quotation_end(pos: Position, input: &str, terminator: char) -
             return Ok(i);
         }
     }
-    Err(Error::no_closing_quotation(pos))
+    Err(Error::new(ErrorKind::NoClosingQuotation, pos))
 }
 
 /// Verbatim variant of [`find_quotation_end`]: does not treat `\` as an
@@ -74,7 +74,7 @@ pub(crate) fn find_verbatim_quotation_end(
             return Ok(i);
         }
     }
-    Err(Error::no_closing_quotation(pos))
+    Err(Error::new(ErrorKind::NoClosingQuotation, pos))
 }
 
 /// Locate the terminator and decode the quoted content into a `Cow`,
@@ -118,7 +118,7 @@ pub(crate) fn parse_escaped_char<I>(pos: Position, chars: &mut Peekable<I>) -> R
 where
     I: Iterator<Item = (usize, char)>,
 {
-    let error = || Error::invalid_escaped_char(pos);
+    let error = || Error::new(ErrorKind::InvalidEscapedChar, pos);
     let (_, c) = chars.next().ok_or_else(error)?;
     match c {
         'b' => Ok(8 as char),   // Back Space

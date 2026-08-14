@@ -21,7 +21,7 @@ use std::borrow::Cow;
 use crate::keyword::Keyword;
 use crate::symbol::Symbol;
 use crate::util;
-use crate::{Error, Position, Result};
+use crate::{Error, ErrorKind, Position, Result};
 
 /// Kind of the token that a scanner recognized at the start of a source
 /// slice.
@@ -85,7 +85,7 @@ fn scan_one_impl(source: &str, pos: Position) -> Result<Scanned> {
     let head = source
         .chars()
         .next()
-        .ok_or_else(|| Error::missing_token(pos))?;
+        .ok_or_else(|| Error::new(ErrorKind::MissingToken, pos))?;
     match head {
         ' ' | '\t' | '\r' | '\n' | '\u{A0}' => scan_whitespace(source, pos),
         'A'..='Z' | '_' => scan_variable(source, pos),
@@ -165,13 +165,13 @@ pub(crate) fn scan_atom(source: &str, pos: Position) -> Result<Scanned> {
     let head = source
         .chars()
         .next()
-        .ok_or_else(|| Error::invalid_atom_token(pos))?;
+        .ok_or_else(|| Error::new(ErrorKind::InvalidAtomToken, pos))?;
     if head == '\'' {
         let inner_end = util::find_quotation_end(pos, &source[1..], '\'')?;
         Ok(Scanned::new(ScanKind::Atom, 1 + inner_end + 1))
     } else {
         if !util::is_atom_head_char(head) {
-            return Err(Error::invalid_atom_token(pos));
+            return Err(Error::new(ErrorKind::InvalidAtomToken, pos));
         }
         let mut end = head.len_utf8();
         for c in source[end..].chars() {
@@ -188,11 +188,15 @@ pub(crate) fn scan_atom(source: &str, pos: Position) -> Result<Scanned> {
 /// length.
 pub(crate) fn scan_char(source: &str, pos: Position) -> Result<Scanned> {
     let mut chars = source.char_indices();
-    let (_, dollar) = chars.next().ok_or_else(|| Error::invalid_char_token(pos))?;
+    let (_, dollar) = chars
+        .next()
+        .ok_or_else(|| Error::new(ErrorKind::InvalidCharToken, pos))?;
     if dollar != '$' {
-        return Err(Error::invalid_char_token(pos));
+        return Err(Error::new(ErrorKind::InvalidCharToken, pos));
     }
-    let (i, c) = chars.next().ok_or_else(|| Error::invalid_char_token(pos))?;
+    let (i, c) = chars
+        .next()
+        .ok_or_else(|| Error::new(ErrorKind::InvalidCharToken, pos))?;
     let end = if c == '\\' {
         let mut chars = chars.peekable();
         util::parse_escaped_char(pos.step_by_width(i + 1), &mut chars)?;
@@ -206,7 +210,7 @@ pub(crate) fn scan_char(source: &str, pos: Position) -> Result<Scanned> {
 /// Validate a comment at the start of `source` and return its length.
 pub(crate) fn scan_comment(source: &str, pos: Position) -> Result<Scanned> {
     if !source.starts_with('%') {
-        return Err(Error::invalid_comment_token(pos));
+        return Err(Error::new(ErrorKind::InvalidCommentToken, pos));
     }
     let end = source.find('\n').unwrap_or(source.len());
     Ok(Scanned::new(ScanKind::Comment, end))
@@ -223,7 +227,7 @@ pub(crate) fn scan_integer(source: &str, pos: Position) -> Result<Scanned> {
     for (i, c) in source.char_indices() {
         if c == '#' && !has_radix && !needs_digit {
             if !(1 < radix_digits && radix_digits < 37) {
-                return Err(Error::invalid_integer_token(pos));
+                return Err(Error::new(ErrorKind::InvalidIntegerToken, pos));
             }
             radix = radix_digits;
             has_radix = true;
@@ -247,7 +251,7 @@ pub(crate) fn scan_integer(source: &str, pos: Position) -> Result<Scanned> {
         }
     }
     if needs_digit {
-        return Err(Error::invalid_integer_token(pos));
+        return Err(Error::new(ErrorKind::InvalidIntegerToken, pos));
     }
     Ok(Scanned::new(ScanKind::Integer, end))
 }
@@ -298,7 +302,7 @@ pub(crate) fn scan_string(source: &str, pos: Position) -> Result<Scanned> {
     // only for the ordinary (non-triple) form to match `erl_scan`.
     if !is_triple && source.get(end..end + 1) == Some("\"") {
         let pos = pos.step_by_text(&source[0..end]);
-        return Err(Error::adjacent_string_literals(pos));
+        return Err(Error::new(ErrorKind::AdjacentStringLiterals, pos));
     }
     Ok(Scanned::new(ScanKind::String, end))
 }
@@ -312,13 +316,13 @@ pub(crate) fn scan_string(source: &str, pos: Position) -> Result<Scanned> {
 /// only affects the ordinary `"..."` branch.
 fn scan_string_body(source: &str, pos: Position, verbatim: bool) -> Result<(usize, bool)> {
     if source.is_empty() {
-        return Err(Error::invalid_string_token(pos));
+        return Err(Error::new(ErrorKind::InvalidStringToken, pos));
     }
     if source.starts_with(r#"""""#) {
         Ok((scan_triple_quoted(source, pos)?, true))
     } else {
         if !source.starts_with('"') {
-            return Err(Error::invalid_string_token(pos));
+            return Err(Error::new(ErrorKind::InvalidStringToken, pos));
         }
         let inner_end = if verbatim {
             util::find_verbatim_quotation_end(pos, &source[1..], '"')?
@@ -415,16 +419,16 @@ fn scan_triple_quoted(source: &str, pos: Position) -> Result<usize> {
             start_line_end_found = true;
             break;
         } else if !c.is_ascii_whitespace() {
-            return Err(Error::invalid_string_token(pos));
+            return Err(Error::new(ErrorKind::InvalidStringToken, pos));
         }
     }
     if !start_line_end_found {
-        return Err(Error::no_closing_quotation(pos));
+        return Err(Error::new(ErrorKind::NoClosingQuotation, pos));
     }
 
     let (indent, end_line_start, end_line_end) =
         find_triple_quoted_closer(source, start_line_end, quote_count)
-            .ok_or_else(|| Error::no_closing_quotation(pos))?;
+            .ok_or_else(|| Error::new(ErrorKind::NoClosingQuotation, pos))?;
 
     // An indented closer with no body lines has `end_line_start ==
     // start_line_end`; `saturating_sub` keeps the range well-formed
@@ -441,14 +445,14 @@ fn scan_triple_quoted(source: &str, pos: Position) -> Result<usize> {
                     if c.is_ascii_whitespace() {
                         continue;
                     } else {
-                        return Err(Error::invalid_string_token(pos));
+                        return Err(Error::new(ErrorKind::InvalidStringToken, pos));
                     }
                 }
                 valid_line = true;
                 break;
             }
             if !valid_line {
-                return Err(Error::invalid_string_token(pos));
+                return Err(Error::new(ErrorKind::InvalidStringToken, pos));
             }
         }
     }
@@ -460,7 +464,7 @@ fn scan_triple_quoted(source: &str, pos: Position) -> Result<usize> {
 /// length.
 pub(crate) fn scan_sigil_string(source: &str, pos: Position) -> Result<Scanned> {
     if !source.starts_with('~') {
-        return Err(Error::invalid_sigil_string_token(pos));
+        return Err(Error::new(ErrorKind::InvalidSigilStringToken, pos));
     }
     let mut offset = 1;
     for c in source[offset..].chars() {
@@ -474,7 +478,7 @@ pub(crate) fn scan_sigil_string(source: &str, pos: Position) -> Result<Scanned> 
     let open = source[offset..]
         .chars()
         .next()
-        .ok_or_else(|| Error::invalid_sigil_string_token(pos))?;
+        .ok_or_else(|| Error::new(ErrorKind::InvalidSigilStringToken, pos))?;
     let content_end = if open == '"' {
         // Reuse the string-body scanner so that both single- and
         // triple-quoted forms behave identically for sigils, minus the
@@ -490,7 +494,7 @@ pub(crate) fn scan_sigil_string(source: &str, pos: Position) -> Result<Scanned> 
             '{' => '}',
             '<' => '>',
             '/' | '|' | '\'' | '`' | '#' => open,
-            _ => return Err(Error::invalid_sigil_string_token(pos)),
+            _ => return Err(Error::new(ErrorKind::InvalidSigilStringToken, pos)),
         };
         let inner_pos = pos.step_by_width(offset + 1);
         let content = &source[offset + 1..];
@@ -513,7 +517,7 @@ pub(crate) fn scan_sigil_string(source: &str, pos: Position) -> Result<Scanned> 
     // suffix separates the tokens and no error is raised.
     if end == content_end && source.get(end..end + 1) == Some("\"") {
         let pos = pos.step_by_text(&source[0..end]);
-        return Err(Error::adjacent_string_literals(pos));
+        return Err(Error::new(ErrorKind::AdjacentStringLiterals, pos));
     }
     Ok(Scanned::new(ScanKind::SigilString, end))
 }
@@ -602,7 +606,7 @@ pub(crate) fn scan_symbol(source: &str, pos: Position) -> Result<Scanned> {
     }
     match symbol {
         Some(s) => Ok(Scanned::new(ScanKind::Symbol(s), len)),
-        None => Err(Error::invalid_symbol_token(pos)),
+        None => Err(Error::new(ErrorKind::InvalidSymbolToken, pos)),
     }
 }
 
@@ -611,9 +615,9 @@ pub(crate) fn scan_variable(source: &str, pos: Position) -> Result<Scanned> {
     let head = source
         .chars()
         .next()
-        .ok_or_else(|| Error::invalid_variable_token(pos))?;
+        .ok_or_else(|| Error::new(ErrorKind::InvalidVariableToken, pos))?;
     if !util::is_variable_head_char(head) {
-        return Err(Error::invalid_variable_token(pos));
+        return Err(Error::new(ErrorKind::InvalidVariableToken, pos));
     }
     let mut end = head.len_utf8();
     for c in source[end..].chars() {
@@ -650,9 +654,9 @@ pub(crate) fn scan_whitespace(source: &str, pos: Position) -> Result<Scanned> {
     let head = source
         .chars()
         .next()
-        .ok_or_else(|| Error::invalid_whitespace_token(pos))?;
+        .ok_or_else(|| Error::new(ErrorKind::InvalidWhitespaceToken, pos))?;
     if !is_whitespace_char(head) {
-        return Err(Error::invalid_whitespace_token(pos));
+        return Err(Error::new(ErrorKind::InvalidWhitespaceToken, pos));
     }
     let mut end = head.len_utf8();
     for c in source[end..].chars() {
@@ -667,9 +671,9 @@ pub(crate) fn scan_whitespace(source: &str, pos: Position) -> Result<Scanned> {
 /// Validate a float literal at the start of `source` and return its length.
 ///
 /// Rejects overflow (a value that decodes to a non-finite `f64`) with
-/// the same [`Error::invalid_float_token`] as syntactic errors, matching
-/// `erl_scan`'s behavior. Underflow is not an error: it collapses to
-/// `0.0`, which is finite.
+/// the same [`ErrorKind::InvalidFloatToken`] as syntactic errors,
+/// matching `erl_scan`'s behavior. Underflow is not an error: it
+/// collapses to `0.0`, which is finite.
 pub(crate) fn scan_float(source: &str, pos: Position) -> Result<Scanned> {
     let scanned = if is_based(source) {
         scan_float_radix(source, pos)?
@@ -677,7 +681,7 @@ pub(crate) fn scan_float(source: &str, pos: Position) -> Result<Scanned> {
         scan_float_decimal(source, pos)?
     };
     if !decode_float(&source[..scanned.len]).is_finite() {
-        return Err(Error::invalid_float_token(pos));
+        return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
     }
     Ok(scanned)
 }
@@ -687,7 +691,7 @@ fn scan_float_decimal(source: &str, pos: Position) -> Result<Scanned> {
     let after_int = &source[idx..];
     let mut chars = after_int.chars();
     if chars.next() != Some('.') {
-        return Err(Error::invalid_float_token(pos));
+        return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
     }
     idx += 1;
     idx = read_digit_run(source, idx, pos)?;
@@ -729,7 +733,7 @@ fn read_digit_run(source: &str, start: usize, pos: Position) -> Result<usize> {
             }
             '_' => {
                 if needs_digit {
-                    return Err(Error::invalid_float_token(pos));
+                    return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
                 }
                 needs_digit = true;
                 idx = at + 1;
@@ -738,7 +742,7 @@ fn read_digit_run(source: &str, start: usize, pos: Position) -> Result<usize> {
         }
     }
     if needs_digit {
-        Err(Error::invalid_float_token(pos))
+        Err(Error::new(ErrorKind::InvalidFloatToken, pos))
     } else {
         Ok(idx)
     }
@@ -749,22 +753,22 @@ fn scan_float_radix(source: &str, pos: Position) -> Result<Scanned> {
     let hash = source.find('#').expect("looks_like_float / is_based guard");
     let radix = parse_radix_digits(&source[..hash], pos)?;
     if !(1 < radix && radix < 37) {
-        return Err(Error::invalid_float_token(pos));
+        return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
     }
     let mut idx = hash + 1;
     if idx >= source.len() {
-        return Err(Error::invalid_float_token(pos));
+        return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
     }
     let (int_end, saw_dot) = read_radix_digit_run(source, idx, radix, pos, true)?;
     idx = int_end;
     if !saw_dot {
-        return Err(Error::invalid_float_token(pos));
+        return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
     }
     let (frac_end, has_exp) = read_radix_digit_run(source, idx, radix, pos, false)?;
     idx = frac_end;
     if has_exp {
         if !source[idx..].starts_with('e') {
-            return Err(Error::invalid_float_token(pos));
+            return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
         }
         idx += 1;
         idx = read_exp_digit_run(source, idx, pos)?;
@@ -789,11 +793,11 @@ fn parse_radix_digits(text: &str, pos: Position) -> Result<u32> {
         } else if c == '_' && prev_digit {
             prev_digit = false;
         } else {
-            return Err(Error::invalid_float_token(pos));
+            return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
         }
     }
     if !has_digit || !prev_digit {
-        return Err(Error::invalid_float_token(pos));
+        return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
     }
     Ok(value)
 }
@@ -837,7 +841,7 @@ fn read_radix_digit_run(
         }
     }
     if !is_prev_digit && !terminator {
-        return Err(Error::invalid_float_token(pos));
+        return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
     }
     if terminator && !expect_dot {
         // The fractional part terminated on `#`, so the caller must find
@@ -874,7 +878,7 @@ fn read_exp_digit_run(source: &str, start: usize, pos: Position) -> Result<usize
         }
     }
     if !saw_any || !is_prev_digit {
-        return Err(Error::invalid_float_token(pos));
+        return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
     }
     Ok(idx)
 }

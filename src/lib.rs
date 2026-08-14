@@ -89,7 +89,7 @@
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
-pub use crate::error::Error;
+pub use crate::error::{Error, ErrorKind};
 pub use crate::keyword::Keyword;
 pub use crate::position::Position;
 pub use crate::symbol::Symbol;
