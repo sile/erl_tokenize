@@ -770,6 +770,7 @@ fn symbol_all() {
         ("{", Symbol::OpenBrace),
         ("}", Symbol::CloseBrace),
         ("#", Symbol::Sharp),
+        ("#_", Symbol::WildcardRecord),
         ("/", Symbol::Slash),
         (".", Symbol::Dot),
         ("..", Symbol::DoubleDot),
@@ -813,6 +814,31 @@ fn symbol_all() {
         assert_eq!(t.kind(), TokenKind::Symbol(expected), "for {src}");
         assert_eq!(t.text(src), src);
     }
+}
+
+#[test]
+fn symbol_wildcard_record_single_token() {
+    // `#_` is a single wildcard-record symbol, not `#` followed by `_`.
+    let tokens = scan_tokens("Node#_{anno=[]}");
+    let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind()).collect();
+    assert_eq!(
+        kinds,
+        [
+            TokenKind::Variable,
+            TokenKind::Symbol(Symbol::WildcardRecord),
+            TokenKind::Symbol(Symbol::OpenBrace),
+            TokenKind::Atom,
+            TokenKind::Symbol(Symbol::Match),
+            TokenKind::Symbol(Symbol::OpenSquare),
+            TokenKind::Symbol(Symbol::CloseSquare),
+            TokenKind::Symbol(Symbol::CloseBrace),
+        ]
+    );
+    assert_eq!(tokens[1].text("Node#_{anno=[]}"), "#_");
+    assert_eq!(
+        tokens[1].value("Node#_{anno=[]}"),
+        TokenValue::Symbol(Symbol::WildcardRecord)
+    );
 }
 
 // ============================================================

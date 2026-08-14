@@ -567,6 +567,7 @@ pub(crate) fn scan_symbol(source: &str, pos: Position) -> Result<Scanned> {
             b"=<" => Some(Symbol::LessEq),
             b"??" => Some(Symbol::DoubleQuestion),
             b"?=" => Some(Symbol::MaybeMatch),
+            b"#_" => Some(Symbol::WildcardRecord),
             b".." => Some(Symbol::DoubleDot),
             b"&&" => Some(Symbol::DoubleAmpersand),
             _ => None,

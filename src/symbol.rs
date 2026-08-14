@@ -25,6 +25,9 @@ pub enum Symbol {
     /// `#`
     Sharp,
 
+    /// `#_`
+    WildcardRecord,
+
     /// `/`
     Slash,
 
@@ -150,6 +153,7 @@ impl Symbol {
             Symbol::OpenBrace => "{",
             Symbol::CloseBrace => "}",
             Symbol::Sharp => "#",
+            Symbol::WildcardRecord => "#_",
             Symbol::Slash => "/",
             Symbol::Dot => ".",
             Symbol::DoubleDot => "..",

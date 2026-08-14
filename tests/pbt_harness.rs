@@ -55,7 +55,7 @@ pub const KEYWORDS: [(&str, Keyword); 29] = [
 ];
 
 /// All Erlang punctuation symbols in canonical text form.
-pub const SYMBOLS: [(&str, Symbol); 45] = [
+pub const SYMBOLS: [(&str, Symbol); 46] = [
     ("[", Symbol::OpenSquare),
     ("]", Symbol::CloseSquare),
     ("(", Symbol::OpenParen),
@@ -63,6 +63,7 @@ pub const SYMBOLS: [(&str, Symbol); 45] = [
     ("{", Symbol::OpenBrace),
     ("}", Symbol::CloseBrace),
     ("#", Symbol::Sharp),
+    ("#_", Symbol::WildcardRecord),
     ("/", Symbol::Slash),
     (".", Symbol::Dot),
     ("..", Symbol::DoubleDot),
