@@ -157,6 +157,7 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
     let saw_exponent_float = Counter::default();
     let saw_empty_comment = Counter::default();
     let saw_caret = Counter::default();
+    let saw_sigil_triple_escape = Counter::default();
 
     runner.run(CASES, |ctx| {
         let (text, expected) = sample_case(ctx);
@@ -225,6 +226,14 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
                 assert_eq!(suffix, es, "sigil suffix for {text:?}");
                 variants.hit("sigil_string");
                 cow_hit(&borrowed, &owned, matches!(content, Cow::Borrowed(_)));
+                // Non-verbatim (`b`/`s`) triple-quoted sigil that actually
+                // decoded an escape from its raw text.
+                if matches!(ep.as_str(), "b" | "s")
+                    && text[2..].starts_with("\"\"\"")
+                    && text.contains('\\')
+                {
+                    saw_sigil_triple_escape.hit();
+                }
             }
             (Expected::String(exp), TokenValue::String(v)) => {
                 assert_eq!(v.as_ref(), exp, "string value for {text:?}");
@@ -282,6 +291,10 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
     assert!(saw_exponent_float.get() > 0, "no exponent float\n{runner}");
     assert!(saw_empty_comment.get() > 0, "no empty comment\n{runner}");
     assert!(saw_caret.get() > 0, "no caret escape\n{runner}");
+    assert!(
+        saw_sigil_triple_escape.get() > 0,
+        "no non-verbatim triple-quoted sigil escape\n{runner}"
+    );
     Ok(())
 }
 

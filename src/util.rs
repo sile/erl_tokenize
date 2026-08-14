@@ -77,6 +77,44 @@ pub(crate) fn find_verbatim_quotation_end(
     Err(Error::new(ErrorKind::NoClosingQuotation, pos))
 }
 
+/// Validate that every `\` in `input` introduces a well-formed escape
+/// sequence, without requiring a terminator.
+///
+/// Unlike [`find_quotation_end`] (which also validates escapes), this
+/// never looks for a closing terminator, so it is usable on content that
+/// has no terminating character of its own (e.g. a single line of a
+/// triple-quoted string body).
+pub(crate) fn validate_escapes(pos: Position, input: &str) -> Result<()> {
+    let mut chars = input.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        if c == '\\' {
+            parse_escaped_char(pos.step_by_text(&input[..i]), &mut chars)?;
+        }
+    }
+    Ok(())
+}
+
+/// Strip one trailing `\` from `line` when the count of consecutive
+/// trailing `\` characters is odd, meaning the last backslash is unpaired.
+///
+/// This models `erl_scan`'s line-continuation handling in non-verbatim
+/// triple-quoted content: a `\` immediately before the raw LF that ends a
+/// content line is consumed together with that LF (the LF still acts as
+/// the content-line separator). Since the LF has already been consumed by
+/// splitting the body on `\n`, only the dangling `\` remains at the end
+/// of the line.
+///
+/// `\\` (an escaped backslash) has an even trailing count and is left
+/// alone so [`parse_escaped_char`] can decode it as a single `\`.
+pub(crate) fn strip_line_continuation(line: &str) -> &str {
+    let trailing = line.bytes().rev().take_while(|b| *b == b'\\').count();
+    if trailing % 2 == 1 {
+        &line[..line.len() - 1]
+    } else {
+        line
+    }
+}
+
 /// Locate the terminator and decode the quoted content into a `Cow`,
 /// borrowing when no escape sequences are present.
 pub(crate) fn parse_quotation(

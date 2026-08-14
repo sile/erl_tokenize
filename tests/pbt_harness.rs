@@ -511,12 +511,13 @@ pub fn sample_triple_quoted_string(ctx: &mut noprop::TestCaseContext) -> (String
 /// `(text, prefix, decoded_content, suffix)`.
 ///
 /// `erl_scan` treats the empty prefix, `b`, and `s` as non-verbatim
-/// (escape sequences are decoded); every other prefix — including `~B`,
-/// `~S`, and multi-letter forms — is verbatim, so the content is emitted
-/// literally and `\` is not an escape introducer. The generator picks a
-/// verbatim / non-verbatim branch first and then samples a prefix and
-/// content consistent with that choice, so `decoded_content` always
-/// matches what the tokenizer will produce.
+/// (escape sequences are decoded) for single-quoted content; every other
+/// prefix — including `~B`, `~S`, and multi-letter forms — is verbatim.
+/// For triple-quoted content the rule differs: only `b` and `s` are
+/// non-verbatim, and the empty prefix is verbatim (matching `erl_scan`'s
+/// `scan_tqstring`). The generator picks a verbatim / non-verbatim branch
+/// first and then samples a prefix and content consistent with that choice,
+/// so `decoded_content` always matches what the tokenizer will produce.
 pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String, String, String) {
     const DELIMS: [(char, char); 9] = [
         ('(', ')'),
@@ -532,7 +533,7 @@ pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String
     const AFFIX: [char; 6] = ['a', 'b', 'x', '_', '1', 'Q'];
     const NON_VERBATIM_PREFIXES: [&str; 3] = ["", "b", "s"];
 
-    let verbatim = noprop::sample_weighted_index(ctx, &[1, 1]) == 0;
+    let verbatim = noprop::sample_weighted_index(ctx, &[1, 7]) == 0;
     let prefix = if verbatim {
         let mut p = String::new();
         // Ensure the resulting prefix is neither empty nor `b`/`s` so it
@@ -556,7 +557,7 @@ pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String
         suffix.push(noprop::sample_choice(ctx, &AFFIX));
     }
 
-    match noprop::sample_weighted_index(ctx, &[3, 2, 1]) {
+    match noprop::sample_weighted_index(ctx, &[3, 2, 3]) {
         0 => {
             let (open, close) = noprop::sample_choice(ctx, &DELIMS);
             let (inner, decoded) = if verbatim {
@@ -579,11 +580,84 @@ pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String
             (text, prefix, decoded, suffix)
         }
         _ => {
-            let (triple, decoded) = sample_triple_quoted_string(ctx);
+            // For triple-quoted content the verbatim rule differs from the
+            // single-quoted rule above (the empty prefix is verbatim), so
+            // compute the effective verbatim from the prefix and sample
+            // escapes only when non-verbatim.
+            let triple_verbatim = !matches!(prefix.as_str(), "b" | "s");
+            let (triple, decoded) = sample_sigil_triple_quoted_string(ctx, triple_verbatim);
             let text = format!("~{prefix}{triple}{suffix}");
             (text, prefix, decoded, suffix)
         }
     }
+}
+
+/// Sample a triple-quoted string body, optionally with escapes, returning
+/// `(text, decoded_value)`. `text` includes the `"""..."""` delimiters.
+///
+/// When `verbatim` is false, non-verbatim escape sequences are emitted
+/// mid-line and decoded per content line (after indent stripping), matching
+/// the tokenizer's triple-quoted decode.
+pub fn sample_sigil_triple_quoted_string(
+    ctx: &mut noprop::TestCaseContext,
+    verbatim: bool,
+) -> (String, String) {
+    const CONTENT: [char; 6] = ['a', 'b', 'c', 'x', 'y', ' '];
+    let indent =
+        noprop::sample_with_boundaries(ctx, &[0usize, 1, 4], noprop::Ratio::one_nth(4), |ctx| {
+            noprop::sample_usize_in(ctx, 0..=4)
+        });
+    let n_lines =
+        noprop::sample_with_boundaries(ctx, &[0usize, 1, 4], noprop::Ratio::one_nth(4), |ctx| {
+            noprop::sample_usize_in(ctx, 0..=4)
+        });
+    let pad = " ".repeat(indent);
+    let mut decoded_lines = Vec::with_capacity(n_lines);
+    let mut text = String::from("\"\"\"\n");
+    for _ in 0..n_lines {
+        // Indented form rejects a body line that is shorter than `indent`
+        // (it has no content character at column `indent`).
+        let min_len = usize::from(indent > 0);
+        let len = noprop::sample_usize_in(ctx, min_len..=6);
+        let mut line = String::new();
+        let mut decoded = String::new();
+        for j in 0..len {
+            // Force at least one escape on every non-verbatim line (the
+            // first content char is an escape), so the escape-decoding path
+            // is reliably exercised and the oracle stays consistent.
+            let force_escape = !verbatim && j == 0;
+            if !verbatim && (force_escape || noprop::sample_weighted_index(ctx, &[3, 1]) == 0) {
+                let (escape_src, escape_val) = sample_escape(ctx, '"');
+                line.push_str(&escape_src);
+                decoded.push(escape_val);
+            } else {
+                let c = noprop::sample_choice(ctx, &CONTENT);
+                line.push(c);
+                decoded.push(c);
+            }
+        }
+        // With probability, append a "line-continuation" trailing `\`
+        // to a non-verbatim line. `erl_scan` treats such a `\` as being
+        // consumed together with the raw LF that ends the line: the
+        // backslash disappears and the LF still separates content
+        // lines, so the decoded value is unchanged. This only applies
+        // when the escapes so far leave an even count of trailing
+        // backslashes; otherwise appending another `\` would flip the
+        // meaning of the escape immediately before it.
+        if !verbatim
+            && line.bytes().rev().take_while(|b| *b == b'\\').count() % 2 == 0
+            && noprop::sample_weighted_index(ctx, &[3, 1]) == 1
+        {
+            line.push('\\');
+        }
+        text.push_str(&pad);
+        text.push_str(&line);
+        text.push('\n');
+        decoded_lines.push(decoded);
+    }
+    text.push_str(&pad);
+    text.push_str("\"\"\"");
+    (text, decoded_lines.join("\n"))
 }
 
 /// Sample the inner body of a verbatim quoted region: no `\` characters

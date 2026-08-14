@@ -297,7 +297,7 @@ pub(crate) fn keyword_from_text(text: &str) -> Option<Keyword> {
 ///
 /// Accepts both ordinary `"..."` and triple-quoted `"""..."""` forms.
 pub(crate) fn scan_string(source: &str, pos: Position) -> Result<Scanned> {
-    let (end, is_triple) = scan_string_body(source, pos, false)?;
+    let (end, is_triple) = scan_string_body(source, pos, None)?;
     // Adjacent string literals without intervening whitespace are rejected
     // only for the ordinary (non-triple) form to match `erl_scan`.
     if !is_triple && source.get(end..end + 1) == Some("\"") {
@@ -310,20 +310,29 @@ pub(crate) fn scan_string(source: &str, pos: Position) -> Result<Scanned> {
 /// Scan a `"..."` or `"""..."""` string body and return `(length,
 /// is_triple)` without applying the adjacent-string rejection rule.
 ///
-/// `verbatim` disables escape processing for the ordinary form, mirroring
-/// `erl_scan`'s handling of verbatim sigils (e.g. `~B"..."`, `~S"..."`).
-/// Triple-quoted content is always verbatim per EEP 64, so `verbatim`
-/// only affects the ordinary `"..."` branch.
-fn scan_string_body(source: &str, pos: Position, verbatim: bool) -> Result<(usize, bool)> {
+/// `prefix` is the sigil prefix (`None` for a plain string). It selects the
+/// verbatim/escape-processing behaviour, which differs between the two
+/// forms in `erl_scan`:
+///
+/// * Ordinary `"..."`: empty, `s`, and `b` prefixes are non-verbatim
+///   (escapes decoded); every other prefix (and a plain string) is
+///   verbatim. See [`is_verbatim_sigil_prefix`].
+/// * Triple-quoted `"""..."""`: only `s` and `b` are non-verbatim; the
+///   empty prefix, every other prefix, and a plain string are all verbatim
+///   (`erl_scan`'s `scan_tqstring` classifies `SigilType` `b`/`s` as
+///   non-verbatim and everything else as verbatim).
+fn scan_string_body(source: &str, pos: Position, prefix: Option<&str>) -> Result<(usize, bool)> {
     if source.is_empty() {
         return Err(Error::new(ErrorKind::InvalidStringToken, pos));
     }
     if source.starts_with(r#"""""#) {
-        Ok((scan_triple_quoted(source, pos)?, true))
+        let verbatim = !matches!(prefix, Some("b") | Some("s"));
+        Ok((scan_triple_quoted(source, pos, verbatim)?, true))
     } else {
         if !source.starts_with('"') {
             return Err(Error::new(ErrorKind::InvalidStringToken, pos));
         }
+        let verbatim = prefix.is_some_and(is_verbatim_sigil_prefix);
         let inner_end = if verbatim {
             util::find_verbatim_quotation_end(pos, &source[1..], '"')?
         } else {
@@ -397,8 +406,10 @@ fn find_triple_quoted_closer(
 /// Scan a triple-quoted string literal and return its byte length.
 ///
 /// Mirrors [`decode_triple_quoted`] but without building the decoded
-/// content.
-fn scan_triple_quoted(source: &str, pos: Position) -> Result<usize> {
+/// content. When `verbatim` is false, each content line's `\` escapes are
+/// validated (matching erl_scan, which rejects malformed escapes in
+/// non-verbatim sigil triple-quoted strings).
+fn scan_triple_quoted(source: &str, pos: Position, verbatim: bool) -> Result<usize> {
     let mut quote_count = 0usize;
     let mut chars = source.chars().peekable();
     let mut start_line_end = 0usize;
@@ -433,26 +444,30 @@ fn scan_triple_quoted(source: &str, pos: Position) -> Result<usize> {
     // An indented closer with no body lines has `end_line_start ==
     // start_line_end`; `saturating_sub` keeps the range well-formed
     // (decode_triple_quoted uses the same formula).
-    if indent > 0 {
-        let body_end = end_line_start.saturating_sub(1).max(start_line_end);
-        for line in source[start_line_end..body_end].lines() {
-            if line.trim().is_empty() {
-                continue;
-            }
-            let mut valid_line = false;
+    let body_end = end_line_start.saturating_sub(1).max(start_line_end);
+    let body = &source[start_line_end..body_end];
+    for line in body.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        // Strip `indent` leading whitespace columns; a non-whitespace
+        // character within the indent is an error. Indent chars are all
+        // ASCII whitespace (1 byte each), so `line[indent..]` is a valid
+        // byte slice covering the post-indent portion of the line.
+        if indent > 0 {
             for (i, c) in line.chars().enumerate() {
-                if i < indent {
-                    if c.is_ascii_whitespace() {
-                        continue;
-                    } else {
-                        return Err(Error::new(ErrorKind::InvalidStringToken, pos));
-                    }
+                if i >= indent {
+                    break;
                 }
-                valid_line = true;
-                break;
+                if !c.is_ascii_whitespace() {
+                    return Err(Error::new(ErrorKind::InvalidStringToken, pos));
+                }
             }
-            if !valid_line {
-                return Err(Error::new(ErrorKind::InvalidStringToken, pos));
+        }
+        if !verbatim {
+            let stripped = &line[indent..];
+            if stripped.contains('\\') {
+                util::validate_escapes(pos, util::strip_line_continuation(stripped))?;
             }
         }
     }
@@ -485,7 +500,7 @@ pub(crate) fn scan_sigil_string(source: &str, pos: Position) -> Result<Scanned> 
         // adjacent-string rejection (which is checked later against the
         // sigil suffix).
         let (len, _is_triple) =
-            scan_string_body(&source[offset..], pos.step_by_width(offset), verbatim)?;
+            scan_string_body(&source[offset..], pos.step_by_width(offset), Some(prefix))?;
         offset + len
     } else {
         let close = match open {
@@ -1022,7 +1037,7 @@ fn decode_radix_float(slice: &str, hash: usize) -> f64 {
 /// when no indentation stripping is required).
 pub(crate) fn decode_string(text: &str) -> Cow<'_, str> {
     if text.starts_with(r#"""""#) {
-        decode_triple_quoted(text)
+        decode_triple_quoted(text, true)
     } else {
         let after_open = &text[1..];
         let (v, _) = util::parse_quotation(Position::new(), after_open, '"')
@@ -1033,10 +1048,11 @@ pub(crate) fn decode_string(text: &str) -> Cow<'_, str> {
 
 /// Decode a triple-quoted string's body from validated text.
 ///
-/// Borrowed when the closing line has no indentation (the body is a
-/// contiguous slice of the source); owned when indentation must be
-/// stripped from each content line.
-fn decode_triple_quoted(text: &str) -> Cow<'_, str> {
+/// Borrowed when the closing line has no indentation and there are no
+/// escapes to decode (the body is a contiguous slice of the source); owned
+/// when indentation must be stripped from each content line or non-verbatim
+/// escapes must be decoded.
+fn decode_triple_quoted(text: &str, verbatim: bool) -> Cow<'_, str> {
     // Count the opening quote run.
     let mut quote_count = 0usize;
     let mut idx = 0usize;
@@ -1067,7 +1083,11 @@ fn decode_triple_quoted(text: &str) -> Cow<'_, str> {
     // (intermediate lines keep theirs), so remove it from the body, which
     // does not include a trailing LF.
     let body = body.strip_suffix('\r').unwrap_or(body);
-    if indent == 0 {
+
+    // Decode escapes per line only for non-verbatim content. When the
+    // content needs neither indentation stripping nor escape decoding, the
+    // body is a contiguous slice of the source and can be borrowed.
+    if indent == 0 && (verbatim || !body.contains('\\')) {
         return Cow::Borrowed(body);
     }
     let mut value = String::with_capacity(body.len());
@@ -1077,11 +1097,23 @@ fn decode_triple_quoted(text: &str) -> Cow<'_, str> {
             value.push('\n');
         }
         first = false;
-        for (i, c) in line.chars().enumerate() {
-            if i < indent {
-                continue;
-            }
-            value.push(c);
+        // Strip `indent` leading columns, then decode escapes (matching
+        // erl_scan's "indent stripping, then per-line escape decoding,
+        // then line joining" order). Indent chars are all ASCII
+        // whitespace (validated by the scanner), so byte slicing on
+        // `indent` is safe when the line has at least `indent` bytes;
+        // shorter blank lines are treated as empty.
+        let stripped: &str = if indent == 0 {
+            line
+        } else {
+            line.get(indent..).unwrap_or("")
+        };
+        if verbatim {
+            value.push_str(stripped);
+        } else {
+            let stripped = util::strip_line_continuation(stripped);
+            let decoded = util::decode_quotation_content(Position::new(), stripped);
+            value.push_str(&decoded);
         }
     }
     Cow::Owned(value)
@@ -1109,11 +1141,15 @@ pub(crate) fn decode_sigil(text: &str) -> (&str, Cow<'_, str>, &str) {
     let (content, content_end) = if open == '"' {
         // The content is itself a full (regular or triple-quoted) string.
         let sub = &text[prefix_end..];
-        let (len, is_triple) = scan_string_body(sub, Position::new(), verbatim)
+        let (len, is_triple) = scan_string_body(sub, Position::new(), Some(prefix))
             .expect("scanner validated sigil string");
         let body = &sub[..len];
         let value = if is_triple {
-            decode_triple_quoted(body)
+            // Triple-quoted sigils follow a different verbatim rule than
+            // single-quoted ones: only `b`/`s` are non-verbatim, and the
+            // empty prefix is verbatim (matching `erl_scan`'s
+            // `scan_tqstring`).
+            decode_triple_quoted(body, !matches!(prefix, "b" | "s"))
         } else {
             decode_regular_string(&body[1..len - 1], verbatim)
         };

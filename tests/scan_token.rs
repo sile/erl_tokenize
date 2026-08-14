@@ -654,6 +654,154 @@ fn sigil_string_empty_content_followed_by_string_rejects() {
 }
 
 #[test]
+fn sigil_string_triple_quoted_non_verbatim_decodes_escapes() {
+    // Non-verbatim prefixes (`~s`, `~b`) decode escapes inside
+    // triple-quoted content, matching erl_scan. The body line is the escape
+    // `\n` (backslash-n) which decodes to a single LF.
+    for (src, expected) in [
+        (
+            r#"~s"""
+\n
+""""#
+                .to_string(),
+            "\n",
+        ),
+        (
+            r#"~b"""
+\n
+""""#
+                .to_string(),
+            "\n",
+        ),
+        (
+            r#"~s"""
+\x{41}
+""""#
+                .to_string(),
+            "A",
+        ),
+        (
+            r#"~s"""
+\tfoo
+""""#
+                .to_string(),
+            "\tfoo",
+        ),
+    ] {
+        match first_value(&src) {
+            TokenValue::SigilString {
+                content: Cow::Owned(s),
+                ..
+            } => assert_eq!(s, expected, "for {src:?}"),
+            other => panic!("{other:?} for {src:?}"),
+        }
+    }
+}
+
+#[test]
+fn sigil_string_triple_quoted_empty_prefix_is_verbatim() {
+    // The empty prefix `~"""..."""` is verbatim in erl_scan (only `s`/`b`
+    // are non-verbatim in the triple-quoted form), so `\n` stays literal.
+    let src = r#"~"""
+\n
+""""#;
+    match first_value(src) {
+        TokenValue::SigilString {
+            content: Cow::Borrowed(s),
+            ..
+        } => assert_eq!(s, "\\n"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn sigil_string_triple_quoted_verbatim_preserves_backslash() {
+    // Verbatim prefixes (`~S`, `~B`) and the plain triple-quoted string
+    // keep `\` literal inside triple-quoted content.
+    let src = r#"~S"""
+\n
+""""#;
+    match first_value(src) {
+        TokenValue::SigilString {
+            content: Cow::Borrowed(s),
+            ..
+        } => assert_eq!(s, "\\n"),
+        other => panic!("{other:?}"),
+    }
+    let src = "\"\"\"\n\\n\n\"\"\"";
+    match first_value(src) {
+        TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "\\n"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn sigil_string_triple_quoted_non_verbatim_malformed_escape_rejects() {
+    // erl_scan rejects a malformed escape in non-verbatim triple-quoted
+    // sigil content; we must too (the decode step would otherwise panic on
+    // its `scanner already validated escape` expect). `\x` with no hex
+    // digits, an empty `\x{}`, and an unclosed `\x{` are all illegal.
+    for src in [
+        "~s\"\"\"\n\\x\n\"\"\"",
+        "~s\"\"\"\n\\x{}\n\"\"\"",
+        "~s\"\"\"\n\\x{41\n\"\"\"",
+        "~b\"\"\"\n\\x\n\"\"\"",
+    ] {
+        assert!(
+            scan_token(src, pos()).is_err(),
+            "expected error for {src:?}"
+        );
+    }
+}
+
+#[test]
+fn sigil_string_triple_quoted_non_verbatim_line_continuation() {
+    // erl_scan treats a `\` immediately before the raw LF that ends a
+    // content line as a line-continuation marker: the backslash is
+    // consumed and the LF still acts as the content-line separator, so
+    // `foo\<LF>bar` decodes to `"foo\nbar"` (not an escape error).
+    // Verify each observable rule:
+    //   * lone `\<LF>` at the end of a line just drops the `\`;
+    //   * `\\` (an escaped backslash) still decodes to a literal `\`;
+    //   * a trailing odd count of `\` drops one continuation `\`
+    //     after the preceding `\\` escapes decode.
+    for (src, expected) in [
+        ("~s\"\"\"\nfoo\\\nbar\n\"\"\"", "foo\nbar"),
+        ("~s\"\"\"\nabc\\\n\"\"\"", "abc"),
+        ("~s\"\"\"\n\\\n\\\n\"\"\"", "\n"),
+        ("~s\"\"\"\na\\\nb\\\nc\n\"\"\"", "a\nb\nc"),
+        ("~s\"\"\"\n\\\\\n\"\"\"", "\\"),
+        ("~s\"\"\"\n\\\\\\\n\"\"\"", "\\"),
+        ("~s\"\"\"\n\\\\\\\\\n\"\"\"", "\\\\"),
+        ("~s\"\"\"\n  foo\\\n  bar\n  \"\"\"", "foo\nbar"),
+        ("~s\"\"\"\n  \\\n  \"\"\"", ""),
+    ] {
+        match first_value(src) {
+            TokenValue::SigilString {
+                content: Cow::Owned(s),
+                ..
+            } => assert_eq!(s, expected, "for {src:?}"),
+            other => panic!("{other:?} for {src:?}"),
+        }
+    }
+}
+
+#[test]
+fn sigil_string_triple_quoted_verbatim_preserves_trailing_backslash() {
+    // Verbatim triple-quoted content keeps `\` literal, including a
+    // trailing `\` before the LF that ends a content line (no line
+    // continuation).
+    let src = "~S\"\"\"\nfoo\\\nbar\n\"\"\"";
+    match first_value(src) {
+        TokenValue::SigilString {
+            content: Cow::Borrowed(s),
+            ..
+        } => assert_eq!(s, "foo\\\nbar"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
 fn sigil_string_suffix_separates_from_next_string() {
     // A non-empty sigil suffix separates the tokens, so a `"..."` may
     // follow without triggering adjacent-string.
