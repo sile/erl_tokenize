@@ -125,10 +125,17 @@ fn scan_one_impl(source: &str, pos: Position) -> Result<Scanned> {
 /// Look ahead past digits and underscores to check whether an ASCII-digit
 /// run introduces a float or an integer.
 ///
-/// Recognises both `<digits>.<digit>` (decimal float) and
-/// `<radix>#<radix-digits>.<radix-digit>` (radix float); anything else
-/// (including `<digits>.` followed by a non-digit and `<digits>#<digits>`
-/// with no dot) is left to the integer scanner.
+/// Recognises both `<digits>.<x>` (decimal float) and
+/// `<radix>#<radix-digits>.<x>` (radix float), where `<x>` is either a
+/// digit (a real fractional part) or a namechar (`_`, `@`, `A-Z`,
+/// `a-z`). The namechar case is intentionally routed here even though
+/// it never yields a valid float: `scan_float_decimal` /
+/// `scan_float_radix` will fail via their "dot must be followed by a
+/// digit" rule, producing `InvalidFloatToken` for shapes like `1.e2`
+/// and `16#ff._` — matching erl_scan's `scan_number` /
+/// `scan_based_num` `.`-then-`?NAMECHAR` reject clauses. Any other
+/// shape (`<digits>.` followed by whitespace / symbol / EOF, or
+/// `<digits>#<digits>` with no dot) is left to the integer scanner.
 fn looks_like_float(source: &str) -> bool {
     let bytes = source.as_bytes();
     // Skip the initial digit / underscore run.
@@ -140,11 +147,11 @@ fn looks_like_float(source: &str) -> bool {
             break;
         }
     }
-    // Decimal float: `<digits>.<digit>`.
+    // Decimal float: `<digits>.<namechar>` (digits are namechars too).
     if bytes.get(i) == Some(&b'.') {
-        return bytes.get(i + 1).is_some_and(|c| c.is_ascii_digit());
+        return bytes.get(i + 1).copied().is_some_and(is_ascii_namechar);
     }
-    // Radix float: `<digits>#<radix-digits>.<radix-digit>`.
+    // Radix float: `<digits>#<radix-digits>.<namechar>`.
     if bytes.get(i) == Some(&b'#') {
         let mut j = i + 1;
         while let Some(&b) = bytes.get(j) {
@@ -155,9 +162,15 @@ fn looks_like_float(source: &str) -> bool {
             }
         }
         return bytes.get(j) == Some(&b'.')
-            && bytes.get(j + 1).is_some_and(|c| c.is_ascii_alphanumeric());
+            && bytes.get(j + 1).copied().is_some_and(is_ascii_namechar);
     }
     false
+}
+
+/// Byte-level fast path for [`util::is_namechar`]: every namechar is
+/// ASCII, so a byte comparison suffices here.
+fn is_ascii_namechar(b: u8) -> bool {
+    matches!(b, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'@')
 }
 
 /// Validate an atom token at the start of `source` and return its length.
@@ -251,6 +264,14 @@ pub(crate) fn scan_integer(source: &str, pos: Position) -> Result<Scanned> {
         }
     }
     if needs_digit {
+        return Err(Error::new(ErrorKind::InvalidIntegerToken, pos));
+    }
+    // Reject a trailing namechar: erl_scan's `scan_number` and
+    // `scan_based_num` both return `{illegal,integer}` when the digit
+    // run is followed by `?NAMECHAR` (`12abc`, `1e2`, `16#Fg`, ...).
+    if let Some(c) = source[end..].chars().next()
+        && util::is_namechar(c)
+    {
         return Err(Error::new(ErrorKind::InvalidIntegerToken, pos));
     }
     Ok(Scanned::new(ScanKind::Integer, end))
@@ -717,6 +738,14 @@ fn scan_float_decimal(source: &str, pos: Position) -> Result<Scanned> {
         }
         idx = read_digit_run(source, idx, pos)?;
     }
+    // Reject a trailing namechar: erl_scan's `scan_fraction` and
+    // `scan_exponent` both return `{illegal,float}` when the run ends
+    // on `?NAMECHAR` (`1.5a`, `1.5e2a`, ...).
+    if let Some(c) = source[idx..].chars().next()
+        && util::is_namechar(c)
+    {
+        return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
+    }
     Ok(Scanned::new(ScanKind::Float, idx))
 }
 
@@ -787,6 +816,20 @@ fn scan_float_radix(source: &str, pos: Position) -> Result<Scanned> {
         }
         idx += 1;
         idx = read_exp_digit_run(source, idx, pos)?;
+        // erl_scan's `scan_based_exponent` has no `?NAMECHAR` clause,
+        // so a namechar after the exponent digits terminates the token
+        // and starts the next one (`16#ff.ff#e1a` → `Float, Atom("a")`).
+        // Skip the trailing-namechar check on this branch.
+    } else {
+        // Reject a trailing namechar on the fractional part when no
+        // exponent follows: erl_scan's `scan_based_fraction` returns
+        // `{illegal,float}` when the fractional run ends on `?NAMECHAR`
+        // that is not a base digit (`16#ff._`, `16#ff.@`, ...).
+        if let Some(c) = source[idx..].chars().next()
+            && util::is_namechar(c)
+        {
+            return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
+        }
     }
     Ok(Scanned::new(ScanKind::Float, idx))
 }

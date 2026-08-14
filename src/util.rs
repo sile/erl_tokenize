@@ -19,6 +19,15 @@ pub(crate) fn is_atom_non_head_char(c: char) -> bool {
     )
 }
 
+/// Match erl_scan's effective `?NAMECHAR` set: ASCII alphanumerics,
+/// `_`, and `@`. Latin-1 letters are intentionally excluded: erl_scan's
+/// macro attempts to include them but chains its Latin-1 clauses with
+/// `andalso`, so `ß..ÿ ∩ À..Þ` collapses to the empty set and no
+/// Latin-1 letter satisfies the guard in practice.
+pub(crate) fn is_namechar(c: char) -> bool {
+    matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '@')
+}
+
 pub(crate) fn is_variable_head_char(c: char) -> bool {
     // Matches erl_scan: ASCII `A-Z`, `_`, and Latin-1 uppercase letters
     // (`À..Þ` minus the multiplication sign `×`).

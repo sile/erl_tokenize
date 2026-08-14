@@ -353,6 +353,32 @@ fn integer_errors() {
     }
 }
 
+#[test]
+fn integer_rejects_trailing_namechar() {
+    // Matches `erl_scan`'s `scan_number` / `scan_based_num` `?NAMECHAR`
+    // clauses: a digit run (decimal or radix) followed by a namechar is
+    // `{illegal,integer}`. Without this, we would split `12abc` into
+    // `Integer("12")` + `Atom("abc")` and diverge from `erl_scan`.
+    for src in ["12abc", "1e2", "16#Fg", "100@200", "9_"] {
+        let e = scan_token(src, pos())
+            .expect_err(&format!("expected error for {src:?}"));
+        // `9_` is caught earlier by the trailing-underscore rule; the
+        // rest surface the new namechar check. Both use the same kind.
+        assert_eq!(e.kind(), ErrorKind::InvalidIntegerToken, "for {src:?}");
+    }
+}
+
+#[test]
+fn integer_latin1_letter_boundary_splits() {
+    // `erl_scan`'s `?NAMECHAR` macro chains its Latin-1 clauses with
+    // `andalso` (`ß..ÿ ∩ À..Þ` collapses to the empty set), so Latin-1
+    // letters are *not* namechars for it: `12ä` scans as
+    // `Integer("12") + Atom("ä")`, not `{illegal,integer}`. We must
+    // mirror this asymmetry rather than reusing `is_atom_non_head_char`.
+    assert_eq!(texts("12ä"), ["12", "ä"]);
+    assert_eq!(texts("16#Fé"), ["16#F", "é"]);
+}
+
 // ============================================================
 // Float
 // ============================================================
@@ -441,6 +467,42 @@ fn float_overflow_is_error() {
         TokenValue::Float(1.7e308),
         "1.7e308 should still be scannable"
     );
+}
+
+#[test]
+fn float_rejects_dot_then_namechar() {
+    // `erl_scan`'s `scan_number` and `scan_based_num` reject
+    // `<digits>[#<digits>].<?NAMECHAR>` as `{illegal,float}` (`1.e2` /
+    // `16#ff._` / `16#ff.@`). We route these into the float scanners
+    // via `looks_like_float` so the "dot must be followed by a digit"
+    // rule surfaces `InvalidFloatToken`.
+    for src in ["1.e2", "1.a", "16#ff._", "16#ff.@"] {
+        let e = scan_token(src, pos())
+            .expect_err(&format!("expected error for {src:?}"));
+        assert_eq!(e.kind(), ErrorKind::InvalidFloatToken, "for {src:?}");
+    }
+}
+
+#[test]
+fn float_rejects_trailing_namechar_on_fractional_and_decimal_exponent() {
+    // `scan_fraction`, `scan_exponent`, and `scan_based_fraction` each
+    // reject a trailing `?NAMECHAR`. Note the omission of a radix
+    // `scan_based_exponent` case: that clause is intentionally missing
+    // in `erl_scan` — see `float_radix_exponent_trailing_namechar_splits`.
+    for src in ["1.5a", "1.5e2a", "16#ff.ffz", "16#ff.ff@"] {
+        let e = scan_token(src, pos())
+            .expect_err(&format!("expected error for {src:?}"));
+        assert_eq!(e.kind(), ErrorKind::InvalidFloatToken, "for {src:?}");
+    }
+}
+
+#[test]
+fn float_radix_exponent_trailing_namechar_splits() {
+    // `erl_scan`'s `scan_based_exponent` has no `?NAMECHAR` clause, so
+    // a namechar after the exponent digits terminates the float and
+    // starts the next token instead of erroring.
+    assert_eq!(texts("16#ff.ff#e1a"), ["16#ff.ff#e1", "a"]);
+    assert_eq!(first("16#ff.ff#e1a").kind(), TokenKind::Float);
 }
 
 #[test]
