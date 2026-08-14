@@ -618,6 +618,33 @@ pub fn sample_sigil_string(ctx: &mut noprop::TestCaseContext) -> (String, String
     }
 }
 
+/// Sample a `~b"""..."""` / `~s"""..."""` non-verbatim triple-quoted
+/// sigil with at least one escape in its content. Returns
+/// `(text, prefix, decoded_content, suffix)`.
+///
+/// This dedicated sampler exists so the `saw_sigil_triple_escape`
+/// coverage gate in `pbt_value_extraction` gets a reliable stream of
+/// hits: the same shape via [`sample_sigil_string`] is reached through
+/// three chained weighted picks that combine to well under 1 % per
+/// case, which is far too flaky at `CASES = 256`.
+pub fn sample_sigil_triple_escape_string(
+    ctx: &mut noprop::TestCaseContext,
+) -> (String, String, String, String) {
+    const AFFIX: [char; 6] = ['a', 'b', 'x', '_', '1', 'Q'];
+    let prefix = if noprop::sample_bool(ctx) { "b" } else { "s" }.to_owned();
+    let suffix_len = noprop::sample_usize_in(ctx, 0..=3);
+    let mut suffix = String::new();
+    for _ in 0..suffix_len {
+        suffix.push(noprop::sample_choice(ctx, &AFFIX));
+    }
+    // `verbatim = false` — `sample_sigil_triple_quoted_string` forces
+    // an escape on the first char of every content line, so the
+    // decoded body always contains at least one escape.
+    let (triple, decoded) = sample_sigil_triple_quoted_string(ctx, false);
+    let text = format!("~{prefix}{triple}{suffix}");
+    (text, prefix, decoded, suffix)
+}
+
 /// Sample a triple-quoted string body, optionally with escapes, returning
 /// `(text, decoded_value)`. `text` includes the `"""..."""` delimiters.
 ///

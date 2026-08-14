@@ -16,8 +16,8 @@ use pbt_harness::{
     CASES, Counter, LabelSet, SEED_ENV, sample_bare_atom, sample_char_literal, sample_comment,
     sample_decimal_float, sample_decimal_integer, sample_keyword, sample_one_whitespace_token,
     sample_overflow_integer, sample_quoted_atom, sample_radix_float, sample_radix_integer,
-    sample_regular_string, sample_sigil_string, sample_symbol, sample_triple_quoted_string,
-    sample_unicode_atom, sample_variable,
+    sample_regular_string, sample_sigil_string, sample_sigil_triple_escape_string, sample_symbol,
+    sample_triple_quoted_string, sample_unicode_atom, sample_variable,
 };
 
 /// Expected value for one case. Kept flat so a mismatch reports clearly.
@@ -59,6 +59,13 @@ fn sample_case(ctx: &mut noprop::TestCaseContext) -> (String, Expected) {
             2, // triple-quoted string
             2, // variable
             2, // sigil
+            // Dedicated `~b"""…"""` / `~s"""…"""` sigil branch: reaching
+            // this shape via `sample_sigil_string` chains three weighted
+            // picks (verbatim vs not, prefix, delimiter) that combine
+            // to well under 1 % per case, so the `saw_sigil_triple_escape`
+            // coverage gate needs a first-class arm to stay reliable
+            // at `CASES = 256`.
+            2, // sigil triple-quoted escape
             2, // whitespace
         ],
     ) {
@@ -125,6 +132,17 @@ fn sample_case(ctx: &mut noprop::TestCaseContext) -> (String, Expected) {
         }
         15 => {
             let (text, prefix, content, suffix) = sample_sigil_string(ctx);
+            (
+                text,
+                Expected::SigilString {
+                    prefix,
+                    content,
+                    suffix,
+                },
+            )
+        }
+        16 => {
+            let (text, prefix, content, suffix) = sample_sigil_triple_escape_string(ctx);
             (
                 text,
                 Expected::SigilString {
