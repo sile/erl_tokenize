@@ -52,7 +52,7 @@ pub(crate) fn find_quotation_end(pos: Position, input: &str, terminator: char) -
     let mut chars = input.char_indices().peekable();
     while let Some((i, c)) = chars.next() {
         if c == '\\' {
-            parse_escaped_char(pos.step_by_width(1 + i), &mut chars)?;
+            parse_escaped_char(pos.step_by_text(&input[..i]), &mut chars)?;
         } else if c == terminator {
             return Ok(i);
         }
@@ -103,7 +103,7 @@ pub(crate) fn decode_quotation_content(pos: Position, input: &str) -> String {
     let mut chars = input.char_indices().peekable();
     while let Some((i, c)) = chars.next() {
         if c == '\\' {
-            let c = parse_escaped_char(pos.step_by_width(1 + i), &mut chars)
+            let c = parse_escaped_char(pos.step_by_text(&input[..i]), &mut chars)
                 .expect("scanner already validated escape");
             buf.push(c);
         } else {

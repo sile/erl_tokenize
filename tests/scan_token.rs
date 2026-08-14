@@ -787,6 +787,37 @@ fn string_errors() {
     }
 }
 
+#[test]
+fn string_escape_error_position_tracks_line_breaks() {
+    // An ill-formed escape reports the position of the backslash that
+    // opens it, tracking line/column across embedded LF so multi-line
+    // sources report the real location (erl_scan behaviour).
+    let src = "\"line1\n\\^0\"";
+    let err = scan_token(src, pos()).unwrap_err();
+    assert_eq!(
+        (err.position().line().get(), err.position().column().get()),
+        (2, 1),
+        "for {src:?}"
+    );
+
+    let src = "\"'\n\n\\^0'\"";
+    let err = scan_token(src, pos()).unwrap_err();
+    assert_eq!(
+        (err.position().line().get(), err.position().column().get()),
+        (3, 1),
+        "for {src:?}"
+    );
+
+    // Single-line escapes are unchanged.
+    let src = r#""ab\^0""#;
+    let err = scan_token(src, pos()).unwrap_err();
+    assert_eq!(
+        (err.position().line().get(), err.position().column().get()),
+        (1, 3),
+        "for {src:?}"
+    );
+}
+
 // ============================================================
 // Symbol
 // ============================================================
