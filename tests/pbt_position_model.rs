@@ -47,12 +47,12 @@ fn position_model_matches_scan_token() -> noprop::TestResult {
                 "start offset for {src:?} at {text:?}"
             );
             assert_eq!(
-                token.start().line(),
+                token.start().line().get(),
                 model.1,
                 "start line for {src:?} at {text:?}"
             );
             assert_eq!(
-                token.start().column(),
+                token.start().column().get(),
                 model.2,
                 "start column for {src:?} at {text:?}"
             );
@@ -63,12 +63,12 @@ fn position_model_matches_scan_token() -> noprop::TestResult {
                 "end offset for {src:?} at {text:?}"
             );
             assert_eq!(
-                token.end().line(),
+                token.end().line().get(),
                 after.1,
                 "end line for {src:?} at {text:?}"
             );
             assert_eq!(
-                token.end().column(),
+                token.end().column().get(),
                 after.2,
                 "end column for {src:?} at {text:?}"
             );
@@ -78,7 +78,7 @@ fn position_model_matches_scan_token() -> noprop::TestResult {
             if text.chars().any(|c| c.len_utf8() > 1) {
                 saw_multibyte.hit();
             }
-            if token.end().line() > 1 {
+            if token.end().line().get() > 1 {
                 saw_multiline.hit();
             }
             model = after;

@@ -1,9 +1,14 @@
+use std::num::NonZeroUsize;
+
 /// Position within a source string.
 ///
-/// Tracks the byte offset from the start of the source and the 1-based
-/// line and column of the underlying UTF-8 character. Columns advance in
-/// bytes rather than characters, so a line that contains multi-byte
-/// characters can have columns beyond the visual character count.
+/// Tracks the byte offset from the start of the source and the line and
+/// column of the underlying UTF-8 character. Columns advance in bytes
+/// rather than characters, so a line that contains multi-byte characters
+/// can have columns beyond the visual character count.
+///
+/// Line and column are typed as [`NonZeroUsize`] because both are
+/// 1-based (there is no line 0 or column 0).
 ///
 /// `Position` intentionally carries no file-path information. Callers
 /// manage the association between a source string and its identifier
@@ -11,8 +16,8 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Position {
     offset: usize,
-    line: usize,
-    column: usize,
+    line: NonZeroUsize,
+    column: NonZeroUsize,
 }
 
 impl Position {
@@ -20,8 +25,8 @@ impl Position {
     /// (offset 0, line 1, column 1).
     pub const fn new() -> Position {
         Position {
-            line: 1,
-            column: 1,
+            line: NonZeroUsize::MIN,
+            column: NonZeroUsize::MIN,
             offset: 0,
         }
     }
@@ -38,7 +43,7 @@ impl Position {
     ///
     /// Lines are separated by LF (`\n`). CR (`\r`) is not treated as a
     /// line break.
-    pub const fn line(self) -> usize {
+    pub const fn line(self) -> NonZeroUsize {
         self.line
     }
 
@@ -46,7 +51,7 @@ impl Position {
     ///
     /// Columns are counted in bytes. Column 1 is the start of a line;
     /// crossing a LF resets column to 1.
-    pub const fn column(self) -> usize {
+    pub const fn column(self) -> NonZeroUsize {
         self.column
     }
 
@@ -57,7 +62,7 @@ impl Position {
     /// arbitrary text.
     pub(crate) fn step_by_width(mut self, width: usize) -> Position {
         self.offset += width;
-        self.column += width;
+        self.column = self.column.saturating_add(width);
         self
     }
 
@@ -66,12 +71,12 @@ impl Position {
     pub(crate) fn step_by_text(mut self, mut text: &str) -> Position {
         while let Some(i) = text.find('\n') {
             self.offset += i + 1;
-            self.line += 1;
-            self.column = 1;
+            self.line = self.line.saturating_add(1);
+            self.column = NonZeroUsize::MIN;
             text = &text[i + 1..];
         }
         self.offset += text.len();
-        self.column += text.len();
+        self.column = self.column.saturating_add(text.len());
         self
     }
 
@@ -80,10 +85,10 @@ impl Position {
         let n = c.len_utf8();
         self.offset += n;
         if c == '\n' {
-            self.line += 1;
-            self.column = 1;
+            self.line = self.line.saturating_add(1);
+            self.column = NonZeroUsize::MIN;
         } else {
-            self.column += n;
+            self.column = self.column.saturating_add(n);
         }
         self
     }

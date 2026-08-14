@@ -131,8 +131,8 @@ fn scan_loop_terminates_and_advances_on_error() -> noprop::TestResult {
         loop {
             let before = pos.offset();
             assert_eq!(pos.offset(), model.0, "offset drift for {src:?}");
-            assert_eq!(pos.line(), model.1, "line drift for {src:?}");
-            assert_eq!(pos.column(), model.2, "column drift for {src:?}");
+            assert_eq!(pos.line().get(), model.1, "line drift for {src:?}");
+            assert_eq!(pos.column().get(), model.2, "column drift for {src:?}");
             match scan_token(&src, pos) {
                 Ok(None) => break,
                 Ok(Some(token)) => {
@@ -148,12 +148,24 @@ fn scan_loop_terminates_and_advances_on_error() -> noprop::TestResult {
                         "success did not advance offset for {src:?}"
                     );
                     assert_eq!(token.start().offset(), model.0, "start offset for {src:?}");
-                    assert_eq!(token.start().line(), model.1, "start line for {src:?}");
-                    assert_eq!(token.start().column(), model.2, "start column for {src:?}");
+                    assert_eq!(
+                        token.start().line().get(),
+                        model.1,
+                        "start line for {src:?}"
+                    );
+                    assert_eq!(
+                        token.start().column().get(),
+                        model.2,
+                        "start column for {src:?}"
+                    );
                     let after = step_position(model, text);
                     assert_eq!(token.end().offset(), after.0, "end offset for {src:?}");
-                    assert_eq!(token.end().line(), after.1, "end line for {src:?}");
-                    assert_eq!(token.end().column(), after.2, "end column for {src:?}");
+                    assert_eq!(token.end().line().get(), after.1, "end line for {src:?}");
+                    assert_eq!(
+                        token.end().column().get(),
+                        after.2,
+                        "end column for {src:?}"
+                    );
                     model = after;
                     pos = token.end();
                 }
@@ -170,9 +182,13 @@ fn scan_loop_terminates_and_advances_on_error() -> noprop::TestResult {
                         after.0,
                         "resume offset is not one scalar for {src:?}"
                     );
-                    assert_eq!(resume.line(), after.1, "resume line mismatch for {src:?}");
                     assert_eq!(
-                        resume.column(),
+                        resume.line().get(),
+                        after.1,
+                        "resume line mismatch for {src:?}"
+                    );
+                    assert_eq!(
+                        resume.column().get(),
                         after.2,
                         "resume column mismatch for {src:?}"
                     );

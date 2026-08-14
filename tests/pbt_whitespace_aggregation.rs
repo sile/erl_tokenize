@@ -66,8 +66,8 @@ fn whitespace_aggregation_invariants() -> noprop::TestResult {
 
         let expected = step_position((0, 1, 1), &src);
         assert_eq!(pos.offset(), expected.0, "model offset for {src:?}");
-        assert_eq!(pos.line(), expected.1, "model line for {src:?}");
-        assert_eq!(pos.column(), expected.2, "model column for {src:?}");
+        assert_eq!(pos.line().get(), expected.1, "model line for {src:?}");
+        assert_eq!(pos.column().get(), expected.2, "model column for {src:?}");
 
         for pair in tokens.windows(2) {
             let (_, first_end) = pair[0];

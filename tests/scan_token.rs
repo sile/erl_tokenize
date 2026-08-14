@@ -899,7 +899,7 @@ fn position_after_first_token_advances_column() {
     let t = scan_token(src, p).unwrap().unwrap();
     p = t.end();
     assert_eq!(p.offset(), 3);
-    assert_eq!(p.column(), 4);
+    assert_eq!(p.column().get(), 4);
 }
 
 #[test]
@@ -908,13 +908,13 @@ fn position_advances_across_lf_whitespace() {
     let mut p = Position::new();
     let t1 = scan_token(src, p).unwrap().unwrap();
     p = t1.end();
-    assert_eq!((p.line(), p.column()), (1, 3));
+    assert_eq!((p.line().get(), p.column().get()), (1, 3));
     let t2 = scan_token(src, p).unwrap().unwrap();
     p = t2.end();
-    assert_eq!((p.line(), p.column()), (2, 3));
+    assert_eq!((p.line().get(), p.column().get()), (2, 3));
     let t3 = scan_token(src, p).unwrap().unwrap();
     p = t3.end();
-    assert_eq!((p.line(), p.column()), (2, 4));
+    assert_eq!((p.line().get(), p.column().get()), (2, 4));
     assert_eq!(t3.text(src), "X");
 }
 
