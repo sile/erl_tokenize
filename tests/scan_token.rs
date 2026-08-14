@@ -784,7 +784,6 @@ fn symbol_all() {
         ("|", Symbol::VerticalBar),
         ("||", Symbol::DoubleVerticalBar),
         ("?", Symbol::Question),
-        ("??", Symbol::DoubleQuestion),
         ("?=", Symbol::MaybeMatch),
         ("!", Symbol::Bang),
         ("-", Symbol::Hyphen),
@@ -839,6 +838,17 @@ fn symbol_wildcard_record_single_token() {
         tokens[1].value("Node#_{anno=[]}"),
         TokenValue::Symbol(Symbol::WildcardRecord)
     );
+}
+
+#[test]
+fn double_question_splits_into_two_question_tokens() {
+    // `??` is not a single symbol; erl_scan emits it as two `?` tokens
+    // (the preprocessor combines them, e.g. as the stringify-arg operator).
+    assert_eq!(texts("??"), ["?", "?"]);
+    assert_eq!(texts("??foo"), ["?", "?", "foo"]);
+    // A lone `?` is unchanged.
+    assert_eq!(texts("?"), ["?"]);
+    assert_eq!(first("?").kind(), TokenKind::Symbol(Symbol::Question));
 }
 
 // ============================================================

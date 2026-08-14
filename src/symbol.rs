@@ -67,9 +67,6 @@ pub enum Symbol {
     /// `?`
     Question,
 
-    /// `??`
-    DoubleQuestion,
-
     /// `?=`
     MaybeMatch,
 
@@ -167,7 +164,6 @@ impl Symbol {
             Symbol::VerticalBar => "|",
             Symbol::DoubleVerticalBar => "||",
             Symbol::Question => "?",
-            Symbol::DoubleQuestion => "??",
             Symbol::Bang => "!",
             Symbol::Hyphen => "-",
             Symbol::MinusMinus => "--",
