@@ -204,12 +204,9 @@ pub(crate) fn scan_atom(source: &str, pos: Position) -> Result<Scanned> {
 /// length.
 pub(crate) fn scan_char(source: &str, pos: Position) -> Result<Scanned> {
     let mut chars = source.char_indices();
-    let (_, dollar) = chars
+    chars
         .next()
         .ok_or_else(|| Error::new(ErrorKind::InvalidCharToken, pos))?;
-    if dollar != '$' {
-        return Err(Error::new(ErrorKind::InvalidCharToken, pos));
-    }
     let (i, c) = chars
         .next()
         .ok_or_else(|| Error::new(ErrorKind::InvalidCharToken, pos))?;
@@ -346,9 +343,6 @@ pub(crate) fn scan_string(source: &str, pos: Position) -> Result<Scanned> {
 ///   (`erl_scan`'s `scan_tqstring` classifies `SigilType` `b`/`s` as
 ///   non-verbatim and everything else as verbatim).
 fn scan_string_body(source: &str, pos: Position, prefix: Option<&str>) -> Result<(usize, bool)> {
-    if source.is_empty() {
-        return Err(Error::new(ErrorKind::InvalidStringToken, pos));
-    }
     if source.starts_with(r#"""""#) {
         let verbatim = !matches!(prefix, Some("b") | Some("s"));
         Ok((scan_triple_quoted(source, pos, verbatim)?, true))
