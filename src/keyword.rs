@@ -2,7 +2,7 @@
 ///
 /// Reference: [Erlang's Reserved Words][Reserved Words]
 ///
-/// [Reserved Words]: http://erlang.org/doc/reference_manual/introduction.html#id61721
+/// [Reserved Words]: https://www.erlang.org/doc/system/reference_manual.html#reserved-words
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Keyword {
     /// `after`
