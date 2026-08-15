@@ -988,8 +988,8 @@ fn read_exp_digit_run(source: &str, start: usize, pos: Position) -> Result<usize
 // Value decoders
 //
 // These helpers take a text slice that the scanners above have already
-// validated and produce the decoded value that `Token::value(source)` (and,
-// during the migration, `tokens::*Token::from_text`) hands to callers.
+// validated and produce the decoded value that `Token::value(source)`
+// hands to callers.
 //
 // Decoding is intentionally kept in this module so scanning and value
 // extraction share the same tables of escape characters, sigil delimiter
