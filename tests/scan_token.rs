@@ -256,9 +256,18 @@ fn char_octal() {
 
 #[test]
 fn char_errors() {
-    for src in ["$", r"$\"] {
-        assert!(scan_token(src, pos()).is_err(), "expected error for {src}");
-    }
+    // `"$"` alone: the `$` is consumed but the following character is
+    // missing — `InvalidCharToken`.
+    assert_eq!(
+        scan_token("$", pos()).unwrap_err().kind,
+        ErrorKind::InvalidCharToken,
+    );
+    // `"$\"`: the `$` opens a char literal, `\` opens an escape, but no
+    // escape target follows — `InvalidEscapedChar`.
+    assert_eq!(
+        scan_token(r"$\", pos()).unwrap_err().kind,
+        ErrorKind::InvalidEscapedChar,
+    );
 }
 
 // ============================================================
@@ -720,9 +729,21 @@ fn sigil_string_escape_produces_owned_content() {
 
 #[test]
 fn sigil_string_errors() {
-    for src in ["~", "~?foo?", "~(foo"] {
-        assert!(scan_token(src, pos()).is_err(), "expected error for {src}");
+    // `"~"` (no delimiter) and `"~?foo?"` (`?` is not a valid delimiter)
+    // both fail before finding a matching close — `InvalidSigilStringToken`.
+    for src in ["~", "~?foo?"] {
+        assert_eq!(
+            scan_token(src, pos()).unwrap_err().kind,
+            ErrorKind::InvalidSigilStringToken,
+            "for {src}",
+        );
     }
+    // `"~(foo"`: `(` opens a sigil body whose close `)` is never found
+    // — `NoClosingQuotation`.
+    assert_eq!(
+        scan_token("~(foo", pos()).unwrap_err().kind,
+        ErrorKind::NoClosingQuotation,
+    );
     // Non-sigil string.
     assert_eq!(first(r#""foo""#).kind(), TokenKind::String);
 }
@@ -1071,7 +1092,10 @@ fn string_triple_quoted_crlf_cases() {
 
 #[test]
 fn string_adjacent_literals_reject() {
-    assert!(scan_token(r#""foo""bar""#, pos()).is_err());
+    assert_eq!(
+        scan_token(r#""foo""bar""#, pos()).unwrap_err().kind,
+        ErrorKind::AdjacentStringLiterals,
+    );
 }
 
 #[test]
@@ -1102,9 +1126,10 @@ fn string_triple_quoted_closer_requires_contiguous_quotes() {
 #[test]
 fn string_errors() {
     for src in ["\"", r#""unterminated"#] {
-        assert!(
-            scan_token(src, pos()).is_err(),
-            "expected error for {src:?}"
+        assert_eq!(
+            scan_token(src, pos()).unwrap_err().kind,
+            ErrorKind::NoClosingQuotation,
+            "for {src:?}",
         );
     }
 }
@@ -1547,4 +1572,119 @@ handle_cast(increment, #state{count = Count} = State) ->
     {noreply, State#state{count = Count + 1}}.
 "#;
     assert!(scan_tokens(src).len() > 100);
+}
+
+// ============================================================
+// ErrorKind coverage for the two remaining reachable variants
+// ============================================================
+
+#[test]
+fn triple_quoted_opener_line_rejects_non_whitespace() {
+    // A triple-quoted opener line may only carry whitespace after the
+    // final `"`; a non-whitespace character is `InvalidStringToken`.
+    assert_eq!(
+        scan_token("\"\"\"abc\n\"\"\"", pos()).unwrap_err().kind,
+        ErrorKind::InvalidStringToken,
+    );
+}
+
+#[test]
+fn unknown_symbol_leader_is_invalid_symbol_token() {
+    // `\u{2603}` (snowman) is neither a variable head, alphabetic, nor
+    // any recognised symbol byte, so `scan_symbol` returns
+    // `InvalidSymbolToken`.
+    assert_eq!(
+        scan_token("\u{2603}", pos()).unwrap_err().kind,
+        ErrorKind::InvalidSymbolToken,
+    );
+}
+
+// ============================================================
+// Display for Position / Token / Error / ErrorKind
+// ============================================================
+
+#[test]
+fn position_display_matches_line_column_format() {
+    assert_eq!(format!("{}", Position::new()), "1:1");
+    // After scanning `"a\nbc"` the end position is line 2, column 3.
+    let end = scan_tokens("a\nbc").last().unwrap().end();
+    assert_eq!(format!("{end}"), "2:3");
+}
+
+#[test]
+fn token_display_shows_kind_and_range() {
+    let t = first("case");
+    assert_eq!(format!("{t}"), "Keyword(Case)@1:1..1:5");
+}
+
+#[test]
+fn error_display_combines_message_and_position() {
+    let err = scan_token("\u{2603}", Position::new()).unwrap_err();
+    assert_eq!(format!("{err}"), "cannot parse a symbol token (1:1)");
+}
+
+#[test]
+fn error_kind_display_matches_message() {
+    for k in ErrorKind::ALL {
+        assert_eq!(format!("{k}"), k.message(), "Display mismatch for {k:?}");
+    }
+}
+
+// ============================================================
+// std::error::Error bound
+// ============================================================
+
+#[test]
+fn error_satisfies_std_error_bound() {
+    fn take_error(_: &dyn std::error::Error) {}
+    let err = scan_token("\u{2603}", Position::new()).unwrap_err();
+    take_error(&err);
+}
+
+// ============================================================
+// Panic contracts
+// ============================================================
+//
+// The panic paths take a `Position` (or the `start`/`end` inside a
+// `Token`) whose `offset` is out of range or misaligned with respect to
+// the source being scanned. Both invalid states are constructed by
+// scanning a long source first, then re-using the resulting position
+// (or token) against a shorter or differently-shaped source. The
+// scanner and `Token::text` / `Token::value` never accept `Position`
+// values from foreign sources — this is the whole point of the panic
+// contract.
+
+#[test]
+#[should_panic(expected = "exceeds source length")]
+fn scan_token_panics_when_position_offset_exceeds_source_length() {
+    // A `Position` at offset 6 (end of `"abcdef"` scanned as an atom)
+    // is out of range for a 2-byte source.
+    let long_end = first("abcdef").end();
+    let _ = scan_token("ab", long_end);
+}
+
+#[test]
+#[should_panic(expected = "UTF-8 boundary")]
+fn scan_token_panics_when_position_offset_lands_inside_multibyte_char() {
+    // Long ASCII source produces an offset (3) that is a byte boundary
+    // there but falls inside the emoji in `"a\u{1F600}"` (bytes 1..=4).
+    let mid = first("abc def").end();
+    let _ = scan_token("a\u{1F600}", mid);
+}
+
+#[test]
+#[should_panic(expected = "UTF-8 boundaries")]
+fn token_text_panics_on_non_boundary_source() {
+    // `first("abc def")` returns the atom `abc` with byte range 0..3.
+    // Byte 3 sits inside the emoji in `"a\u{1F600}"`, so `text` cannot
+    // return a valid slice.
+    let t = first("abc def");
+    let _ = t.text("a\u{1F600}");
+}
+
+#[test]
+#[should_panic(expected = "UTF-8 boundaries")]
+fn token_value_panics_on_non_boundary_source() {
+    let t = first("abc def");
+    let _ = t.value("a\u{1F600}");
 }

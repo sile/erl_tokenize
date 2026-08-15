@@ -94,6 +94,30 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
+    /// Every `ErrorKind` variant.
+    ///
+    /// Useful for iteration in tests (Display / round-trip checks),
+    /// documentation generation, or building lookup tables.
+    // Keep in sync when adding a variant — the compiler will not catch a
+    // missing entry (`message`'s exhaustive match will, so a fresh variant
+    // surfaces there first).
+    pub const ALL: &'static [Self] = &[
+        Self::NoClosingQuotation,
+        Self::InvalidEscapedChar,
+        Self::AdjacentStringLiterals,
+        Self::MissingToken,
+        Self::InvalidAtomToken,
+        Self::InvalidCharToken,
+        Self::InvalidCommentToken,
+        Self::InvalidFloatToken,
+        Self::InvalidIntegerToken,
+        Self::InvalidStringToken,
+        Self::InvalidSigilStringToken,
+        Self::InvalidSymbolToken,
+        Self::InvalidVariableToken,
+        Self::InvalidWhitespaceToken,
+    ];
+
     /// Returns the human-readable message associated with this kind.
     pub const fn message(self) -> &'static str {
         match self {
