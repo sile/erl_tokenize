@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::fmt;
 
 use crate::keyword::Keyword;
-use crate::lex::{self, ScanKind};
+use crate::lex;
 use crate::symbol::Symbol;
 use crate::{Position, Result};
 
@@ -50,24 +50,6 @@ impl TokenKind {
     /// of [`is_hidden`](Self::is_hidden)).
     pub const fn is_lexical(self) -> bool {
         !self.is_hidden()
-    }
-}
-
-impl From<ScanKind> for TokenKind {
-    fn from(kind: ScanKind) -> Self {
-        match kind {
-            ScanKind::Atom => TokenKind::Atom,
-            ScanKind::Char => TokenKind::Char,
-            ScanKind::Comment => TokenKind::Comment,
-            ScanKind::Float => TokenKind::Float,
-            ScanKind::Integer => TokenKind::Integer,
-            ScanKind::Keyword(k) => TokenKind::Keyword(k),
-            ScanKind::SigilString => TokenKind::SigilString,
-            ScanKind::String => TokenKind::String,
-            ScanKind::Symbol(s) => TokenKind::Symbol(s),
-            ScanKind::Variable => TokenKind::Variable,
-            ScanKind::Whitespace => TokenKind::Whitespace,
-        }
     }
 }
 
@@ -272,7 +254,7 @@ pub fn scan_token(source: &str, position: Position) -> Result<Option<Token>> {
     let scanned = lex::scan_one(tail, position)?;
     let end = position.step_by_text(&tail[..scanned.len]);
     Ok(Some(Token {
-        kind: TokenKind::from(scanned.kind),
+        kind: scanned.kind,
         start: position,
         end,
     }))

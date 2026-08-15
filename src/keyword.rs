@@ -132,6 +132,43 @@ impl Keyword {
         Keyword::Else,
     ];
 
+    /// Returns the keyword whose textual form matches `text`, or `None`
+    /// when `text` is not a reserved word.
+    pub const fn from_text(text: &str) -> Option<Self> {
+        Some(match text.as_bytes() {
+            b"after" => Keyword::After,
+            b"and" => Keyword::And,
+            b"andalso" => Keyword::Andalso,
+            b"band" => Keyword::Band,
+            b"begin" => Keyword::Begin,
+            b"bnot" => Keyword::Bnot,
+            b"bor" => Keyword::Bor,
+            b"bsl" => Keyword::Bsl,
+            b"bsr" => Keyword::Bsr,
+            b"bxor" => Keyword::Bxor,
+            b"case" => Keyword::Case,
+            b"catch" => Keyword::Catch,
+            b"cond" => Keyword::Cond,
+            b"div" => Keyword::Div,
+            b"end" => Keyword::End,
+            b"fun" => Keyword::Fun,
+            b"if" => Keyword::If,
+            b"let" => Keyword::Let,
+            b"not" => Keyword::Not,
+            b"of" => Keyword::Of,
+            b"or" => Keyword::Or,
+            b"orelse" => Keyword::Orelse,
+            b"receive" => Keyword::Receive,
+            b"rem" => Keyword::Rem,
+            b"try" => Keyword::Try,
+            b"when" => Keyword::When,
+            b"xor" => Keyword::Xor,
+            b"maybe" => Keyword::Maybe,
+            b"else" => Keyword::Else,
+            _ => return None,
+        })
+    }
+
     /// Returns the string representation of this keyword.
     pub const fn as_str(self) -> &'static str {
         match self {

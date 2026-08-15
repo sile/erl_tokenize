@@ -3,59 +3,8 @@ use std::iter::Peekable;
 
 use crate::{Error, ErrorKind, Position, Result};
 
-pub(crate) fn is_atom_head_char(c: char) -> bool {
-    matches!(c, 'a'..='z' | 'ß'..='ö' | 'ø'..='ÿ')
-}
-
-pub(crate) fn is_atom_non_head_char(c: char) -> bool {
-    matches!(
-        c,
-        'a'..='z' | 'A'..='Z' | '@' | '_' | '0'..='9'
-            | 'À'..='Ö'
-            | 'Ø'..='Þ'
-            | 'ß'..='ö'
-            | 'ø'..='ÿ'
-    )
-}
-
-/// Match erl_scan's effective `?NAMECHAR` set: ASCII alphanumerics,
-/// `_`, and `@`. Latin-1 letters are intentionally excluded: erl_scan's
-/// macro attempts to include them but chains its Latin-1 clauses with
-/// `andalso`, so `ß..ÿ ∩ À..Þ` collapses to the empty set and no
-/// Latin-1 letter satisfies the guard in practice.
-pub(crate) fn is_namechar(c: char) -> bool {
-    matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '@')
-}
-
-pub(crate) fn is_variable_head_char(c: char) -> bool {
-    // Matches erl_scan: ASCII `A-Z`, `_`, and Latin-1 uppercase letters
-    // (`À..Þ` minus the multiplication sign `×`).
-    matches!(c, 'A'..='Z' | '_' | 'À'..='Ö' | 'Ø'..='Þ')
-}
-
-pub(crate) fn is_variable_non_head_char(c: char) -> bool {
-    // Matches erl_scan's `scan_name`: ASCII alphanumerics, `_`, `@`, and
-    // Latin-1 letters (`À..Þ` minus `×`, `ß..ÿ` minus `÷`).
-    matches!(
-        c,
-        'a'..='z'
-            | 'A'..='Z'
-            | '@'
-            | '_'
-            | '0'..='9'
-            | 'À'..='Ö'
-            | 'Ø'..='Þ'
-            | 'ß'..='ö'
-            | 'ø'..='ÿ'
-    )
-}
-
 /// Walk a quoted region and return the byte index of the closing
 /// terminator, validating any escape sequences along the way.
-///
-/// [`crate::lex`] uses this to determine token boundaries without
-/// allocating; [`parse_quotation`] uses it to locate the terminator
-/// before decoding the content.
 pub(crate) fn find_quotation_end(pos: Position, input: &str, terminator: char) -> Result<usize> {
     let mut chars = input.char_indices().peekable();
     while let Some((i, c)) = chars.next() {
@@ -231,11 +180,4 @@ where
         }
         _ => Ok(c),
     }
-}
-
-/// Strip underscore separators from a numeric literal chunk that the
-/// scanner has already validated. The result is safe to feed to
-/// [`str::parse`] / [`i64::from_str_radix`] / etc.
-pub(crate) fn strip_underscores(s: &str) -> String {
-    s.chars().filter(|c| *c != '_').collect()
 }

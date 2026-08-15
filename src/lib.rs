@@ -106,13 +106,24 @@ pub use crate::position::Position;
 pub use crate::symbol::Symbol;
 pub use crate::token::{Token, TokenKind, TokenValue, scan_token};
 
+mod charset;
 mod error;
+mod escape;
 mod keyword;
 mod lex;
+mod lex_atom;
+mod lex_char;
+mod lex_comment;
+mod lex_float;
+mod lex_integer;
+mod lex_sigil;
+mod lex_string;
+mod lex_symbol;
+mod lex_variable;
+mod lex_whitespace;
 mod position;
 mod symbol;
 mod token;
-mod util;
 
 /// This crate's `Result` type.
 pub type Result<T> = ::std::result::Result<T, Error>;
