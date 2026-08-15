@@ -82,8 +82,8 @@ fn main() {
             }
             Ok(None) => break,
             Err(error) => {
-                eprintln!("skipping at {}: {}", error.position(), error);
-                position = error.resume_position();
+                eprintln!("skipping at {}: {}", error.position, error);
+                position = error.resume_position;
             }
         }
     }
