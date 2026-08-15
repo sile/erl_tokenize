@@ -79,6 +79,17 @@
 //! assert_eq!(texts, [" ", "foo"]);
 //! ```
 //!
+//! # Compatibility target
+//!
+//! This crate aims to match the behavior of Erlang/OTP's
+//! [`erl_scan`][erl_scan] module on the current stable OTP release. The
+//! CI job that scans the OTP source tree pins the reference to
+//! `erlang/otp`'s `maint` branch (the latest stable maintenance line).
+//! When OTP publishes a new major release, `maint` starts pointing at
+//! its maintenance line and any behavioral change in `erl_scan` will
+//! surface as a CI failure — that failure is the intended signal to
+//! review and update this crate.
+//!
 //! # References
 //!
 //! - [`erl_scan`][erl_scan] module

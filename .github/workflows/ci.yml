@@ -44,8 +44,8 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Checkout latest OTP source
-        run: git clone --depth 1 https://github.com/erlang/otp otp
+      - name: Checkout latest stable OTP source
+        run: git clone --depth 1 --branch maint https://github.com/erlang/otp otp
       - run: rustup update stable
       - run: rustup default stable
       - run: cargo run --example check_otp -- otp

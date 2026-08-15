@@ -164,6 +164,14 @@ standalone whitespace tokens because at most one line feed is allowed at
 the start of a whitespace token; a run that would otherwise pack two
 consecutive line feeds is split in two.
 
+Compatibility target
+--------------------
+
+The crate aims to match `erl_scan` on the current stable Erlang/OTP
+release. CI pins the OTP source it scans to `erlang/otp`'s `maint`
+branch, so a behavior change in the next OTP major will surface as a
+CI failure — the signal to review and update the crate.
+
 References
 ----------
 
