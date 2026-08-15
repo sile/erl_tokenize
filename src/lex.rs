@@ -938,16 +938,7 @@ fn read_radix_digit_run(
     if !is_prev_digit && !terminator {
         return Err(Error::new(ErrorKind::InvalidFloatToken, pos));
     }
-    if terminator && !expect_dot {
-        // The fractional part terminated on `#`, so the caller must find
-        // an `e` next.
-        Ok((idx, true))
-    } else if terminator {
-        // The integer part terminated on `.`.
-        Ok((idx, true))
-    } else {
-        Ok((idx, false))
-    }
+    Ok((idx, terminator))
 }
 
 /// Consume the exponent digits (with a leading optional `-` and underscore
