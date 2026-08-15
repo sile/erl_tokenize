@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::char;
 use std::iter::Peekable;
 
 use crate::{Error, ErrorKind, Position, Result};
