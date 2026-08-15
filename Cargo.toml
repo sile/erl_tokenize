@@ -16,4 +16,5 @@ rust-version = "1.88"
 
 [dev-dependencies]
 noargs = "0.4.1"
+nojson = "0.3.13"
 noprop = "0.1.0"

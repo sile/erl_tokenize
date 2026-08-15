@@ -63,3 +63,46 @@ jobs:
       - run: rustup update stable
       - run: rustup default stable
       - run: cargo run --example check_otp -- otp
+
+  otp-diff:
+    name: OTP source diff (erl_scan vs erl_tokenize)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: sha
+        name: Resolve OTP maint HEAD
+        run: |
+          sha=$(git ls-remote --heads https://github.com/erlang/otp maint | cut -f1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      # Cloned every run: the Rust-side diff scans the same source that
+      # generated the fixture, so the OTP tree is needed on both cache
+      # hit and miss. Caching guards only the Erlang install and the
+      # fixture generation cost.
+      - name: Checkout latest stable OTP source
+        run: git clone --depth 1 --branch maint https://github.com/erlang/otp otp
+      - id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fixture.jsonl.gz
+          key: otp-diff-fixture-${{ steps.sha.outputs.sha }}-${{ hashFiles('scripts/dump-otp-fixture.escript') }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        id: otp-major
+        name: Read OTP major version from maint checkout
+        run: |
+          major=$(head -1 otp/OTP_VERSION | cut -d. -f1)
+          echo "major=$major" >> "$GITHUB_OUTPUT"
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Install Erlang/OTP matching maint major
+        uses: erlef/setup-beam@e6d7c94229049569db56a7ad5a540c051a010af9 # v1.20.4
+        with:
+          otp-version: ${{ steps.otp-major.outputs.major }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Generate erl_scan fixture from stdlib
+        run: scripts/dump-otp-fixture.escript otp/lib/stdlib/src | gzip -9 > fixture.jsonl.gz
+      - run: rustup update stable
+      - run: rustup default stable
+      - name: Decompress fixture
+        run: gunzip -k fixture.jsonl.gz
+      - name: Compare erl_tokenize output against fixture
+        run: cargo run --release --example otp_diff -- fixture.jsonl
