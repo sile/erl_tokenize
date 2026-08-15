@@ -12,9 +12,9 @@
 //! parsing) is the caller's responsibility and happens against the slice
 //! whose length is returned here.
 //!
-//! Public tokenization API in [`crate::token`] and [`crate::tokens`] wires
-//! its entry points through this module so that no other place in the
-//! crate re-implements the same lexical rules.
+//! Public tokenization API in [`crate::token`] wires its entry points
+//! through this module so that no other place in the crate re-implements
+//! the same lexical rules.
 
 use std::borrow::Cow;
 
