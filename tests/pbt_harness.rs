@@ -230,7 +230,7 @@ pub fn sample_char_literal(ctx: &mut noprop::TestCaseContext) -> (String, char) 
 
 /// Sample a comment token text like `%foo`. Never contains LF.
 pub fn sample_comment(ctx: &mut noprop::TestCaseContext) -> String {
-    match noprop::sample_weighted_index(ctx, &[2, 1, 2]) {
+    match noprop::sample_weighted_index(ctx, &[6, 1, 2]) {
         0 => "%".to_owned(),
         1 => {
             let len = noprop::sample_usize_in(ctx, 0..=8);
@@ -367,7 +367,7 @@ pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
         ("7#0.0#e-1", 0.0),
         ("10#1.5#e-1", 0.15),
     ];
-    let (text, value) = match noprop::sample_weighted_index(ctx, &[1, 1]) {
+    let (text, value) = match noprop::sample_weighted_index(ctx, &[1, 2]) {
         0 => noprop::sample_choice(ctx, &POSITIVE),
         _ => noprop::sample_choice(ctx, &NEGATIVE),
     };
