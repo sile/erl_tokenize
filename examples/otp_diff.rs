@@ -15,8 +15,8 @@
 //!
 //! `<path>` in the fixture is the absolute path recorded at generation
 //! time; the same path must resolve to the same source content when the
-//! diff runs (the CI job clones the OTP tree at the same `--branch
-//! maint` SHA, so the paths line up).
+//! diff runs (the CI job clones the OTP tree at the same tag, so the
+//! paths line up).
 //!
 //! Exit code is `1` if any mismatch was detected, `0` otherwise.
 

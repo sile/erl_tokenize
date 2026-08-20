@@ -167,10 +167,9 @@ consecutive line feeds is split in two.
 Compatibility target
 --------------------
 
-The crate aims to match `erl_scan` on the current stable Erlang/OTP
-release. CI pins the OTP source it scans to `erlang/otp`'s `maint`
-branch, so a behavior change in the next OTP major will surface as a
-CI failure — the signal to review and update the crate.
+The crate aims to match `erl_scan` in Erlang/OTP
+[`OTP-29.0.5`](https://github.com/erlang/otp/tree/OTP-29.0.5). CI runs
+the token diff against that tag's stdlib source.
 
 References
 ----------

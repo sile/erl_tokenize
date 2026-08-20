@@ -2,6 +2,9 @@ name: CI
 
 on: [push]
 
+env:
+  OTP_TAG: OTP-29.0.5
+
 jobs:
   check:
     name: Check
@@ -58,8 +61,8 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Checkout latest stable OTP source
-        run: git clone --depth 1 --branch maint https://github.com/erlang/otp otp
+      - name: Checkout Erlang/OTP source (${{ env.OTP_TAG }})
+        run: git clone --depth 1 --branch "${OTP_TAG}" https://github.com/erlang/otp otp
       - run: rustup update stable
       - run: rustup default stable
       - run: cargo run --example check_otp -- otp
@@ -70,30 +73,26 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - id: sha
-        name: Resolve OTP maint HEAD
-        run: |
-          sha=$(git ls-remote --heads https://github.com/erlang/otp maint | cut -f1)
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       # Cloned every run: the Rust-side diff scans the same source that
       # generated the fixture, so the OTP tree is needed on both cache
       # hit and miss. Caching guards only the Erlang install and the
       # fixture generation cost.
-      - name: Checkout latest stable OTP source
-        run: git clone --depth 1 --branch maint https://github.com/erlang/otp otp
+      - name: Checkout Erlang/OTP source (${{ env.OTP_TAG }})
+        run: git clone --depth 1 --branch "${OTP_TAG}" https://github.com/erlang/otp otp
       - id: cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: fixture.jsonl.gz
-          key: otp-diff-fixture-${{ steps.sha.outputs.sha }}-${{ hashFiles('scripts/dump-otp-fixture.escript') }}
+          key: otp-diff-fixture-${{ env.OTP_TAG }}-${{ hashFiles('scripts/dump-otp-fixture.escript') }}
       - if: steps.cache.outputs.cache-hit != 'true'
         id: otp-major
-        name: Read OTP major version from maint checkout
+        name: Extract OTP major from tag
         run: |
-          major=$(head -1 otp/OTP_VERSION | cut -d. -f1)
+          major="${OTP_TAG#OTP-}"
+          major="${major%%.*}"
           echo "major=$major" >> "$GITHUB_OUTPUT"
       - if: steps.cache.outputs.cache-hit != 'true'
-        name: Install Erlang/OTP matching maint major
+        name: Install Erlang/OTP ${{ steps.otp-major.outputs.major }}
         uses: erlef/setup-beam@e6d7c94229049569db56a7ad5a540c051a010af9 # v1.20.4
         with:
           otp-version: ${{ steps.otp-major.outputs.major }}

@@ -82,13 +82,8 @@
 //! # Compatibility target
 //!
 //! This crate aims to match the behavior of Erlang/OTP's
-//! [`erl_scan`][erl_scan] module on the current stable OTP release. The
-//! CI job that scans the OTP source tree pins the reference to
-//! `erlang/otp`'s `maint` branch (the latest stable maintenance line).
-//! When OTP publishes a new major release, `maint` starts pointing at
-//! its maintenance line and any behavioral change in `erl_scan` will
-//! surface as a CI failure — that failure is the intended signal to
-//! review and update this crate.
+//! [`erl_scan`][erl_scan] module at the [`OTP-29.0.5`][OTP-29.0.5] tag.
+//! CI runs the token diff against that tag's stdlib source.
 //!
 //! # References
 //!
@@ -97,6 +92,7 @@
 //!
 //! [erl_scan]: http://erlang.org/doc/man/erl_scan.html
 //! [Data Types]: http://erlang.org/doc/reference_manual/data_types.html
+//! [OTP-29.0.5]: https://github.com/erlang/otp/tree/OTP-29.0.5
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
