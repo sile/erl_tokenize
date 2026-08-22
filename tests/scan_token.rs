@@ -21,13 +21,7 @@ fn pos() -> Position {
 
 /// Scan `src` fully and return the emitted tokens.
 fn scan_tokens(src: &str) -> Vec<Token> {
-    let mut out = Vec::new();
-    let mut p = Position::new();
-    while let Some(t) = scan_token(src, p).unwrap() {
-        p = t.end();
-        out.push(t);
-    }
-    out
+    erl_tokenize::scan_tokens(src).expect("test input must scan without lex errors")
 }
 
 /// Scan `src` fully and return the sequence of token texts.
@@ -1431,6 +1425,31 @@ fn scan_token_returns_none_at_eof() {
     let src = "foo";
     let t = scan_token(src, Position::new()).unwrap().unwrap();
     assert_eq!(scan_token(src, t.end()).unwrap(), None);
+}
+
+#[test]
+fn scan_tokens_returns_empty_for_empty_source() {
+    assert!(erl_tokenize::scan_tokens("").expect("empty source must scan").is_empty());
+}
+
+#[test]
+fn scan_tokens_matches_manual_scan_token_loop() {
+    let src = "foo bar";
+    let from_helper = scan_tokens(src);
+    let mut manual = Vec::new();
+    let mut position = Position::new();
+    while let Some(token) = scan_token(src, position).expect("valid source") {
+        position = token.end();
+        manual.push(token);
+    }
+    assert_eq!(from_helper, manual);
+}
+
+#[test]
+fn scan_tokens_propagates_lexical_error() {
+    let err = erl_tokenize::scan_tokens("\"unclosed")
+        .expect_err("unclosed string must fail");
+    assert_eq!(err.kind, ErrorKind::NoClosingQuotation);
 }
 
 #[test]
