@@ -9,8 +9,6 @@
 use std::cell::Cell;
 use std::collections::BTreeSet;
 
-use erl_tokenize::{Keyword, Symbol};
-
 /// Environment variable used by `noprop::seed_from_env_or_time` to
 /// reproduce a failing case.
 pub const SEED_ENV: &str = "ERL_TOKENIZE_PBT_SEED";
@@ -80,7 +78,7 @@ pub fn sample_bare_atom(ctx: &mut noprop::TestCaseContext) -> String {
     }
     // Reject keywords by simple suffixing so the atom doesn't accidentally
     // become a reserved word.
-    if Keyword::ALL.iter().any(|k| k.as_str() == s) {
+    if erl_tokenize::Keyword::ALL.iter().any(|k| k.as_str() == s) {
         s.push('_');
     }
     s
@@ -102,7 +100,7 @@ pub fn sample_unicode_atom(ctx: &mut noprop::TestCaseContext) -> String {
 /// Sample a quoted atom (`'foo bar'`, `'a\nb'`). May include escapes.
 ///
 /// Returns `(text, decoded_value)` — `text` is the full quoted literal
-/// and `decoded_value` is what `TokenValue::Atom` should carry.
+/// and `decoded_value` is what `erl_tokenize::TokenValue::Atom` should carry.
 pub fn sample_quoted_atom(ctx: &mut noprop::TestCaseContext) -> (String, String) {
     let (inner, decoded) = sample_quoted_body(ctx, '\'');
     (format!("'{inner}'"), decoded)
@@ -375,14 +373,14 @@ pub fn sample_radix_float(ctx: &mut noprop::TestCaseContext) -> (String, f64) {
 }
 
 /// Sample a keyword text.
-pub fn sample_keyword(ctx: &mut noprop::TestCaseContext) -> (&'static str, Keyword) {
-    let k = noprop::sample_choice(ctx, Keyword::ALL);
+pub fn sample_keyword(ctx: &mut noprop::TestCaseContext) -> (&'static str, erl_tokenize::Keyword) {
+    let k = noprop::sample_choice(ctx, erl_tokenize::Keyword::ALL);
     (k.as_str(), k)
 }
 
 /// Sample a symbol text and its enum value.
-pub fn sample_symbol(ctx: &mut noprop::TestCaseContext) -> (&'static str, Symbol) {
-    let s = noprop::sample_choice(ctx, Symbol::ALL);
+pub fn sample_symbol(ctx: &mut noprop::TestCaseContext) -> (&'static str, erl_tokenize::Symbol) {
+    let s = noprop::sample_choice(ctx, erl_tokenize::Symbol::ALL);
     (s.as_str(), s)
 }
 
@@ -895,7 +893,7 @@ fn to_radix_digits(mut v: u64, radix: u32) -> String {
 }
 
 // ============================================================
-// Position model (independent of production's Position helpers)
+// erl_tokenize::Position model (independent of production's erl_tokenize::Position helpers)
 // ============================================================
 
 /// Advance the model `(offset, line, column)` by walking `text`.

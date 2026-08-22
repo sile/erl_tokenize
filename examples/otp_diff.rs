@@ -24,9 +24,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use erl_tokenize::{Position, Symbol, Token, TokenKind, scan_token};
-use nojson::{RawJson, RawJsonValue};
-
 fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let fixture_path = args.next().ok_or("usage: otp_diff <fixture.jsonl>")?;
@@ -81,7 +78,7 @@ fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
 /// Each line is a single-key JSON object; the key is the source path and
 /// the value is an array of `[kind, text]` pairs.
 fn parse_line(line: &str) -> Result<(PathBuf, Vec<(String, String)>), String> {
-    let raw = RawJson::parse(line).map_err(|e| format!("json parse: {e}"))?;
+    let raw = nojson::RawJson::parse(line).map_err(|e| format!("json parse: {e}"))?;
     let mut object = raw
         .value()
         .to_object()
@@ -104,7 +101,7 @@ fn parse_line(line: &str) -> Result<(PathBuf, Vec<(String, String)>), String> {
     Ok((PathBuf::from(path), expected))
 }
 
-fn parse_token_entry(entry: RawJsonValue<'_, '_>) -> Result<(String, String), String> {
+fn parse_token_entry(entry: nojson::RawJsonValue<'_, '_>) -> Result<(String, String), String> {
     let mut items = entry
         .to_array()
         .map_err(|e| format!("token entry not array: {e}"))?;
@@ -135,12 +132,15 @@ fn compare_file(
     expected: &[(String, String)],
 ) -> Result<(), String> {
     let mut actual = Vec::new();
-    let mut pos = Position::new();
+    let mut pos = erl_tokenize::Position::new();
     loop {
-        match scan_token(source, pos) {
+        match erl_tokenize::scan_token(source, pos) {
             Ok(Some(t)) => {
                 pos = t.end();
-                if !matches!(t.kind(), TokenKind::Whitespace | TokenKind::Comment) {
+                if !matches!(
+                    t.kind(),
+                    erl_tokenize::TokenKind::Whitespace | erl_tokenize::TokenKind::Comment
+                ) {
                     actual.push(t);
                 }
             }
@@ -199,33 +199,33 @@ fn compare_file(
 
 /// Map an `erl_tokenize::TokenKind` to the erl_scan kind atom string
 /// that the fixture records via `atom_to_list/1`.
-fn erl_scan_kind_name(kind: &TokenKind) -> String {
+fn erl_scan_kind_name(kind: &erl_tokenize::TokenKind) -> String {
     match kind {
-        TokenKind::Atom => "atom".to_owned(),
-        TokenKind::Char => "char".to_owned(),
-        TokenKind::Float => "float".to_owned(),
-        TokenKind::Integer => "integer".to_owned(),
-        TokenKind::Keyword(k) => k.as_str().to_owned(),
-        TokenKind::String => "string".to_owned(),
-        TokenKind::Symbol(s) => match s {
-            Symbol::Dot => "dot".to_owned(),
+        erl_tokenize::TokenKind::Atom => "atom".to_owned(),
+        erl_tokenize::TokenKind::Char => "char".to_owned(),
+        erl_tokenize::TokenKind::Float => "float".to_owned(),
+        erl_tokenize::TokenKind::Integer => "integer".to_owned(),
+        erl_tokenize::TokenKind::Keyword(k) => k.as_str().to_owned(),
+        erl_tokenize::TokenKind::String => "string".to_owned(),
+        erl_tokenize::TokenKind::Symbol(s) => match s {
+            erl_tokenize::Symbol::Dot => "dot".to_owned(),
             other => other.as_str().to_owned(),
         },
-        TokenKind::Variable => "var".to_owned(),
+        erl_tokenize::TokenKind::Variable => "var".to_owned(),
         // Fixture emits `sigil_string` for merged sigil_prefix + string +
         // sigil_suffix triples (see scripts/dump-otp-fixture.escript).
-        TokenKind::SigilString => "sigil_string".to_owned(),
+        erl_tokenize::TokenKind::SigilString => "sigil_string".to_owned(),
         // The following are excluded from the fixture, but map them for
         // debug output should they ever show up.
-        TokenKind::Whitespace => "white_space".to_owned(),
-        TokenKind::Comment => "comment".to_owned(),
+        erl_tokenize::TokenKind::Whitespace => "white_space".to_owned(),
+        erl_tokenize::TokenKind::Comment => "comment".to_owned(),
     }
 }
 
 /// erl_scan uses the atom `dot` for the form-terminating dot (followed
 /// by whitespace or EOF) and the atom `'.'` for the dot inside
 /// `record.field` / `map.key` accessors. erl_tokenize represents both
-/// as `Symbol::Dot` and cannot distinguish them from kind alone, so
+/// as `erl_tokenize::Symbol::Dot` and cannot distinguish them from kind alone, so
 /// accept either fixture kind for our `dot` mapping.
 fn kinds_match(expected: &str, actual: &str) -> bool {
     if expected == actual {
@@ -236,4 +236,4 @@ fn kinds_match(expected: &str, actual: &str) -> bool {
 
 // Silence unused imports on missing kinds during development.
 #[allow(dead_code)]
-fn _unused(_t: Token) {}
+fn _unused(_t: erl_tokenize::Token) {}

@@ -3,8 +3,6 @@ use std::io::Read;
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
-use erl_tokenize::{Position, scan_token};
-
 fn main() -> noargs::Result<ExitCode> {
     let mut args = noargs::raw_args();
     args.metadata_mut().app_name = env!("CARGO_PKG_NAME");
@@ -32,9 +30,9 @@ fn main() -> noargs::Result<ExitCode> {
     let start_time = Instant::now();
     let mut count = 0usize;
     let mut errors = 0usize;
-    let mut pos = Position::new();
+    let mut pos = erl_tokenize::Position::new();
     loop {
-        match scan_token(&src, pos) {
+        match erl_tokenize::scan_token(&src, pos) {
             Ok(Some(token)) => {
                 if !silent {
                     println!("[{}] {:?}", token.start(), token.text(&src));

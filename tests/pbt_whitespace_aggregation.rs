@@ -9,8 +9,6 @@
 //! concatenation of all token texts must equal the source, and every
 //! token holds at most one LF at its very start.
 
-use erl_tokenize::{Position, TokenKind, scan_token};
-
 #[expect(dead_code, reason = "shared helpers; this binary uses only a subset")]
 mod pbt_harness;
 use pbt_harness::{CASES, Counter, SEED_ENV, sample_whitespace_sequence, step_position};
@@ -42,12 +40,12 @@ fn whitespace_aggregation_invariants() -> noprop::TestResult {
         }
 
         let mut tokens: Vec<(usize, usize)> = Vec::new();
-        let mut pos = Position::new();
+        let mut pos = erl_tokenize::Position::new();
         let mut concat = String::with_capacity(src.len());
-        while let Some(token) = scan_token(&src, pos)? {
+        while let Some(token) = erl_tokenize::scan_token(&src, pos)? {
             assert_eq!(
                 token.kind(),
-                TokenKind::Whitespace,
+                erl_tokenize::TokenKind::Whitespace,
                 "non-whitespace token in {src:?}"
             );
             let text = token.text(&src);

@@ -1,14 +1,12 @@
 //! Error recovery and termination.
 //!
 //! For arbitrary UTF-8 inputs — biased toward anomaly-triggering
-//! branches — the scan loop that uses `Token::end()` on success and
+//! branches — the scan loop that uses `erl_tokenize::Token::end()` on success and
 //! `Error::resume_position()` on failure must advance by exactly one
 //! Unicode scalar on error, keep `(offset, line, column)` in lockstep
 //! with an independent model, treat a successful token as a prefix of
 //! the remaining input, and terminate at `Ok(None)` within an explicit
 //! step ceiling.
-
-use erl_tokenize::{Position, scan_token};
 
 #[expect(dead_code, reason = "shared helpers; this binary uses only a subset")]
 mod pbt_harness;
@@ -123,7 +121,7 @@ fn scan_loop_terminates_and_advances_on_error() -> noprop::TestResult {
 
     runner.run(CASES, |ctx| {
         let src = sample_anomaly_source(ctx);
-        let mut pos = Position::new();
+        let mut pos = erl_tokenize::Position::new();
         let mut model = (0usize, 1usize, 1usize);
         let mut steps = 0usize;
         let step_ceiling = src.chars().count() + 8;
@@ -133,7 +131,7 @@ fn scan_loop_terminates_and_advances_on_error() -> noprop::TestResult {
             assert_eq!(pos.offset(), model.0, "offset drift for {src:?}");
             assert_eq!(pos.line().get(), model.1, "line drift for {src:?}");
             assert_eq!(pos.column().get(), model.2, "column drift for {src:?}");
-            match scan_token(&src, pos) {
+            match erl_tokenize::scan_token(&src, pos) {
                 Ok(None) => break,
                 Ok(Some(token)) => {
                     ok_hits.hit();

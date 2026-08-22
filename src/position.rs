@@ -33,7 +33,7 @@ impl Position {
 
     /// Returns the byte offset from the start of the source.
     ///
-    /// [`crate::scan_token`] and [`crate::Token::text`] use this offset
+    /// [`scan_token`](crate::scan_token) and [`Token::text`](crate::Token::text) use this offset
     /// to slice the source that the caller passes in.
     pub const fn offset(self) -> usize {
         self.offset

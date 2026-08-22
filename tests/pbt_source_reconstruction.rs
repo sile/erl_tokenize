@@ -1,11 +1,9 @@
 //! Source reconstruction and monotonic progress.
 //!
 //! For a valid-by-construction multi-token source, the concatenation of
-//! every scanned `Token::text(source)` must equal the source, offsets
+//! every scanned `erl_tokenize::Token::text(source)` must equal the source, offsets
 //! must strictly advance, and the scan must terminate at `source.len()`
 //! within a step ceiling derived from the source length.
-
-use erl_tokenize::{Position, TokenKind, scan_token};
 
 #[expect(dead_code, reason = "shared helpers; this binary uses only a subset")]
 mod pbt_harness;
@@ -34,7 +32,7 @@ fn source_reconstruction_and_monotonic_progress() -> noprop::TestResult {
         if src.is_empty() {
             empty_cases.hit();
             assert_eq!(
-                scan_token(&src, Position::new())?,
+                erl_tokenize::scan_token(&src, erl_tokenize::Position::new())?,
                 None,
                 "empty source produced a token"
             );
@@ -42,11 +40,11 @@ fn source_reconstruction_and_monotonic_progress() -> noprop::TestResult {
         }
 
         let mut concat = String::with_capacity(src.len());
-        let mut pos = Position::new();
+        let mut pos = erl_tokenize::Position::new();
         let mut prev_offset = 0usize;
         let mut token_count = 0usize;
         let step_ceiling = src.chars().count() * 2 + 8;
-        while let Some(token) = scan_token(&src, pos)? {
+        while let Some(token) = erl_tokenize::scan_token(&src, pos)? {
             let text = token.text(&src);
             assert!(!text.is_empty(), "empty token text in {src:?}");
             assert!(
@@ -62,22 +60,24 @@ fn source_reconstruction_and_monotonic_progress() -> noprop::TestResult {
                 "scan exceeded step ceiling for {src:?}"
             );
             kinds.hit(match token.kind() {
-                TokenKind::Atom => "atom",
-                TokenKind::Char => "char",
-                TokenKind::Comment => "comment",
-                TokenKind::Float => "float",
-                TokenKind::Integer => "integer",
-                TokenKind::Keyword(_) => "keyword",
-                TokenKind::SigilString => "sigil_string",
-                TokenKind::String => "string",
-                TokenKind::Symbol(_) => "symbol",
-                TokenKind::Variable => "variable",
-                TokenKind::Whitespace => "whitespace",
+                erl_tokenize::TokenKind::Atom => "atom",
+                erl_tokenize::TokenKind::Char => "char",
+                erl_tokenize::TokenKind::Comment => "comment",
+                erl_tokenize::TokenKind::Float => "float",
+                erl_tokenize::TokenKind::Integer => "integer",
+                erl_tokenize::TokenKind::Keyword(_) => "keyword",
+                erl_tokenize::TokenKind::SigilString => "sigil_string",
+                erl_tokenize::TokenKind::String => "string",
+                erl_tokenize::TokenKind::Symbol(_) => "symbol",
+                erl_tokenize::TokenKind::Variable => "variable",
+                erl_tokenize::TokenKind::Whitespace => "whitespace",
             });
-            if token.kind() == TokenKind::String && text.starts_with("\"\"\"") {
+            if token.kind() == erl_tokenize::TokenKind::String && text.starts_with("\"\"\"") {
                 saw_triple.hit();
             }
-            if token.kind() == TokenKind::Atom && text.chars().any(|c| c.len_utf8() > 1) {
+            if token.kind() == erl_tokenize::TokenKind::Atom
+                && text.chars().any(|c| c.len_utf8() > 1)
+            {
                 saw_unicode_atom.hit();
             }
         }

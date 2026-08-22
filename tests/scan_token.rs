@@ -7,20 +7,16 @@
 
 use std::borrow::Cow;
 
-use erl_tokenize::{
-    ErrorKind, Keyword, Position, Symbol, Token, TokenKind, TokenValue, scan_token,
-};
-
 // ============================================================
 // Helpers
 // ============================================================
 
-fn pos() -> Position {
-    Position::new()
+fn pos() -> erl_tokenize::Position {
+    erl_tokenize::Position::new()
 }
 
 /// Scan `src` fully and return the emitted tokens.
-fn scan_tokens(src: &str) -> Vec<Token> {
+fn scan_tokens(src: &str) -> Vec<erl_tokenize::Token> {
     erl_tokenize::scan_tokens(src).expect("test input must scan without lex errors")
 }
 
@@ -30,12 +26,14 @@ fn texts(src: &str) -> Vec<&str> {
 }
 
 /// Scan the first token of `src` (panics if there is none).
-fn first(src: &str) -> Token {
-    scan_token(src, pos()).unwrap().expect("at least one token")
+fn first(src: &str) -> erl_tokenize::Token {
+    erl_tokenize::scan_token(src, pos())
+        .expect("scan_token must succeed on test input")
+        .expect("test input must contain at least one token")
 }
 
 /// Scan the first token and return its decoded value.
-fn first_value(src: &str) -> TokenValue<'_> {
+fn first_value(src: &str) -> erl_tokenize::TokenValue<'_> {
     first(src).value(src)
 }
 
@@ -55,10 +53,10 @@ fn atom_bare_and_unicode() {
         "ärlig",
     ] {
         let t = first(src);
-        assert_eq!(t.kind(), TokenKind::Atom);
+        assert_eq!(t.kind(), erl_tokenize::TokenKind::Atom);
         assert_eq!(t.text(src), src);
         match t.value(src) {
-            TokenValue::Atom(Cow::Borrowed(v)) => assert_eq!(v, src),
+            erl_tokenize::TokenValue::Atom(Cow::Borrowed(v)) => assert_eq!(v, src),
             other => panic!("expected bare atom Borrowed for {src:?}, got {other:?}"),
         }
     }
@@ -72,9 +70,9 @@ fn atom_quoted_borrowed_when_no_escape() {
         ("'hello world'", "hello world"),
         ("''", ""),
     ] {
-        assert_eq!(first(src).kind(), TokenKind::Atom);
+        assert_eq!(first(src).kind(), erl_tokenize::TokenKind::Atom);
         match first_value(src) {
-            TokenValue::Atom(Cow::Borrowed(v)) => assert_eq!(v, expected),
+            erl_tokenize::TokenValue::Atom(Cow::Borrowed(v)) => assert_eq!(v, expected),
             other => panic!("expected quoted atom Borrowed for {src:?}, got {other:?}"),
         }
     }
@@ -89,7 +87,7 @@ fn atom_quoted_owned_on_escape() {
         (r"'a\'b'", "a'b"),
     ] {
         match first_value(src) {
-            TokenValue::Atom(Cow::Owned(v)) => assert_eq!(v, expected),
+            erl_tokenize::TokenValue::Atom(Cow::Owned(v)) => assert_eq!(v, expected),
             other => panic!("expected quoted atom Owned for {src:?}, got {other:?}"),
         }
     }
@@ -99,24 +97,27 @@ fn atom_quoted_owned_on_escape() {
 fn atom_vs_keyword_dispatch() {
     assert!(matches!(
         first("case").kind(),
-        TokenKind::Keyword(Keyword::Case)
+        erl_tokenize::TokenKind::Keyword(erl_tokenize::Keyword::Case)
     ));
-    assert_eq!(first("case_x").kind(), TokenKind::Atom);
-    assert_eq!(first("foo").kind(), TokenKind::Atom);
+    assert_eq!(first("case_x").kind(), erl_tokenize::TokenKind::Atom);
+    assert_eq!(first("foo").kind(), erl_tokenize::TokenKind::Atom);
 }
 
 #[test]
 fn atom_errors_or_dispatch_elsewhere() {
     // Leading whitespace: the first token is a whitespace token, not an
     // atom error.
-    assert_eq!(first("  foo").kind(), TokenKind::Whitespace);
+    assert_eq!(first("  foo").kind(), erl_tokenize::TokenKind::Whitespace);
     // Digits open an integer, not an atom.
-    assert_eq!(first("123").kind(), TokenKind::Integer);
+    assert_eq!(first("123").kind(), erl_tokenize::TokenKind::Integer);
     // Empty input has no token.
-    assert_eq!(scan_token("", pos()).unwrap(), None);
+    assert_eq!(
+        erl_tokenize::scan_token("", pos()).expect("scan_token must succeed on test input"),
+        None
+    );
     // Non-lowercase alphabetic that is not a variable head (a Chinese
     // ideograph) fails as an atom.
-    assert!(scan_token("中", pos()).is_err());
+    assert!(erl_tokenize::scan_token("中", pos()).is_err());
     // Non Latin-1 alphabetic characters are not accepted in atom head or
     // body, matching erl_scan's `illegal character`.
     //
@@ -124,25 +125,29 @@ fn atom_errors_or_dispatch_elsewhere() {
     // the body terminates the atom at the ASCII prefix, so the offending
     // character opens the next token, which then fails.
     assert_eq!(
-        scan_token("μfoo", pos()).unwrap_err().kind,
-        ErrorKind::InvalidAtomToken
+        erl_tokenize::scan_token("μfoo", pos())
+            .expect_err("input must produce a lexical error")
+            .kind,
+        erl_tokenize::ErrorKind::InvalidAtomToken
     );
     for src in ["fooαbar", "foo中bar"] {
         // The ASCII prefix scans as a bare atom...
-        assert_eq!(first(src).kind(), TokenKind::Atom);
+        assert_eq!(first(src).kind(), erl_tokenize::TokenKind::Atom);
         assert_eq!(first(src).text(src), "foo");
         // ...and the next token (opened by the non-Latin-1 head) fails.
         let p = first(src).end();
         assert_eq!(
-            scan_token(src, p).unwrap_err().kind,
-            ErrorKind::InvalidAtomToken,
+            erl_tokenize::scan_token(src, p)
+                .expect_err("input must produce a lexical error")
+                .kind,
+            erl_tokenize::ErrorKind::InvalidAtomToken,
             "for {src:?}"
         );
     }
     // Latin-1 letters are still accepted in atom head and body.
-    assert_eq!(first("äfunc").kind(), TokenKind::Atom);
-    assert_eq!(first("comté").kind(), TokenKind::Atom);
-    assert_eq!(first("ärlig").kind(), TokenKind::Atom);
+    assert_eq!(first("äfunc").kind(), erl_tokenize::TokenKind::Atom);
+    assert_eq!(first("comté").kind(), erl_tokenize::TokenKind::Atom);
+    assert_eq!(first("ärlig").kind(), erl_tokenize::TokenKind::Atom);
 }
 
 // ============================================================
@@ -153,9 +158,9 @@ fn atom_errors_or_dispatch_elsewhere() {
 fn char_simple() {
     for (src, expected) in [("$a", 'a'), ("$Z", 'Z'), ("$0", '0'), ("$ ", ' ')] {
         let t = first(src);
-        assert_eq!(t.kind(), TokenKind::Char);
+        assert_eq!(t.kind(), erl_tokenize::TokenKind::Char);
         assert_eq!(t.text(src), src);
-        assert_eq!(t.value(src), TokenValue::Char(expected));
+        assert_eq!(t.value(src), erl_tokenize::TokenValue::Char(expected));
     }
 }
 
@@ -173,7 +178,7 @@ fn char_named_escapes() {
         (r"$\v", 11),
     ] {
         match first_value(src) {
-            TokenValue::Char(c) => assert_eq!(c as u32, expected, "for {src}"),
+            erl_tokenize::TokenValue::Char(c) => assert_eq!(c as u32, expected, "for {src}"),
             other => panic!("expected Char for {src}, got {other:?}"),
         }
     }
@@ -194,30 +199,42 @@ fn char_caret_notation_full_alphabet() {
         let src = format!(r"$\^{c}");
         assert_eq!(
             first_value(&src),
-            TokenValue::Char(char::from_u32(expected).unwrap())
+            erl_tokenize::TokenValue::Char(
+                char::from_u32(expected).expect("test char scalar must be valid Unicode")
+            )
         );
     }
     // Every letter follows the `c % 32` rule.
     for c in ('a'..='z').chain('A'..='Z') {
         let src = format!(r"$\^{c}");
-        let expected = char::from_u32((c as u32) % 32).unwrap();
-        assert_eq!(first_value(&src), TokenValue::Char(expected));
+        let expected =
+            char::from_u32((c as u32) % 32).expect("test char scalar must be valid Unicode");
+        assert_eq!(first_value(&src), erl_tokenize::TokenValue::Char(expected));
     }
 }
 
 #[test]
 fn char_caret_notation_invalid() {
     for src in [r"$\^!", r"$\^0", r"$\^あ", r"$\^>", r"$\^`", r"$\^{"] {
-        assert!(scan_token(src, pos()).is_err(), "expected error for {src}");
+        assert!(
+            erl_tokenize::scan_token(src, pos()).is_err(),
+            "expected error for {src}"
+        );
     }
 }
 
 #[test]
 fn char_hex_forms() {
-    assert_eq!(first_value(r"$\x6F"), TokenValue::Char('o'));
-    assert_eq!(first_value(r"$\x41"), TokenValue::Char('A'));
-    assert_eq!(first_value(r"$\x{06F}"), TokenValue::Char('o'));
-    assert_eq!(first_value(r"$\x{10FFFF}"), TokenValue::Char('\u{10FFFF}'));
+    assert_eq!(first_value(r"$\x6F"), erl_tokenize::TokenValue::Char('o'));
+    assert_eq!(first_value(r"$\x41"), erl_tokenize::TokenValue::Char('A'));
+    assert_eq!(
+        first_value(r"$\x{06F}"),
+        erl_tokenize::TokenValue::Char('o')
+    );
+    assert_eq!(
+        first_value(r"$\x{10FFFF}"),
+        erl_tokenize::TokenValue::Char('\u{10FFFF}')
+    );
 }
 
 #[test]
@@ -232,18 +249,30 @@ fn char_hex_invalid() {
         r"$\x{110000}", // beyond U+10FFFF
         r"$\x{D800}",   // surrogate
     ] {
-        assert!(scan_token(src, pos()).is_err(), "expected error for {src}");
+        assert!(
+            erl_tokenize::scan_token(src, pos()).is_err(),
+            "expected error for {src}"
+        );
     }
 }
 
 #[test]
 fn char_octal() {
-    assert_eq!(first_value(r"$\123"), TokenValue::Char('S'));
-    assert_eq!(first_value(r"$\17"), TokenValue::Char('\u{f}'));
-    assert_eq!(first_value(r"$\01"), TokenValue::Char('\u{1}'));
-    assert_eq!(first_value(r"$\0"), TokenValue::Char('\0'));
-    assert_eq!(first_value(r"$\7"), TokenValue::Char('\u{7}'));
-    assert_eq!(first_value(r"$\377"), TokenValue::Char('\u{ff}'));
+    assert_eq!(first_value(r"$\123"), erl_tokenize::TokenValue::Char('S'));
+    assert_eq!(
+        first_value(r"$\17"),
+        erl_tokenize::TokenValue::Char('\u{f}')
+    );
+    assert_eq!(
+        first_value(r"$\01"),
+        erl_tokenize::TokenValue::Char('\u{1}')
+    );
+    assert_eq!(first_value(r"$\0"), erl_tokenize::TokenValue::Char('\0'));
+    assert_eq!(first_value(r"$\7"), erl_tokenize::TokenValue::Char('\u{7}'));
+    assert_eq!(
+        first_value(r"$\377"),
+        erl_tokenize::TokenValue::Char('\u{ff}')
+    );
     // Octal stops at three digits.
     assert_eq!(texts(r"$\1234"), [r"$\123", "4"]);
 }
@@ -253,14 +282,18 @@ fn char_errors() {
     // `"$"` alone: the `$` is consumed but the following character is
     // missing — `InvalidCharToken`.
     assert_eq!(
-        scan_token("$", pos()).unwrap_err().kind,
-        ErrorKind::InvalidCharToken,
+        erl_tokenize::scan_token("$", pos())
+            .expect_err("input must produce a lexical error")
+            .kind,
+        erl_tokenize::ErrorKind::InvalidCharToken,
     );
     // `"$\"`: the `$` opens a char literal, `\` opens an escape, but no
     // escape target follows — `InvalidEscapedChar`.
     assert_eq!(
-        scan_token(r"$\", pos()).unwrap_err().kind,
-        ErrorKind::InvalidEscapedChar,
+        erl_tokenize::scan_token(r"$\", pos())
+            .expect_err("input must produce a lexical error")
+            .kind,
+        erl_tokenize::ErrorKind::InvalidEscapedChar,
     );
 }
 
@@ -271,14 +304,14 @@ fn char_errors() {
 #[test]
 fn comment_basic_and_value() {
     let t = first("%");
-    assert_eq!(t.kind(), TokenKind::Comment);
+    assert_eq!(t.kind(), erl_tokenize::TokenKind::Comment);
     assert_eq!(t.text("%"), "%");
-    assert_eq!(t.value("%"), TokenValue::Comment(""));
+    assert_eq!(t.value("%"), erl_tokenize::TokenValue::Comment(""));
 
     let src = "%% foo ";
     let t = first(src);
     assert_eq!(t.text(src), src);
-    assert_eq!(t.value(src), TokenValue::Comment("% foo "));
+    assert_eq!(t.value(src), erl_tokenize::TokenValue::Comment("% foo "));
 }
 
 #[test]
@@ -302,8 +335,11 @@ fn integer_basic_and_underscores() {
         ("123_456", 123456),
         ("123_456_789", 123456789),
     ] {
-        assert_eq!(first(src).kind(), TokenKind::Integer);
-        assert_eq!(first_value(src), TokenValue::Integer(Some(expected)));
+        assert_eq!(first(src).kind(), erl_tokenize::TokenKind::Integer);
+        assert_eq!(
+            first_value(src),
+            erl_tokenize::TokenValue::Integer(Some(expected))
+        );
     }
 }
 
@@ -315,7 +351,10 @@ fn integer_radix() {
         ("16#ab0e", 0xab0e),
         ("1_6#a_b_0e", 0xab0e),
     ] {
-        assert_eq!(first_value(src), TokenValue::Integer(Some(expected)));
+        assert_eq!(
+            first_value(src),
+            erl_tokenize::TokenValue::Integer(Some(expected))
+        );
     }
 }
 
@@ -324,35 +363,41 @@ fn integer_overflow_is_none() {
     // i64::MAX still fits in u64.
     assert_eq!(
         first_value("9223372036854775807"),
-        TokenValue::Integer(Some(i64::MAX as u64))
+        erl_tokenize::TokenValue::Integer(Some(i64::MAX as u64))
     );
     // i64::MAX + 1 fits in u64.
     assert_eq!(
         first_value("9223372036854775808"),
-        TokenValue::Integer(Some(1u64 << 63))
+        erl_tokenize::TokenValue::Integer(Some(1u64 << 63))
     );
     // u64::MAX is the last representable value.
     assert_eq!(
         first_value("18446744073709551615"),
-        TokenValue::Integer(Some(u64::MAX))
+        erl_tokenize::TokenValue::Integer(Some(u64::MAX))
     );
     // Just past u64::MAX overflows to None.
     assert_eq!(
         first_value("18446744073709551616"),
-        TokenValue::Integer(None)
+        erl_tokenize::TokenValue::Integer(None)
     );
     assert_eq!(
         first_value("16#ffffffffffffffffff"),
-        TokenValue::Integer(None)
+        erl_tokenize::TokenValue::Integer(None)
     );
 }
 
 #[test]
 fn integer_errors() {
     // Leading `-` is a symbol.
-    assert_eq!(first("-10").kind(), TokenKind::Symbol(Symbol::Hyphen));
+    assert_eq!(
+        first("-10").kind(),
+        erl_tokenize::TokenKind::Symbol(erl_tokenize::Symbol::Hyphen)
+    );
     for src in ["123_456_", "123__456", "1#0", "37#0"] {
-        assert!(scan_token(src, pos()).is_err(), "expected error for {src}");
+        assert!(
+            erl_tokenize::scan_token(src, pos()).is_err(),
+            "expected error for {src}"
+        );
     }
 }
 
@@ -363,10 +408,15 @@ fn integer_rejects_trailing_namechar() {
     // `{illegal,integer}`. Without this, we would split `12abc` into
     // `Integer("12")` + `Atom("abc")` and diverge from `erl_scan`.
     for src in ["12abc", "1e2", "16#Fg", "100@200", "9_"] {
-        let e = scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
+        let e =
+            erl_tokenize::scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
         // `9_` is caught earlier by the trailing-underscore rule; the
         // rest surface the new namechar check. Both use the same kind.
-        assert_eq!(e.kind, ErrorKind::InvalidIntegerToken, "for {src:?}");
+        assert_eq!(
+            e.kind,
+            erl_tokenize::ErrorKind::InvalidIntegerToken,
+            "for {src:?}"
+        );
     }
 }
 
@@ -394,16 +444,23 @@ fn float_decimal() {
         ("12.3E-1", 1.23),
         ("12.3e+1", 123.0),
     ] {
-        assert_eq!(first_value(src), TokenValue::Float(expected), "for {src}");
+        assert_eq!(
+            first_value(src),
+            erl_tokenize::TokenValue::Float(expected),
+            "for {src}"
+        );
     }
 }
 
 #[test]
 fn float_underscores() {
-    assert_eq!(first_value("1_2.3_4"), TokenValue::Float(12.34));
+    assert_eq!(
+        first_value("1_2.3_4"),
+        erl_tokenize::TokenValue::Float(12.34)
+    );
     assert_eq!(
         first_value("1_2.3_4e-1_0"),
-        TokenValue::Float(0.000000001234)
+        erl_tokenize::TokenValue::Float(0.000000001234)
     );
 }
 
@@ -418,7 +475,11 @@ fn float_radix() {
         ("2#0.0#e+5", 0.0),
         ("2#1.0#E-3", 0.125),
     ] {
-        assert_eq!(first_value(src), TokenValue::Float(expected), "for {src}");
+        assert_eq!(
+            first_value(src),
+            erl_tokenize::TokenValue::Float(expected),
+            "for {src}"
+        );
     }
 }
 
@@ -427,7 +488,10 @@ fn float_errors() {
     // These shapes reach `scan_float` (because the dispatcher recognises
     // them as float-like on lookahead) and then fail.
     for src in ["12_.3", "12.3_", "1__2.3", "12.3__4", "12.34e-1__0"] {
-        assert!(scan_token(src, pos()).is_err(), "expected error for {src}");
+        assert!(
+            erl_tokenize::scan_token(src, pos()).is_err(),
+            "expected error for {src}"
+        );
     }
     // These shapes do not look float-like to the dispatcher, so they
     // tokenize as their component tokens rather than erroring:
@@ -439,7 +503,7 @@ fn float_errors() {
         [".", "123"],
         "`.123` splits into dot and integer"
     );
-    assert_eq!(first("123").kind(), TokenKind::Integer);
+    assert_eq!(first("123").kind(), erl_tokenize::TokenKind::Integer);
 }
 
 #[test]
@@ -448,25 +512,25 @@ fn float_overflow_is_error() {
     // is rejected with the same InvalidFloatToken as syntactic errors.
     for src in ["1.8e308", "1.0e400", "2#1.0#e10000"] {
         assert!(
-            scan_token(src, pos()).is_err(),
+            erl_tokenize::scan_token(src, pos()).is_err(),
             "expected overflow error for {src}"
         );
     }
     // An exponent that overflows `i32` must not panic; the resulting
     // non-finite magnitude is rejected like any other float overflow.
     assert!(
-        scan_token("2#0.0#e10000000000", pos()).is_err(),
+        erl_tokenize::scan_token("2#0.0#e10000000000", pos()).is_err(),
         "expected error (not panic) for exponent beyond i32"
     );
     // Boundary exponents at i32::MAX and just past it must not panic and
     // must return either `Ok` or `Err` (both saturate to non-finite).
     for src in ["2#1.0#e2147483647", "2#1.0#e2147483648"] {
-        let _ = scan_token(src, pos());
+        let _ = erl_tokenize::scan_token(src, pos());
     }
     // The last representable magnitude scans successfully.
     assert_eq!(
         first_value("1.7e308"),
-        TokenValue::Float(1.7e308),
+        erl_tokenize::TokenValue::Float(1.7e308),
         "1.7e308 should still be scannable"
     );
 }
@@ -479,8 +543,13 @@ fn float_rejects_dot_then_namechar() {
     // via `looks_like_float` so the "dot must be followed by a digit"
     // rule surfaces `InvalidFloatToken`.
     for src in ["1.e2", "1.a", "16#ff._", "16#ff.@"] {
-        let e = scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
-        assert_eq!(e.kind, ErrorKind::InvalidFloatToken, "for {src:?}");
+        let e =
+            erl_tokenize::scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
+        assert_eq!(
+            e.kind,
+            erl_tokenize::ErrorKind::InvalidFloatToken,
+            "for {src:?}"
+        );
     }
 }
 
@@ -491,8 +560,13 @@ fn float_rejects_trailing_namechar_on_fractional_and_decimal_exponent() {
     // `scan_based_exponent` case: that clause is intentionally missing
     // in `erl_scan` — see `float_radix_exponent_trailing_namechar_splits`.
     for src in ["1.5a", "1.5e2a", "16#ff.ffz", "16#ff.ff@"] {
-        let e = scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
-        assert_eq!(e.kind, ErrorKind::InvalidFloatToken, "for {src:?}");
+        let e =
+            erl_tokenize::scan_token(src, pos()).expect_err(&format!("expected error for {src:?}"));
+        assert_eq!(
+            e.kind,
+            erl_tokenize::ErrorKind::InvalidFloatToken,
+            "for {src:?}"
+        );
     }
 }
 
@@ -502,7 +576,7 @@ fn float_radix_exponent_trailing_namechar_splits() {
     // a namechar after the exponent digits terminates the float and
     // starts the next token instead of erroring.
     assert_eq!(texts("16#ff.ff#e1a"), ["16#ff.ff#e1", "a"]);
-    assert_eq!(first("16#ff.ff#e1a").kind(), TokenKind::Float);
+    assert_eq!(first("16#ff.ff#e1a").kind(), erl_tokenize::TokenKind::Float);
 }
 
 #[test]
@@ -517,7 +591,7 @@ fn float_radix_matches_erl_scan_bit_exact() {
         ("5#0.44444444", 0x3feffffaa19c4774u64),
         ("3#0.1#e-5", 0x3f567980e0bf08c7u64),
     ] {
-        let TokenValue::Float(v) = first_value(src) else {
+        let erl_tokenize::TokenValue::Float(v) = first_value(src) else {
             panic!("expected Float for {src:?}");
         };
         assert_eq!(
@@ -542,10 +616,10 @@ fn float_radix_trims_trailing_and_leading_zeros() {
         ("7#00000000000000000000000000000000000.1234", "7#0.1234"),
         ("3#000.1#e-5", "3#0.1#e-5"),
     ] {
-        let TokenValue::Float(a) = first_value(padded) else {
+        let erl_tokenize::TokenValue::Float(a) = first_value(padded) else {
             panic!("expected Float for padded {padded:?}");
         };
-        let TokenValue::Float(b) = first_value(canonical) else {
+        let erl_tokenize::TokenValue::Float(b) = first_value(canonical) else {
             panic!("expected Float for canonical {canonical:?}");
         };
         assert_eq!(
@@ -570,10 +644,10 @@ fn float_radix_ten_matches_decimal_from_str() {
         ("10#1.5#E-2", "1.5E-2"),
         ("10#1.5#e+3", "1.5e+3"),
     ] {
-        let TokenValue::Float(radix_v) = first_value(radix_src) else {
+        let erl_tokenize::TokenValue::Float(radix_v) = first_value(radix_src) else {
             panic!("expected Float for {radix_src:?}");
         };
-        let TokenValue::Float(decimal_v) = first_value(decimal_src) else {
+        let erl_tokenize::TokenValue::Float(decimal_v) = first_value(decimal_src) else {
             panic!("expected Float for {decimal_src:?}");
         };
         assert_eq!(
@@ -592,64 +666,74 @@ fn float_radix_mantissa_beyond_u128_does_not_panic() {
     // `InvalidFloatToken` (via `is_finite()` guard) rather than
     // being decoded to a possibly-finite f64.
     let src = format!("2#1{}.0", "1".repeat(200));
-    let err = scan_token(&src, pos()).expect_err("mantissa beyond u128 must error");
-    assert_eq!(err.kind, ErrorKind::InvalidFloatToken);
+    let err = erl_tokenize::scan_token(&src, pos()).expect_err("mantissa beyond u128 must error");
+    assert_eq!(err.kind, erl_tokenize::ErrorKind::InvalidFloatToken);
 }
 
 #[test]
 fn float_underflow_is_zero() {
     // Matches `erl_scan`: an exponent that underflows collapses to 0.0.
-    assert_eq!(first_value("1.0e-400"), TokenValue::Float(0.0));
-    assert_eq!(first_value("1.0e-500"), TokenValue::Float(0.0));
+    assert_eq!(
+        first_value("1.0e-400"),
+        erl_tokenize::TokenValue::Float(0.0)
+    );
+    assert_eq!(
+        first_value("1.0e-500"),
+        erl_tokenize::TokenValue::Float(0.0)
+    );
 }
 
 // ============================================================
-// Keyword
+// erl_tokenize::Keyword
 // ============================================================
 
 #[test]
 fn keyword_all_reserved_words() {
     for (src, expected) in [
-        ("after", Keyword::After),
-        ("and", Keyword::And),
-        ("andalso", Keyword::Andalso),
-        ("band", Keyword::Band),
-        ("begin", Keyword::Begin),
-        ("bnot", Keyword::Bnot),
-        ("bor", Keyword::Bor),
-        ("bsl", Keyword::Bsl),
-        ("bsr", Keyword::Bsr),
-        ("bxor", Keyword::Bxor),
-        ("case", Keyword::Case),
-        ("catch", Keyword::Catch),
-        ("cond", Keyword::Cond),
-        ("div", Keyword::Div),
-        ("end", Keyword::End),
-        ("fun", Keyword::Fun),
-        ("if", Keyword::If),
-        ("let", Keyword::Let),
-        ("not", Keyword::Not),
-        ("of", Keyword::Of),
-        ("or", Keyword::Or),
-        ("orelse", Keyword::Orelse),
-        ("receive", Keyword::Receive),
-        ("rem", Keyword::Rem),
-        ("try", Keyword::Try),
-        ("when", Keyword::When),
-        ("xor", Keyword::Xor),
-        ("maybe", Keyword::Maybe),
-        ("else", Keyword::Else),
+        ("after", erl_tokenize::Keyword::After),
+        ("and", erl_tokenize::Keyword::And),
+        ("andalso", erl_tokenize::Keyword::Andalso),
+        ("band", erl_tokenize::Keyword::Band),
+        ("begin", erl_tokenize::Keyword::Begin),
+        ("bnot", erl_tokenize::Keyword::Bnot),
+        ("bor", erl_tokenize::Keyword::Bor),
+        ("bsl", erl_tokenize::Keyword::Bsl),
+        ("bsr", erl_tokenize::Keyword::Bsr),
+        ("bxor", erl_tokenize::Keyword::Bxor),
+        ("case", erl_tokenize::Keyword::Case),
+        ("catch", erl_tokenize::Keyword::Catch),
+        ("cond", erl_tokenize::Keyword::Cond),
+        ("div", erl_tokenize::Keyword::Div),
+        ("end", erl_tokenize::Keyword::End),
+        ("fun", erl_tokenize::Keyword::Fun),
+        ("if", erl_tokenize::Keyword::If),
+        ("let", erl_tokenize::Keyword::Let),
+        ("not", erl_tokenize::Keyword::Not),
+        ("of", erl_tokenize::Keyword::Of),
+        ("or", erl_tokenize::Keyword::Or),
+        ("orelse", erl_tokenize::Keyword::Orelse),
+        ("receive", erl_tokenize::Keyword::Receive),
+        ("rem", erl_tokenize::Keyword::Rem),
+        ("try", erl_tokenize::Keyword::Try),
+        ("when", erl_tokenize::Keyword::When),
+        ("xor", erl_tokenize::Keyword::Xor),
+        ("maybe", erl_tokenize::Keyword::Maybe),
+        ("else", erl_tokenize::Keyword::Else),
     ] {
         let t = first(src);
-        assert_eq!(t.kind(), TokenKind::Keyword(expected), "for {src}");
-        assert_eq!(t.value(src), TokenValue::Keyword(expected));
+        assert_eq!(
+            t.kind(),
+            erl_tokenize::TokenKind::Keyword(expected),
+            "for {src}"
+        );
+        assert_eq!(t.value(src), erl_tokenize::TokenValue::Keyword(expected));
         assert_eq!(t.text(src), src);
     }
 }
 
 #[test]
 fn keyword_display_matches_as_str() {
-    for k in Keyword::ALL {
+    for k in erl_tokenize::Keyword::ALL {
         assert_eq!(format!("{k}"), k.as_str(), "Display mismatch for {k:?}");
     }
 }
@@ -673,10 +757,10 @@ fn sigil_string_all_delimiters_borrow_content() {
         ("~#waldo#", "waldo", ""),
     ] {
         let t = first(src);
-        assert_eq!(t.kind(), TokenKind::SigilString);
+        assert_eq!(t.kind(), erl_tokenize::TokenKind::SigilString);
         assert_eq!(t.text(src), src);
         match t.value(src) {
-            TokenValue::SigilString {
+            erl_tokenize::TokenValue::SigilString {
                 prefix: _,
                 content,
                 suffix,
@@ -697,7 +781,7 @@ fn sigil_string_all_delimiters_borrow_content() {
 fn sigil_string_prefix_suffix() {
     let src = r#"~b"foo"qq"#;
     match first_value(src) {
-        TokenValue::SigilString {
+        erl_tokenize::TokenValue::SigilString {
             prefix,
             content,
             suffix,
@@ -713,7 +797,7 @@ fn sigil_string_prefix_suffix() {
 #[test]
 fn sigil_string_escape_produces_owned_content() {
     match first_value(r#"~(a\nb)"#) {
-        TokenValue::SigilString {
+        erl_tokenize::TokenValue::SigilString {
             content: Cow::Owned(s),
             ..
         } => assert_eq!(s, "a\nb"),
@@ -727,19 +811,23 @@ fn sigil_string_errors() {
     // both fail before finding a matching close — `InvalidSigilStringToken`.
     for src in ["~", "~?foo?"] {
         assert_eq!(
-            scan_token(src, pos()).unwrap_err().kind,
-            ErrorKind::InvalidSigilStringToken,
+            erl_tokenize::scan_token(src, pos())
+                .expect_err("input must produce a lexical error")
+                .kind,
+            erl_tokenize::ErrorKind::InvalidSigilStringToken,
             "for {src}",
         );
     }
     // `"~(foo"`: `(` opens a sigil body whose close `)` is never found
     // — `NoClosingQuotation`.
     assert_eq!(
-        scan_token("~(foo", pos()).unwrap_err().kind,
-        ErrorKind::NoClosingQuotation,
+        erl_tokenize::scan_token("~(foo", pos())
+            .expect_err("input must produce a lexical error")
+            .kind,
+        erl_tokenize::ErrorKind::NoClosingQuotation,
     );
     // Non-sigil string.
-    assert_eq!(first(r#""foo""#).kind(), TokenKind::String);
+    assert_eq!(first(r#""foo""#).kind(), erl_tokenize::TokenKind::String);
 }
 
 #[test]
@@ -749,7 +837,7 @@ fn sigil_string_verbatim_prefix_preserves_backslash() {
     // one-character content ending at the second `"`.
     let src = r#"~B"\""#;
     match first_value(src) {
-        TokenValue::SigilString {
+        erl_tokenize::TokenValue::SigilString {
             prefix,
             content: Cow::Borrowed(s),
             suffix,
@@ -767,7 +855,7 @@ fn sigil_string_verbatim_non_string_delim() {
     // Verbatim rule applies to non-string delimiters too: `~R(\)` scans
     // as content `\`, not an ill-formed escape.
     match first_value(r#"~R(\)"#) {
-        TokenValue::SigilString {
+        erl_tokenize::TokenValue::SigilString {
             prefix,
             content: Cow::Borrowed(s),
             suffix,
@@ -784,7 +872,7 @@ fn sigil_string_verbatim_non_string_delim() {
 fn sigil_string_lowercase_prefix_processes_escapes() {
     // `~s` and `~b` (and empty prefix) still process escapes.
     match first_value(r#"~s"a\nb""#) {
-        TokenValue::SigilString {
+        erl_tokenize::TokenValue::SigilString {
             prefix,
             content: Cow::Owned(s),
             ..
@@ -795,7 +883,7 @@ fn sigil_string_lowercase_prefix_processes_escapes() {
         other => panic!("{other:?}"),
     }
     match first_value(r#"~b"a\nb""#) {
-        TokenValue::SigilString {
+        erl_tokenize::TokenValue::SigilString {
             prefix,
             content: Cow::Owned(s),
             ..
@@ -814,15 +902,18 @@ fn sigil_string_empty_content_followed_by_semicolon() {
     // `;` as a separate token, not a repeated string opener.
     let tokens = scan_tokens("~\"\";");
     assert_eq!(tokens.len(), 2);
-    assert_eq!(tokens[0].kind(), TokenKind::SigilString);
-    assert_eq!(tokens[1].kind(), TokenKind::Symbol(Symbol::Semicolon));
+    assert_eq!(tokens[0].kind(), erl_tokenize::TokenKind::SigilString);
+    assert_eq!(
+        tokens[1].kind(),
+        erl_tokenize::TokenKind::Symbol(erl_tokenize::Symbol::Semicolon)
+    );
 }
 
 #[test]
 fn sigil_string_empty_content_followed_by_string_rejects() {
     // A sigil with empty suffix followed immediately by `"` is still
     // adjacent-string, matching `scan_string_concat` in `erl_scan`.
-    assert!(scan_token(r#"~""""foo""#, pos()).is_err());
+    assert!(erl_tokenize::scan_token(r#"~""""foo""#, pos()).is_err());
 }
 
 #[test]
@@ -861,7 +952,7 @@ fn sigil_string_triple_quoted_non_verbatim_decodes_escapes() {
         ),
     ] {
         match first_value(&src) {
-            TokenValue::SigilString {
+            erl_tokenize::TokenValue::SigilString {
                 content: Cow::Owned(s),
                 ..
             } => assert_eq!(s, expected, "for {src:?}"),
@@ -878,7 +969,7 @@ fn sigil_string_triple_quoted_empty_prefix_is_verbatim() {
 \n
 """"#;
     match first_value(src) {
-        TokenValue::SigilString {
+        erl_tokenize::TokenValue::SigilString {
             content: Cow::Borrowed(s),
             ..
         } => assert_eq!(s, "\\n"),
@@ -894,7 +985,7 @@ fn sigil_string_triple_quoted_verbatim_preserves_backslash() {
 \n
 """"#;
     match first_value(src) {
-        TokenValue::SigilString {
+        erl_tokenize::TokenValue::SigilString {
             content: Cow::Borrowed(s),
             ..
         } => assert_eq!(s, "\\n"),
@@ -902,7 +993,7 @@ fn sigil_string_triple_quoted_verbatim_preserves_backslash() {
     }
     let src = "\"\"\"\n\\n\n\"\"\"";
     match first_value(src) {
-        TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "\\n"),
+        erl_tokenize::TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "\\n"),
         other => panic!("{other:?}"),
     }
 }
@@ -920,7 +1011,7 @@ fn sigil_string_triple_quoted_non_verbatim_malformed_escape_rejects() {
         "~b\"\"\"\n\\x\n\"\"\"",
     ] {
         assert!(
-            scan_token(src, pos()).is_err(),
+            erl_tokenize::scan_token(src, pos()).is_err(),
             "expected error for {src:?}"
         );
     }
@@ -949,7 +1040,7 @@ fn sigil_string_triple_quoted_non_verbatim_line_continuation() {
         ("~s\"\"\"\n  \\\n  \"\"\"", ""),
     ] {
         match first_value(src) {
-            TokenValue::SigilString {
+            erl_tokenize::TokenValue::SigilString {
                 content: Cow::Owned(s),
                 ..
             } => assert_eq!(s, expected, "for {src:?}"),
@@ -965,7 +1056,7 @@ fn sigil_string_triple_quoted_verbatim_preserves_trailing_backslash() {
     // continuation).
     let src = "~S\"\"\"\nfoo\\\nbar\n\"\"\"";
     match first_value(src) {
-        TokenValue::SigilString {
+        erl_tokenize::TokenValue::SigilString {
             content: Cow::Borrowed(s),
             ..
         } => assert_eq!(s, "foo\\\nbar"),
@@ -980,8 +1071,8 @@ fn sigil_string_suffix_separates_from_next_string() {
     let src = r#"~"foo"s"bar""#;
     let tokens = scan_tokens(src);
     assert_eq!(tokens.len(), 2);
-    assert_eq!(tokens[0].kind(), TokenKind::SigilString);
-    assert_eq!(tokens[1].kind(), TokenKind::String);
+    assert_eq!(tokens[0].kind(), erl_tokenize::TokenKind::SigilString);
+    assert_eq!(tokens[1].kind(), erl_tokenize::TokenKind::String);
 }
 
 // ============================================================
@@ -991,15 +1082,15 @@ fn sigil_string_suffix_separates_from_next_string() {
 #[test]
 fn string_regular_borrow_and_own() {
     match first_value(r#""hello""#) {
-        TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "hello"),
+        erl_tokenize::TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "hello"),
         other => panic!("{other:?}"),
     }
     match first_value(r#""a\nb""#) {
-        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "a\nb"),
+        erl_tokenize::TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "a\nb"),
         other => panic!("{other:?}"),
     }
     match first_value(r#""f\x6Fo""#) {
-        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "foo"),
+        erl_tokenize::TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "foo"),
         other => panic!("{other:?}"),
     }
 }
@@ -1008,7 +1099,7 @@ fn string_regular_borrow_and_own() {
 fn string_triple_quoted_no_indent_borrowed() {
     let src = "\"\"\"\nfoo\n\"\"\"";
     match first_value(src) {
-        TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "foo"),
+        erl_tokenize::TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "foo"),
         other => panic!("{other:?}"),
     }
 }
@@ -1017,7 +1108,7 @@ fn string_triple_quoted_no_indent_borrowed() {
 fn string_triple_quoted_multiline_borrowed() {
     let src = "\"\"\"\nline1\nline2\nline3\n\"\"\"";
     match first_value(src) {
-        TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "line1\nline2\nline3"),
+        erl_tokenize::TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "line1\nline2\nline3"),
         other => panic!("{other:?}"),
     }
 }
@@ -1026,7 +1117,7 @@ fn string_triple_quoted_multiline_borrowed() {
 fn string_triple_quoted_indented_owned() {
     let src = "\"\"\"\n  hello\n  world\n  \"\"\"";
     match first_value(src) {
-        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "hello\nworld"),
+        erl_tokenize::TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "hello\nworld"),
         other => panic!("{other:?}"),
     }
 }
@@ -1035,7 +1126,7 @@ fn string_triple_quoted_indented_owned() {
 fn string_triple_quoted_empty() {
     let src = "\"\"\"\n\"\"\"";
     match first_value(src) {
-        TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, ""),
+        erl_tokenize::TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, ""),
         other => panic!("{other:?}"),
     }
 }
@@ -1044,7 +1135,7 @@ fn string_triple_quoted_empty() {
 fn string_triple_quoted_empty_indented() {
     let src = "\"\"\"\n  \"\"\"";
     match first_value(src) {
-        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, ""),
+        erl_tokenize::TokenValue::String(Cow::Owned(s)) => assert_eq!(s, ""),
         other => panic!("{other:?}"),
     }
 }
@@ -1053,7 +1144,7 @@ fn string_triple_quoted_empty_indented() {
 fn string_triple_quoted_with_blank_lines_borrowed() {
     let src = "\"\"\"\nfoo\n\nbar\n\"\"\"";
     match first_value(src) {
-        TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "foo\n\nbar"),
+        erl_tokenize::TokenValue::String(Cow::Borrowed(s)) => assert_eq!(s, "foo\n\nbar"),
         other => panic!("{other:?}"),
     }
 }
@@ -1062,7 +1153,7 @@ fn string_triple_quoted_with_blank_lines_borrowed() {
 fn string_triple_quoted_with_blank_line_indented() {
     let src = "\"\"\"\n  foo\n\n  bar\n  \"\"\"";
     match first_value(src) {
-        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "foo\n\nbar"),
+        erl_tokenize::TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "foo\n\nbar"),
         other => panic!("{other:?}"),
     }
 }
@@ -1078,7 +1169,7 @@ fn string_triple_quoted_crlf_cases() {
     ] {
         assert_eq!(
             first_value(src),
-            TokenValue::String(Cow::Borrowed(expected)),
+            erl_tokenize::TokenValue::String(Cow::Borrowed(expected)),
             "for {src:?}"
         );
     }
@@ -1087,8 +1178,10 @@ fn string_triple_quoted_crlf_cases() {
 #[test]
 fn string_adjacent_literals_reject() {
     assert_eq!(
-        scan_token(r#""foo""bar""#, pos()).unwrap_err().kind,
-        ErrorKind::AdjacentStringLiterals,
+        erl_tokenize::scan_token(r#""foo""bar""#, pos())
+            .expect_err("input must produce a lexical error")
+            .kind,
+        erl_tokenize::ErrorKind::AdjacentStringLiterals,
     );
 }
 
@@ -1099,7 +1192,7 @@ fn string_triple_quoted_four_quote_closer() {
     // ordinary content.
     let src = "\"\"\"\"\n  \"\"\"\n  body\n  \"\"\"\"";
     match first_value(src) {
-        TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "\"\"\"\nbody"),
+        erl_tokenize::TokenValue::String(Cow::Owned(s)) => assert_eq!(s, "\"\"\"\nbody"),
         other => panic!("{other:?}"),
     }
 }
@@ -1113,7 +1206,7 @@ fn string_triple_quoted_closer_requires_contiguous_quotes() {
     // This is the shape used by OTP's `sigils_SUITE.erl` line 249.
     let src = "\"\"\"\"\n  \"\"\" \"\"\n  \"\"\"\"";
     let t = first(src);
-    assert_eq!(t.kind(), TokenKind::String);
+    assert_eq!(t.kind(), erl_tokenize::TokenKind::String);
     assert_eq!(t.text(src), src);
 }
 
@@ -1121,8 +1214,10 @@ fn string_triple_quoted_closer_requires_contiguous_quotes() {
 fn string_errors() {
     for src in ["\"", r#""unterminated"#] {
         assert_eq!(
-            scan_token(src, pos()).unwrap_err().kind,
-            ErrorKind::NoClosingQuotation,
+            erl_tokenize::scan_token(src, pos())
+                .expect_err("input must produce a lexical error")
+                .kind,
+            erl_tokenize::ErrorKind::NoClosingQuotation,
             "for {src:?}",
         );
     }
@@ -1134,7 +1229,7 @@ fn string_escape_error_position_tracks_line_breaks() {
     // opens it, tracking line/column across embedded LF so multi-line
     // sources report the real location (erl_scan behaviour).
     let src = "\"line1\n\\^0\"";
-    let err = scan_token(src, pos()).unwrap_err();
+    let err = erl_tokenize::scan_token(src, pos()).expect_err("input must produce a lexical error");
     assert_eq!(
         (err.position.line().get(), err.position.column().get()),
         (2, 1),
@@ -1142,7 +1237,7 @@ fn string_escape_error_position_tracks_line_breaks() {
     );
 
     let src = "\"'\n\n\\^0'\"";
-    let err = scan_token(src, pos()).unwrap_err();
+    let err = erl_tokenize::scan_token(src, pos()).expect_err("input must produce a lexical error");
     assert_eq!(
         (err.position.line().get(), err.position.column().get()),
         (3, 1),
@@ -1151,7 +1246,7 @@ fn string_escape_error_position_tracks_line_breaks() {
 
     // Single-line escapes are unchanged.
     let src = r#""ab\^0""#;
-    let err = scan_token(src, pos()).unwrap_err();
+    let err = erl_tokenize::scan_token(src, pos()).expect_err("input must produce a lexical error");
     assert_eq!(
         (err.position.line().get(), err.position.column().get()),
         (1, 3),
@@ -1160,67 +1255,71 @@ fn string_escape_error_position_tracks_line_breaks() {
 }
 
 // ============================================================
-// Symbol
+// erl_tokenize::Symbol
 // ============================================================
 
 #[test]
 fn symbol_all() {
     for (src, expected) in [
-        ("[", Symbol::OpenSquare),
-        ("]", Symbol::CloseSquare),
-        ("(", Symbol::OpenParen),
-        (")", Symbol::CloseParen),
-        ("{", Symbol::OpenBrace),
-        ("}", Symbol::CloseBrace),
-        ("#", Symbol::Sharp),
-        ("#_", Symbol::WildcardRecord),
-        ("/", Symbol::Slash),
-        (".", Symbol::Dot),
-        ("..", Symbol::DoubleDot),
-        ("...", Symbol::TripleDot),
-        (",", Symbol::Comma),
-        (":", Symbol::Colon),
-        ("::", Symbol::DoubleColon),
-        (";", Symbol::Semicolon),
-        ("=", Symbol::Match),
-        (":=", Symbol::MapMatch),
-        ("|", Symbol::VerticalBar),
-        ("||", Symbol::DoubleVerticalBar),
-        ("?", Symbol::Question),
-        ("?=", Symbol::MaybeMatch),
-        ("!", Symbol::Bang),
-        ("-", Symbol::Hyphen),
-        ("--", Symbol::MinusMinus),
-        ("+", Symbol::Plus),
-        ("++", Symbol::PlusPlus),
-        ("*", Symbol::Multiply),
-        ("->", Symbol::RightArrow),
-        ("<-", Symbol::LeftArrow),
-        ("=>", Symbol::DoubleRightArrow),
-        ("<=", Symbol::DoubleLeftArrow),
-        (">>", Symbol::DoubleRightAngle),
-        ("<<", Symbol::DoubleLeftAngle),
-        ("==", Symbol::Eq),
-        ("=:=", Symbol::ExactEq),
-        ("/=", Symbol::NotEq),
-        ("=/=", Symbol::ExactNotEq),
-        (">", Symbol::Greater),
-        (">=", Symbol::GreaterEq),
-        ("<", Symbol::Less),
-        ("=<", Symbol::LessEq),
-        ("&&", Symbol::DoubleAmpersand),
-        ("<:-", Symbol::StrictLeftArrow),
-        ("<:=", Symbol::StrictDoubleLeftArrow),
+        ("[", erl_tokenize::Symbol::OpenSquare),
+        ("]", erl_tokenize::Symbol::CloseSquare),
+        ("(", erl_tokenize::Symbol::OpenParen),
+        (")", erl_tokenize::Symbol::CloseParen),
+        ("{", erl_tokenize::Symbol::OpenBrace),
+        ("}", erl_tokenize::Symbol::CloseBrace),
+        ("#", erl_tokenize::Symbol::Sharp),
+        ("#_", erl_tokenize::Symbol::WildcardRecord),
+        ("/", erl_tokenize::Symbol::Slash),
+        (".", erl_tokenize::Symbol::Dot),
+        ("..", erl_tokenize::Symbol::DoubleDot),
+        ("...", erl_tokenize::Symbol::TripleDot),
+        (",", erl_tokenize::Symbol::Comma),
+        (":", erl_tokenize::Symbol::Colon),
+        ("::", erl_tokenize::Symbol::DoubleColon),
+        (";", erl_tokenize::Symbol::Semicolon),
+        ("=", erl_tokenize::Symbol::Match),
+        (":=", erl_tokenize::Symbol::MapMatch),
+        ("|", erl_tokenize::Symbol::VerticalBar),
+        ("||", erl_tokenize::Symbol::DoubleVerticalBar),
+        ("?", erl_tokenize::Symbol::Question),
+        ("?=", erl_tokenize::Symbol::MaybeMatch),
+        ("!", erl_tokenize::Symbol::Bang),
+        ("-", erl_tokenize::Symbol::Hyphen),
+        ("--", erl_tokenize::Symbol::MinusMinus),
+        ("+", erl_tokenize::Symbol::Plus),
+        ("++", erl_tokenize::Symbol::PlusPlus),
+        ("*", erl_tokenize::Symbol::Multiply),
+        ("->", erl_tokenize::Symbol::RightArrow),
+        ("<-", erl_tokenize::Symbol::LeftArrow),
+        ("=>", erl_tokenize::Symbol::DoubleRightArrow),
+        ("<=", erl_tokenize::Symbol::DoubleLeftArrow),
+        (">>", erl_tokenize::Symbol::DoubleRightAngle),
+        ("<<", erl_tokenize::Symbol::DoubleLeftAngle),
+        ("==", erl_tokenize::Symbol::Eq),
+        ("=:=", erl_tokenize::Symbol::ExactEq),
+        ("/=", erl_tokenize::Symbol::NotEq),
+        ("=/=", erl_tokenize::Symbol::ExactNotEq),
+        (">", erl_tokenize::Symbol::Greater),
+        (">=", erl_tokenize::Symbol::GreaterEq),
+        ("<", erl_tokenize::Symbol::Less),
+        ("=<", erl_tokenize::Symbol::LessEq),
+        ("&&", erl_tokenize::Symbol::DoubleAmpersand),
+        ("<:-", erl_tokenize::Symbol::StrictLeftArrow),
+        ("<:=", erl_tokenize::Symbol::StrictDoubleLeftArrow),
     ] {
         let t = first(src);
-        assert_eq!(t.kind(), TokenKind::Symbol(expected), "for {src}");
+        assert_eq!(
+            t.kind(),
+            erl_tokenize::TokenKind::Symbol(expected),
+            "for {src}"
+        );
         assert_eq!(t.text(src), src);
     }
 }
 
 #[test]
 fn symbol_display_matches_as_str() {
-    for s in Symbol::ALL {
+    for s in erl_tokenize::Symbol::ALL {
         assert_eq!(format!("{s}"), s.as_str(), "Display mismatch for {s:?}");
     }
 }
@@ -1229,24 +1328,24 @@ fn symbol_display_matches_as_str() {
 fn symbol_wildcard_record_single_token() {
     // `#_` is a single wildcard-record symbol, not `#` followed by `_`.
     let tokens = scan_tokens("Node#_{anno=[]}");
-    let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind()).collect();
+    let kinds: Vec<erl_tokenize::TokenKind> = tokens.iter().map(|t| t.kind()).collect();
     assert_eq!(
         kinds,
         [
-            TokenKind::Variable,
-            TokenKind::Symbol(Symbol::WildcardRecord),
-            TokenKind::Symbol(Symbol::OpenBrace),
-            TokenKind::Atom,
-            TokenKind::Symbol(Symbol::Match),
-            TokenKind::Symbol(Symbol::OpenSquare),
-            TokenKind::Symbol(Symbol::CloseSquare),
-            TokenKind::Symbol(Symbol::CloseBrace),
+            erl_tokenize::TokenKind::Variable,
+            erl_tokenize::TokenKind::Symbol(erl_tokenize::Symbol::WildcardRecord),
+            erl_tokenize::TokenKind::Symbol(erl_tokenize::Symbol::OpenBrace),
+            erl_tokenize::TokenKind::Atom,
+            erl_tokenize::TokenKind::Symbol(erl_tokenize::Symbol::Match),
+            erl_tokenize::TokenKind::Symbol(erl_tokenize::Symbol::OpenSquare),
+            erl_tokenize::TokenKind::Symbol(erl_tokenize::Symbol::CloseSquare),
+            erl_tokenize::TokenKind::Symbol(erl_tokenize::Symbol::CloseBrace),
         ]
     );
     assert_eq!(tokens[1].text("Node#_{anno=[]}"), "#_");
     assert_eq!(
         tokens[1].value("Node#_{anno=[]}"),
-        TokenValue::Symbol(Symbol::WildcardRecord)
+        erl_tokenize::TokenValue::Symbol(erl_tokenize::Symbol::WildcardRecord)
     );
 }
 
@@ -1258,7 +1357,10 @@ fn double_question_splits_into_two_question_tokens() {
     assert_eq!(texts("??foo"), ["?", "?", "foo"]);
     // A lone `?` is unchanged.
     assert_eq!(texts("?"), ["?"]);
-    assert_eq!(first("?").kind(), TokenKind::Symbol(Symbol::Question));
+    assert_eq!(
+        first("?").kind(),
+        erl_tokenize::TokenKind::Symbol(erl_tokenize::Symbol::Question)
+    );
 }
 
 // ============================================================
@@ -1269,9 +1371,9 @@ fn double_question_splits_into_two_question_tokens() {
 fn variable_basic_and_borrow() {
     for src in ["Foo", "_", "_foo", "Foo_1", "Foo_1@bar"] {
         let t = first(src);
-        assert_eq!(t.kind(), TokenKind::Variable);
+        assert_eq!(t.kind(), erl_tokenize::TokenKind::Variable);
         assert_eq!(t.text(src), src);
-        assert_eq!(t.value(src), TokenValue::Variable(src));
+        assert_eq!(t.value(src), erl_tokenize::TokenValue::Variable(src));
     }
 }
 
@@ -1282,7 +1384,7 @@ fn variable_latin1_uppercase_head() {
     // OTP uses `Överskott` as a parameter name.
     for src in ["Överskott", "Ärger", "Ünique"] {
         let t = first(src);
-        assert_eq!(t.kind(), TokenKind::Variable, "for {src}");
+        assert_eq!(t.kind(), erl_tokenize::TokenKind::Variable, "for {src}");
         assert_eq!(t.text(src), src);
     }
 }
@@ -1346,7 +1448,7 @@ fn whitespace_length_caps_match_erl_scan() {
 fn whitespace_at_most_one_lf_at_start() {
     let src = "a  \n  b\n\nc";
     for t in scan_tokens(src) {
-        if t.kind() != TokenKind::Whitespace {
+        if t.kind() != erl_tokenize::TokenKind::Whitespace {
             continue;
         }
         let text = t.text(src);
@@ -1374,7 +1476,7 @@ fn whitespace_value_borrows_aggregated_text() {
     let src = " \t \n\t";
     let t = first(src);
     match t.value(src) {
-        TokenValue::Whitespace(s) => {
+        erl_tokenize::TokenValue::Whitespace(s) => {
             assert_eq!(s, " ");
             assert_eq!(s.as_ptr(), src.as_ptr());
         }
@@ -1383,15 +1485,17 @@ fn whitespace_value_borrows_aggregated_text() {
 }
 
 // ============================================================
-// Position tracking
+// erl_tokenize::Position tracking
 // ============================================================
 
 #[test]
 fn position_after_first_token_advances_column() {
     let src = "foo bar";
-    let mut p = Position::new();
+    let mut p = erl_tokenize::Position::new();
     assert_eq!(p.offset(), 0);
-    let t = scan_token(src, p).unwrap().unwrap();
+    let t = erl_tokenize::scan_token(src, p)
+        .expect("scan_token must succeed on test input")
+        .expect("test input must contain a token");
     p = t.end();
     assert_eq!(p.offset(), 3);
     assert_eq!(p.column().get(), 4);
@@ -1402,29 +1506,44 @@ fn position_advances_across_lf_whitespace() {
     // `"  "` (space-only run) → `"\n  "` (LF + 2 spaces, one token
     // under `scan_nl_spcs`) → `"X"`.
     let src = "  \n  X";
-    let mut p = Position::new();
-    let t1 = scan_token(src, p).unwrap().unwrap();
+    let mut p = erl_tokenize::Position::new();
+    let t1 = erl_tokenize::scan_token(src, p)
+        .expect("scan_token must succeed on test input")
+        .expect("test input must contain a token");
     p = t1.end();
     assert_eq!((p.line().get(), p.column().get()), (1, 3));
-    let t2 = scan_token(src, p).unwrap().unwrap();
+    let t2 = erl_tokenize::scan_token(src, p)
+        .expect("scan_token must succeed on test input")
+        .expect("test input must contain a token");
     p = t2.end();
     assert_eq!((p.line().get(), p.column().get()), (2, 3));
-    let t3 = scan_token(src, p).unwrap().unwrap();
+    let t3 = erl_tokenize::scan_token(src, p)
+        .expect("scan_token must succeed on test input")
+        .expect("test input must contain a token");
     p = t3.end();
     assert_eq!((p.line().get(), p.column().get()), (2, 4));
     assert_eq!(t3.text(src), "X");
 }
 
 // ============================================================
-// scan_token / Token contract
+// scan_token / erl_tokenize::Token contract
 // ============================================================
 
 #[test]
 fn scan_token_returns_none_at_eof() {
-    assert_eq!(scan_token("", Position::new()).unwrap(), None);
+    assert_eq!(
+        erl_tokenize::scan_token("", erl_tokenize::Position::new())
+            .expect("scan_token must succeed on test input"),
+        None
+    );
     let src = "foo";
-    let t = scan_token(src, Position::new()).unwrap().unwrap();
-    assert_eq!(scan_token(src, t.end()).unwrap(), None);
+    let t = erl_tokenize::scan_token(src, erl_tokenize::Position::new())
+        .expect("scan_token must succeed on test input")
+        .expect("test input must contain a token");
+    assert_eq!(
+        erl_tokenize::scan_token(src, t.end()).expect("scan_token must succeed on test input"),
+        None
+    );
 }
 
 #[test]
@@ -1441,8 +1560,8 @@ fn scan_tokens_matches_manual_scan_token_loop() {
     let src = "foo bar";
     let from_helper = scan_tokens(src);
     let mut manual = Vec::new();
-    let mut position = Position::new();
-    while let Some(token) = scan_token(src, position).expect("valid source") {
+    let mut position = erl_tokenize::Position::new();
+    while let Some(token) = erl_tokenize::scan_token(src, position).expect("valid source") {
         position = token.end();
         manual.push(token);
     }
@@ -1452,7 +1571,7 @@ fn scan_tokens_matches_manual_scan_token_loop() {
 #[test]
 fn scan_tokens_propagates_lexical_error() {
     let err = erl_tokenize::scan_tokens("\"unclosed").expect_err("unclosed string must fail");
-    assert_eq!(err.kind, ErrorKind::NoClosingQuotation);
+    assert_eq!(err.kind, erl_tokenize::ErrorKind::NoClosingQuotation);
 }
 
 #[test]
@@ -1483,7 +1602,7 @@ fn hidden_filter_matches_lexical_only() {
 }
 
 // ============================================================
-// Token::value semantics
+// erl_tokenize::Token::value semantics
 // ============================================================
 
 #[test]
@@ -1494,7 +1613,10 @@ fn token_value_is_not_cached() {
     let b = t.value(src);
     assert_eq!(a, b);
     match (a, b) {
-        (TokenValue::Atom(Cow::Owned(a)), TokenValue::Atom(Cow::Owned(b))) => {
+        (
+            erl_tokenize::TokenValue::Atom(Cow::Owned(a)),
+            erl_tokenize::TokenValue::Atom(Cow::Owned(b)),
+        ) => {
             assert_eq!(a, b);
             assert_ne!(a.as_ptr(), b.as_ptr());
         }
@@ -1509,7 +1631,8 @@ fn token_value_is_not_cached() {
 #[test]
 fn error_is_copy_and_exposes_positions() {
     fn take_copy<T: Copy>(_: T) {}
-    let err = scan_token("\u{2603}", Position::new()).unwrap_err();
+    let err = erl_tokenize::scan_token("\u{2603}", erl_tokenize::Position::new())
+        .expect_err("input must produce a lexical error");
     take_copy(err);
     let _ = err.position;
     let _ = err.resume_position;
@@ -1518,25 +1641,31 @@ fn error_is_copy_and_exposes_positions() {
 #[test]
 fn resume_position_advances_one_unicode_scalar() {
     let src = "\u{1F600} rest";
-    let err = scan_token(src, Position::new()).unwrap_err();
+    let err = erl_tokenize::scan_token(src, erl_tokenize::Position::new())
+        .expect_err("input must produce a lexical error");
     let r = err.resume_position;
     assert_eq!(r.offset(), '\u{1F600}'.len_utf8());
     assert!(src.is_char_boundary(r.offset()));
-    let next = scan_token(src, r).unwrap().unwrap();
+    let next = erl_tokenize::scan_token(src, r)
+        .expect("scan_token must succeed on test input")
+        .expect("test input must contain a token");
     assert_eq!(next.text(src), " ");
 }
 
 #[test]
 fn resume_position_monotonic_on_repeated_errors() {
     let src = "\u{FFFC}\u{FFFC}";
-    let mut p = Position::new();
+    let mut p = erl_tokenize::Position::new();
     for _ in 0..2 {
-        let e = scan_token(src, p).unwrap_err();
+        let e = erl_tokenize::scan_token(src, p).expect_err("input must produce a lexical error");
         assert!(e.resume_position.offset() > p.offset());
         p = e.resume_position;
     }
     assert_eq!(p.offset(), src.len());
-    assert_eq!(scan_token(src, p).unwrap(), None);
+    assert_eq!(
+        erl_tokenize::scan_token(src, p).expect("scan_token must succeed on test input"),
+        None
+    );
 }
 
 // ============================================================
@@ -1597,7 +1726,7 @@ handle_cast(increment, #state{count = Count} = State) ->
 }
 
 // ============================================================
-// ErrorKind coverage for the two remaining reachable variants
+// erl_tokenize::ErrorKind coverage for the two remaining reachable variants
 // ============================================================
 
 #[test]
@@ -1605,8 +1734,10 @@ fn triple_quoted_opener_line_rejects_non_whitespace() {
     // A triple-quoted opener line may only carry whitespace after the
     // final `"`; a non-whitespace character is `InvalidStringToken`.
     assert_eq!(
-        scan_token("\"\"\"abc\n\"\"\"", pos()).unwrap_err().kind,
-        ErrorKind::InvalidStringToken,
+        erl_tokenize::scan_token("\"\"\"abc\n\"\"\"", pos())
+            .expect_err("input must produce a lexical error")
+            .kind,
+        erl_tokenize::ErrorKind::InvalidStringToken,
     );
 }
 
@@ -1616,20 +1747,25 @@ fn unknown_symbol_leader_is_invalid_symbol_token() {
     // any recognised symbol byte, so `scan_symbol` returns
     // `InvalidSymbolToken`.
     assert_eq!(
-        scan_token("\u{2603}", pos()).unwrap_err().kind,
-        ErrorKind::InvalidSymbolToken,
+        erl_tokenize::scan_token("\u{2603}", pos())
+            .expect_err("input must produce a lexical error")
+            .kind,
+        erl_tokenize::ErrorKind::InvalidSymbolToken,
     );
 }
 
 // ============================================================
-// Display for Position / Token / Error / ErrorKind
+// Display for erl_tokenize::Position / erl_tokenize::Token / Error / erl_tokenize::ErrorKind
 // ============================================================
 
 #[test]
 fn position_display_matches_line_column_format() {
-    assert_eq!(format!("{}", Position::new()), "1:1");
+    assert_eq!(format!("{}", erl_tokenize::Position::new()), "1:1");
     // After scanning `"a\nbc"` the end position is line 2, column 3.
-    let end = scan_tokens("a\nbc").last().unwrap().end();
+    let end = scan_tokens("a\nbc")
+        .last()
+        .expect("scan_tokens must emit at least one token")
+        .end();
     assert_eq!(format!("{end}"), "2:3");
 }
 
@@ -1641,13 +1777,14 @@ fn token_display_shows_kind_and_range() {
 
 #[test]
 fn error_display_combines_message_and_position() {
-    let err = scan_token("\u{2603}", Position::new()).unwrap_err();
+    let err = erl_tokenize::scan_token("\u{2603}", erl_tokenize::Position::new())
+        .expect_err("input must produce a lexical error");
     assert_eq!(format!("{err}"), "cannot parse a symbol token (1:1)");
 }
 
 #[test]
 fn error_kind_display_matches_message() {
-    for k in ErrorKind::ALL {
+    for k in erl_tokenize::ErrorKind::ALL {
         assert_eq!(format!("{k}"), k.message(), "Display mismatch for {k:?}");
     }
 }
@@ -1659,7 +1796,8 @@ fn error_kind_display_matches_message() {
 #[test]
 fn error_satisfies_std_error_bound() {
     fn take_error(_: &dyn std::error::Error) {}
-    let err = scan_token("\u{2603}", Position::new()).unwrap_err();
+    let err = erl_tokenize::scan_token("\u{2603}", erl_tokenize::Position::new())
+        .expect_err("input must produce a lexical error");
     take_error(&err);
 }
 
@@ -1667,22 +1805,22 @@ fn error_satisfies_std_error_bound() {
 // Panic contracts
 // ============================================================
 //
-// The panic paths take a `Position` (or the `start`/`end` inside a
-// `Token`) whose `offset` is out of range or misaligned with respect to
+// The panic paths take a `erl_tokenize::Position` (or the `start`/`end` inside a
+// `erl_tokenize::Token`) whose `offset` is out of range or misaligned with respect to
 // the source being scanned. Both invalid states are constructed by
 // scanning a long source first, then re-using the resulting position
 // (or token) against a shorter or differently-shaped source. The
-// scanner and `Token::text` / `Token::value` never accept `Position`
+// scanner and `erl_tokenize::Token::text` / `erl_tokenize::Token::value` never accept `erl_tokenize::Position`
 // values from foreign sources — this is the whole point of the panic
 // contract.
 
 #[test]
 #[should_panic(expected = "exceeds source length")]
 fn scan_token_panics_when_position_offset_exceeds_source_length() {
-    // A `Position` at offset 6 (end of `"abcdef"` scanned as an atom)
+    // A `erl_tokenize::Position` at offset 6 (end of `"abcdef"` scanned as an atom)
     // is out of range for a 2-byte source.
     let long_end = first("abcdef").end();
-    let _ = scan_token("ab", long_end);
+    let _ = erl_tokenize::scan_token("ab", long_end);
 }
 
 #[test]
@@ -1691,7 +1829,7 @@ fn scan_token_panics_when_position_offset_lands_inside_multibyte_char() {
     // Long ASCII source produces an offset (3) that is a byte boundary
     // there but falls inside the emoji in `"a\u{1F600}"` (bytes 1..=4).
     let mid = first("abc def").end();
-    let _ = scan_token("a\u{1F600}", mid);
+    let _ = erl_tokenize::scan_token("a\u{1F600}", mid);
 }
 
 #[test]

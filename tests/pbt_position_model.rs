@@ -1,11 +1,9 @@
-//! Position transition model.
+//! erl_tokenize::Position transition model.
 //!
 //! Maintain an independent `(offset, line, column)` model in the test
-//! and assert `Token::start()` / `Token::end()` match at every step.
+//! and assert `erl_tokenize::Token::start()` / `erl_tokenize::Token::end()` match at every step.
 //! Coverage gates require LF, multi-byte, and multi-line branches to be
 //! actually exercised.
-
-use erl_tokenize::{Position, scan_token};
 
 #[expect(dead_code, reason = "shared helpers; this binary uses only a subset")]
 mod pbt_harness;
@@ -35,11 +33,11 @@ fn position_model_matches_scan_token() -> noprop::TestResult {
             saw_crlf.hit();
         }
 
-        let mut pos = Position::new();
+        let mut pos = erl_tokenize::Position::new();
         let mut model = (0usize, 1usize, 1usize);
         let step_ceiling = src.chars().count() * 2 + 8;
         let mut steps = 0usize;
-        while let Some(token) = scan_token(&src, pos)? {
+        while let Some(token) = erl_tokenize::scan_token(&src, pos)? {
             let text = token.text(&src);
             assert_eq!(
                 token.start().offset(),

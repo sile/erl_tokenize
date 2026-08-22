@@ -1,14 +1,12 @@
 //! Lazy value extraction oracle.
 //!
 //! Generate `(expected value, valid token text)` pairs for every
-//! `TokenValue` variant. Scan the text and assert
-//! `Token::value(source)` matches the expected value. Coverage gates
+//! `erl_tokenize::TokenValue` variant. Scan the text and assert
+//! `erl_tokenize::Token::value(source)` matches the expected value. Coverage gates
 //! ensure that `Cow::Borrowed` / `Cow::Owned` splits, integer
 //! `Some` / `None` boundary, and every variant are actually exercised.
 
 use std::borrow::Cow;
-
-use erl_tokenize::{Keyword, Position, Symbol, TokenKind, TokenValue, scan_token};
 
 #[expect(dead_code, reason = "shared helpers; this binary uses only a subset")]
 mod pbt_harness;
@@ -27,14 +25,14 @@ enum Expected {
     Comment(String),
     Float(f64),
     Integer(Option<u64>),
-    Keyword(Keyword),
+    Keyword(erl_tokenize::Keyword),
     SigilString {
         prefix: String,
         content: String,
         suffix: String,
     },
     String(String),
-    Symbol(Symbol),
+    Symbol(erl_tokenize::Symbol),
     Variable(String),
     Whitespace(String),
 }
@@ -179,29 +177,30 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
 
     runner.run(CASES, |ctx| {
         let (text, expected) = sample_case(ctx);
-        let token = scan_token(&text, Position::new())?.expect("generator produced empty source");
+        let token = erl_tokenize::scan_token(&text, erl_tokenize::Position::new())?
+            .expect("generator produced empty source");
         let value = token.value(&text);
         if text.contains("\\^") {
             saw_caret.hit();
         }
         match (&expected, &value) {
-            (Expected::Atom(exp), TokenValue::Atom(v)) => {
+            (Expected::Atom(exp), erl_tokenize::TokenValue::Atom(v)) => {
                 assert_eq!(v.as_ref(), exp, "atom value for {text:?}");
                 variants.hit("atom");
                 cow_hit(&borrowed, &owned, matches!(v, Cow::Borrowed(_)));
             }
-            (Expected::Char(exp), TokenValue::Char(c)) => {
+            (Expected::Char(exp), erl_tokenize::TokenValue::Char(c)) => {
                 assert_eq!(c, exp, "char value for {text:?}");
                 variants.hit("char");
             }
-            (Expected::Comment(exp), TokenValue::Comment(s)) => {
+            (Expected::Comment(exp), erl_tokenize::TokenValue::Comment(s)) => {
                 assert_eq!(s, exp, "comment value for {text:?}");
                 variants.hit("comment");
                 if exp.is_empty() {
                     saw_empty_comment.hit();
                 }
             }
-            (Expected::Float(exp), TokenValue::Float(v)) => {
+            (Expected::Float(exp), erl_tokenize::TokenValue::Float(v)) => {
                 assert_eq!(v, exp, "float value for {text:?}");
                 variants.hit("float");
                 if text.contains('#') {
@@ -214,7 +213,7 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
                     saw_exponent_float.hit();
                 }
             }
-            (Expected::Integer(exp), TokenValue::Integer(v)) => {
+            (Expected::Integer(exp), erl_tokenize::TokenValue::Integer(v)) => {
                 assert_eq!(v, exp, "integer value for {text:?}");
                 variants.hit("integer");
                 match exp {
@@ -222,7 +221,7 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
                     None => integer_none.hit(),
                 }
             }
-            (Expected::Keyword(exp), TokenValue::Keyword(v)) => {
+            (Expected::Keyword(exp), erl_tokenize::TokenValue::Keyword(v)) => {
                 assert_eq!(v, exp, "keyword value for {text:?}");
                 assert_eq!(token.text(&text), v.as_str(), "keyword as_str for {text:?}");
                 variants.hit("keyword");
@@ -233,7 +232,7 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
                     content: ec,
                     suffix: es,
                 },
-                TokenValue::SigilString {
+                erl_tokenize::TokenValue::SigilString {
                     prefix,
                     content,
                     suffix,
@@ -253,7 +252,7 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
                     saw_sigil_triple_escape.hit();
                 }
             }
-            (Expected::String(exp), TokenValue::String(v)) => {
+            (Expected::String(exp), erl_tokenize::TokenValue::String(v)) => {
                 assert_eq!(v.as_ref(), exp, "string value for {text:?}");
                 variants.hit("string");
                 cow_hit(&borrowed, &owned, matches!(v, Cow::Borrowed(_)));
@@ -261,18 +260,18 @@ fn token_value_matches_generated_oracle() -> noprop::TestResult {
                     saw_triple.hit();
                 }
             }
-            (Expected::Symbol(exp), TokenValue::Symbol(v)) => {
+            (Expected::Symbol(exp), erl_tokenize::TokenValue::Symbol(v)) => {
                 assert_eq!(v, exp, "symbol value for {text:?}");
                 assert_eq!(token.text(&text), v.as_str(), "symbol as_str for {text:?}");
                 variants.hit("symbol");
             }
-            (Expected::Variable(exp), TokenValue::Variable(v)) => {
+            (Expected::Variable(exp), erl_tokenize::TokenValue::Variable(v)) => {
                 assert_eq!(v, exp, "variable value for {text:?}");
                 variants.hit("variable");
             }
-            (Expected::Whitespace(exp), TokenValue::Whitespace(v)) => {
+            (Expected::Whitespace(exp), erl_tokenize::TokenValue::Whitespace(v)) => {
                 assert_eq!(v, exp, "whitespace value for {text:?}");
-                assert_eq!(token.kind(), TokenKind::Whitespace);
+                assert_eq!(token.kind(), erl_tokenize::TokenKind::Whitespace);
                 variants.hit("whitespace");
             }
             _ => panic!("kind mismatch: {value:?} for {text:?}"),

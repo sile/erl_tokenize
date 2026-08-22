@@ -47,7 +47,7 @@ impl TokenKind {
     }
 
     /// Returns `true` for kinds that carry lexical meaning (the negation
-    /// of [`is_hidden`](Self::is_hidden)).
+    /// of [`TokenKind::is_hidden`](TokenKind::is_hidden)).
     pub const fn is_lexical(self) -> bool {
         !self.is_hidden()
     }
@@ -56,9 +56,9 @@ impl TokenKind {
 /// A scanned token: kind and a half-open position range in the source.
 ///
 /// `Token` does not borrow the source and does not own any decoded
-/// value. Call [`text`](Self::text) with the same source that was passed
+/// value. Call [`Token::text`](Token::text) with the same source that was passed
 /// to [`scan_token`] to retrieve the original substring, and
-/// [`value`](Self::value) to decode the token's semantic value on
+/// [`Token::value`](Token::value) to decode the token's semantic value on
 /// demand.
 ///
 /// # Whitespace aggregation
@@ -131,7 +131,7 @@ impl Token {
     ///
     /// # Panics
     ///
-    /// Panics for the same reasons as [`text`](Self::text): `source`
+    /// Panics for the same reasons as [`Token::text`](Token::text): `source`
     /// must be the same string that was passed to [`scan_token`].
     pub fn value<'a>(self, source: &'a str) -> TokenValue<'a> {
         let text = self.text(source);

@@ -3,8 +3,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use erl_tokenize::{Position, scan_token};
-
 fn main() -> noargs::Result<ExitCode> {
     let mut args = noargs::raw_args();
     args.metadata_mut().app_name = env!("CARGO_PKG_NAME");
@@ -35,9 +33,9 @@ fn main() -> noargs::Result<ExitCode> {
         };
         let mut count = 0;
         let mut errs = 0;
-        let mut pos = Position::new();
+        let mut pos = erl_tokenize::Position::new();
         loop {
-            match scan_token(&src, pos) {
+            match erl_tokenize::scan_token(&src, pos) {
                 Ok(Some(t)) => {
                     count += 1;
                     pos = t.end();
