@@ -1429,7 +1429,11 @@ fn scan_token_returns_none_at_eof() {
 
 #[test]
 fn scan_tokens_returns_empty_for_empty_source() {
-    assert!(erl_tokenize::scan_tokens("").expect("empty source must scan").is_empty());
+    assert!(
+        erl_tokenize::scan_tokens("")
+            .expect("empty source must scan")
+            .is_empty()
+    );
 }
 
 #[test]
@@ -1447,8 +1451,7 @@ fn scan_tokens_matches_manual_scan_token_loop() {
 
 #[test]
 fn scan_tokens_propagates_lexical_error() {
-    let err = erl_tokenize::scan_tokens("\"unclosed")
-        .expect_err("unclosed string must fail");
+    let err = erl_tokenize::scan_tokens("\"unclosed").expect_err("unclosed string must fail");
     assert_eq!(err.kind, ErrorKind::NoClosingQuotation);
 }
 
