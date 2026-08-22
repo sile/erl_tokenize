@@ -5,7 +5,8 @@
 //! [`Token`], or `Ok(None)` when the end of the source is reached. On
 //! failure, the returned [`Error`] carries a diagnostic position and a
 //! resume position that can be passed straight back into [`scan_token`]
-//! so a bad token never spins in place.
+//! so a bad token never spins in place. To scan the whole source in one
+//! call, use [`scan_tokens`].
 //!
 //! # Design
 //!
@@ -29,12 +30,10 @@
 //! ```
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let src = r#"io:format("Hello")."#;
-//! let mut position = erl_tokenize::Position::new();
-//! let mut texts = Vec::new();
-//! while let Some(token) = erl_tokenize::scan_token(src, position)? {
-//!     texts.push(token.text(src));
-//!     position = token.end();
-//! }
+//! let texts: Vec<_> = erl_tokenize::scan_tokens(src)?
+//!     .into_iter()
+//!     .map(|token| token.text(src))
+//!     .collect();
 //! assert_eq!(texts, ["io", ":", "format", "(", r#""Hello""#, ")", "."]);
 //! # Ok(())
 //! # }
@@ -45,14 +44,11 @@
 //! ```
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let src = "%% greeting\nhello world";
-//! let mut position = erl_tokenize::Position::new();
-//! let mut lexical = Vec::new();
-//! while let Some(token) = erl_tokenize::scan_token(src, position)? {
-//!     if token.kind().is_lexical() {
-//!         lexical.push(token.text(src));
-//!     }
-//!     position = token.end();
-//! }
+//! let lexical: Vec<_> = erl_tokenize::scan_tokens(src)?
+//!     .into_iter()
+//!     .filter(|token| token.kind().is_lexical())
+//!     .map(|token| token.text(src))
+//!     .collect();
 //! assert_eq!(lexical, ["hello", "world"]);
 //! # Ok(())
 //! # }
@@ -100,7 +96,7 @@ pub use crate::error::{Error, ErrorKind};
 pub use crate::keyword::Keyword;
 pub use crate::position::Position;
 pub use crate::symbol::Symbol;
-pub use crate::token::{Token, TokenKind, TokenValue, scan_token};
+pub use crate::token::{Token, TokenKind, TokenValue, scan_token, scan_tokens};
 
 mod charset;
 mod error;

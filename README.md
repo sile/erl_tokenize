@@ -16,7 +16,8 @@ How it works
 You give the tokenizer a source string and a current position, and it
 returns the next token. You then advance the position to the end of
 that token and ask again. When you reach the end of the source, you get
-`Ok(None)` and stop.
+`Ok(None)` and stop. To scan the whole source in one call, use
+[`scan_tokens`](https://docs.rs/erl_tokenize/latest/erl_tokenize/fn.scan_tokens.html).
 
 The tokens themselves are lightweight: they know their kind (atom,
 integer, string, and so on) and where they sit in the source, but they
@@ -37,12 +38,10 @@ Tokenize the Erlang code `io:format("Hello").`:
 ```rust
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let src = r#"io:format("Hello")."#;
-    let mut position = erl_tokenize::Position::new();
-    let mut texts = Vec::new();
-    while let Some(token) = erl_tokenize::scan_token(src, position)? {
-        texts.push(token.text(src));
-        position = token.end();
-    }
+    let texts: Vec<_> = erl_tokenize::scan_tokens(src)?
+        .into_iter()
+        .map(|token| token.text(src))
+        .collect();
     assert_eq!(texts, ["io", ":", "format", "(", r#""Hello""#, ")", "."]);
     Ok(())
 }
@@ -54,14 +53,11 @@ the caller side with `TokenKind::is_lexical`:
 ```rust
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let src = "%% greeting\nhello world";
-    let mut position = erl_tokenize::Position::new();
-    let mut lexical = Vec::new();
-    while let Some(token) = erl_tokenize::scan_token(src, position)? {
-        if token.kind().is_lexical() {
-            lexical.push(token.text(src));
-        }
-        position = token.end();
-    }
+    let lexical: Vec<_> = erl_tokenize::scan_tokens(src)?
+        .into_iter()
+        .filter(|token| token.kind().is_lexical())
+        .map(|token| token.text(src))
+        .collect();
     assert_eq!(lexical, ["hello", "world"]);
     Ok(())
 }
@@ -98,14 +94,16 @@ kind-specific downcast method is required:
 ```rust
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let src = r#"io:format("Hello", ["World"])."#;
-    let mut position = erl_tokenize::Position::new();
-    let mut strings = Vec::new();
-    while let Some(token) = erl_tokenize::scan_token(src, position)? {
-        if let erl_tokenize::TokenValue::String(text) = token.value(src) {
-            strings.push(text.into_owned());
-        }
-        position = token.end();
-    }
+    let strings: Vec<_> = erl_tokenize::scan_tokens(src)?
+        .into_iter()
+        .filter_map(|token| {
+            if let erl_tokenize::TokenValue::String(text) = token.value(src) {
+                Some(text.into_owned())
+            } else {
+                None
+            }
+        })
+        .collect();
     assert_eq!(strings, ["Hello", "World"]);
     Ok(())
 }

@@ -260,6 +260,25 @@ pub fn scan_token(source: &str, position: Position) -> Result<Option<Token>> {
     }))
 }
 
+/// Scans all tokens from `source` until EOF.
+///
+/// Convenience wrapper around repeated [`scan_token`] calls starting at
+/// [`Position::new`]. Returns the full token stream in source order,
+/// including comments and whitespace.
+///
+/// Stops at the first lexical error and returns it. Callers that resume
+/// past errors should drive [`scan_token`] manually; see the crate-level
+/// documentation for an example.
+pub fn scan_tokens(source: &str) -> Result<Vec<Token>> {
+    let mut tokens = Vec::new();
+    let mut position = Position::new();
+    while let Some(token) = scan_token(source, position)? {
+        position = token.end();
+        tokens.push(token);
+    }
+    Ok(tokens)
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}@{}..{}", self.kind, self.start, self.end)
